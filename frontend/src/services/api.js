@@ -1,0 +1,133 @@
+import axios from 'axios';
+
+const API_BASE_URL = 'http://localhost:8000/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Intercepteur pour les erreurs
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// ========== Enseignants ==========
+export const enseignantsAPI = {
+  getAll: (params) => api.get('/enseignants/', { params }),
+  getById: (id) => api.get(`/enseignants/${id}`),
+  create: (data) => api.post('/enseignants/', data),
+  update: (id, data) => api.put(`/enseignants/${id}`, data),
+  delete: (id) => api.delete(`/enseignants/${id}`),
+  search: (params) => api.get('/enseignants/search/', { params }),
+};
+
+// ========== Examens ==========
+export const examensAPI = {
+  getAll: (params) => api.get('/examens/', { params }),
+  getById: (id) => api.get(`/examens/${id}`),
+  create: (data) => api.post('/examens/', data),
+  update: (id, data) => api.put(`/examens/${id}`, data),
+  delete: (id) => api.delete(`/examens/${id}`),
+  search: (params) => api.get('/examens/search/', { params }),
+};
+
+// ========== Voeux ==========
+export const voeuxAPI = {
+  getAll: (params) => api.get('/voeux/', { params }),
+  getById: (id) => api.get(`/voeux/${id}`),
+  create: (data) => api.post('/voeux/', data),
+  update: (id, data) => api.put(`/voeux/${id}`, data),
+  delete: (id) => api.delete(`/voeux/${id}`),
+  search: (params) => api.get('/voeux/search/', { params }),
+};
+
+// ========== Import ==========
+export const importAPI = {
+  importEnseignants: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/import/enseignants', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  importVoeux: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/import/voeux', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  importExamens: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/import/examens', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
+// ========== Génération ==========
+export const generationAPI = {
+  // V2: Algorithme d'optimisation avancé avec système de contraintes hiérarchisées
+  generer: (data) => api.post('/generation/generer-v2', data),
+  // V1: Ancien algorithme (conservé pour compatibilité)
+  genererV1: (data) => api.post('/generation/generer', data),
+  reinitialiser: () => api.delete('/generation/reinitialiser'),
+  verifier: () => api.get('/generation/verification'),
+};
+
+// ========== Export ==========
+export const exportAPI = {
+  planningPDF: (params) => 
+    api.post('/export/planning-pdf', null, { 
+      params, 
+      responseType: 'blob' 
+    }),
+  convocations: () => api.post('/export/convocations'),
+  listesCreneaux: () => api.post('/export/listes-creneaux'),
+  planningExcel: (params) => 
+    api.post('/export/planning-excel', null, { 
+      params, 
+      responseType: 'blob' 
+    }),
+  listeFichiers: () => api.get('/export/fichiers'),
+  telechargerFichier: (filename) => 
+    api.get(`/export/fichiers/${filename}`, { 
+      responseType: 'blob' 
+    }),
+};
+
+// ========== Planning ==========
+export const planningAPI = {
+  getEmploiEnseignant: (enseignantId) => api.get(`/planning/emploi-enseignant/${enseignantId}`),
+  getEmploiSeances: () => api.get('/planning/emploi-seances'),
+};
+
+// ========== Statistiques ==========
+export const statistiquesAPI = {
+  getGlobal: () => api.get('/statistiques/'),
+  getRepartitionGrades: () => api.get('/statistiques/repartition-grades'),
+  getChargeEnseignants: () => api.get('/statistiques/charge-enseignants'),
+  getExamensParJour: () => api.get('/statistiques/examens-par-jour'),
+  getDisponibilites: () => api.get('/statistiques/disponibilites'),
+};
+
+// ========== Grades Configuration ==========
+export const gradesAPI = {
+  getAll: () => api.get('/grades/'),
+  getByCode: (code) => api.get(`/grades/${code}`),
+  update: (code, data) => api.put(`/grades/${code}`, data),
+  reset: () => api.post('/grades/reset'),
+};
+
+// ========== Health Check ==========
+export const healthCheck = () => api.get('/health');
+
+export default api;
