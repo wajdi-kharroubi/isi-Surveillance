@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
-from models.models import Enseignant, Affectation, Examen
+from models.models import Enseignant, Affectation, Examen, GradeConfig
 from typing import List, Dict
 from datetime import datetime
 
@@ -53,8 +53,22 @@ def emploi_enseignant(enseignant_id: int, db: Session = Depends(get_db)):
         seance["salles"] = ", ".join(sorted(set(seance["salles"])))
         result.append(seance)
     
+    # Récupérer la configuration du grade pour calculer le pourcentage de quota
+    grade_config = db.query(GradeConfig).filter(GradeConfig.grade_code == enseignant.grade_code).first()
+    quota_max = grade_config.nb_surveillances if grade_config else 0
+    nb_surveillances_affectees = len(result)
+    pourcentage_quota = round((nb_surveillances_affectees / quota_max * 100), 2) if quota_max > 0 else 0
+    
     return {
-        "enseignant": {"id": enseignant.id, "nom": enseignant.nom, "prenom": enseignant.prenom, "grade": enseignant.grade_code},
+        "enseignant": {
+            "id": enseignant.id, 
+            "nom": enseignant.nom, 
+            "prenom": enseignant.prenom, 
+            "grade": enseignant.grade_code,
+            "quota_max": quota_max,
+            "nb_surveillances_affectees": nb_surveillances_affectees,
+            "pourcentage_quota": pourcentage_quota
+        },
         "emplois": result
     }
 

@@ -211,10 +211,12 @@ class ImportService:
         return count, erreurs
     
     @staticmethod
-    def importer_examens(file_path: str, db: Session) -> Tuple[int, List[str]]:
+    def importer_examens(file_path: str, db: Session) -> Tuple[int, List[str], int]:
         """
         Importe les examens depuis un fichier Excel.
         ATTENTION : Supprime tous les examens existants avant l'import !
+        
+        Les examens dupliqués (même date, même heure début/fin, même salle) sont automatiquement ignorés.
         
         Colonnes attendues:
         - dateExam (format: YYYY-MM-DD ou DD/MM/YYYY)
@@ -227,10 +229,11 @@ class ImportService:
         - cod_salle
         
         Returns:
-            (nombre_importes, erreurs)
+            (nombre_importes, erreurs, nombre_doublons)
         """
         erreurs = []
         count = 0
+        nb_doublons = 0  # Initialiser le compteur de doublons
         
         try:
             # SUPPRIMER TOUS LES EXAMENS EXISTANTS
@@ -265,7 +268,10 @@ class ImportService:
                 logger.info(f"📋 Colonnes disponibles: {df.columns.tolist()}")
                 return 0, erreurs
             
-            # Import ligne par ligne
+            # Import ligne par ligne avec détection des doublons
+            examens_vus = set()  # Pour détecter les doublons (date, h_debut, h_fin, cod_salle)
+            nb_doublons = 0
+            
             for idx, row in df.iterrows():
                 try:
                     logger.debug(f"Traitement ligne {idx + 1}: dateExam={row['dateExam']}, h_début={row['h_début']}")
@@ -294,6 +300,19 @@ class ImportService:
                     # Enseignant : stocker le code_smartex directement (string)
                     enseignant_code = str(int(row['enseignant']))  # Convertir en int puis string pour éviter les .0
                     
+                    # Créer une signature unique pour détecter les doublons
+                    # Un doublon = même date, même heure début/fin, même salle
+                    signature_examen = (date_exam, h_debut, h_fin, cod_salle)
+                    
+                    # Vérifier si cet examen existe déjà (doublon)
+                    if signature_examen in examens_vus:
+                        nb_doublons += 1
+                        logger.debug(f"  ⏭️  Doublon ignoré (ligne {idx + 2}): {date_exam} {h_debut}-{h_fin} salle {cod_salle}")
+                        continue  # Ignorer ce doublon
+                    
+                    # Ajouter à l'ensemble des examens vus
+                    examens_vus.add(signature_examen)
+                    
                     logger.debug(f"  Création examen: session={session}, type={type_ex}, semestre={semestre}, enseignant={enseignant_code}, salle={cod_salle}")
                     
                     # Créer l'examen avec les colonnes exactes d'Excel
@@ -318,7 +337,8 @@ class ImportService:
             
             if count > 0:
                 db.commit()
-                logger.info(f"✅ {count} examens importés avec succès")
+                msg_doublons = f" ({nb_doublons} doublons ignorés)" if nb_doublons > 0 else ""
+                logger.info(f"✅ {count} examens importés avec succès{msg_doublons}")
             else:
                 logger.warning(f"⚠️ Aucun examen importé. Erreurs: {erreurs}")
             
@@ -326,4 +346,4 @@ class ImportService:
             erreurs.append(f"Erreur lors de la lecture du fichier: {str(e)}")
             logger.error(f"Erreur import examens: {str(e)}")
         
-        return count, erreurs
+        return count, erreurs, nb_doublons

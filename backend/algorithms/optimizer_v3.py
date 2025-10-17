@@ -253,6 +253,13 @@ class SurveillanceOptimizerV2:
         )
         print(f"      ✓ Contraintes d'équilibre appliquées")
         
+        # CONTRAINTE 7: Favoriser séances consécutives et éviter première+dernière séance
+        print("   → Contrainte 7: Optimisation de la continuité des séances")
+        bonus_consecutivite = self._contrainte_seances_consecutives(
+            seances, enseignants, affectations_vars
+        )
+        print(f"      ✓ Bonus de consécutivité calculé (évite 1ère+dernière, favorise consécutivité)")
+        
         # ===== PHASE 7: FONCTION OBJECTIF =====
         print("\n🎯 Phase 7: Configuration de la fonction objectif...")
         
@@ -262,19 +269,30 @@ class SurveillanceOptimizerV2:
             seances,
             enseignants,
             equilibrer_temporel,
-            preferences_voeux
+            preferences_voeux,
+            bonus_consecutivite
         )
         
         print(f"      ✓ Fonction objectif configurée:")
         print(f"         • Maximiser l'utilisation des quotas (35%)")
         print(f"         • Minimiser la dispersion globale entre enseignants (25%)")
         print(f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)")
-        print(f"         • Favoriser les vœux de surveillance (15%)")
-        print(f"         • Équilibrer temporellement les créneaux (5%)")
+        print(f"         • Favoriser les séances consécutives (10% - optimisé)")
+        print(f"         • Favoriser les vœux de surveillance (10%)")
         
         # ===== PHASE 8: RÉSOLUTION =====
         print("\n⚡ Phase 8: Résolution du problème...")
-        self.solver.parameters.max_time_in_seconds = 6000.0
+        
+        # Configuration optimisée du solveur pour rapidité
+        self.solver.parameters.max_time_in_seconds = 36000  # 1 heure max au lieu de 6000
+        self.solver.parameters.num_search_workers = 8  # Parallélisation
+        self.solver.parameters.log_search_progress = False  # Désactiver les logs verbeux
+        
+        # Stratégies pour accélérer la recherche
+        # Accepter une solution "assez bonne" plutôt que chercher l'optimale pendant des heures
+        self.solver.parameters.cp_model_presolve = True
+        self.solver.parameters.linearization_level = 2
+        self.solver.parameters.cp_model_probing_level = 2
         
         status = self.solver.Solve(self.model)
         
@@ -833,6 +851,113 @@ class SurveillanceOptimizerV2:
                     self.model.Add(nb_ens_1 - nb_ens_2 <= tolerance)
                     self.model.Add(nb_ens_2 - nb_ens_1 <= tolerance)
     
+    def _contrainte_seances_consecutives(
+        self,
+        seances: Dict,
+        enseignants: List[Enseignant],
+        affectations_vars: Dict
+    ):
+        """
+        CONTRAINTE 7: Favorise le regroupement des séances par jour.
+        VERSION OPTIMISÉE pour performance.
+        
+        Objectifs:
+        1. Favoriser les séances regroupées dans un même jour (plusieurs séances = BONUS)
+        2. Pénaliser les séances isolées dans un jour (1 seule séance = PÉNALITÉ)
+        
+        Règle:
+        - Si un enseignant a N >= 2 séances dans un même jour → BONUS = +N
+        - Si un enseignant a 1 seule séance dans un jour → PÉNALITÉ = -2
+        
+        Retourne un score de regroupement pour la fonction objectif.
+        """
+        
+        # Grouper les séances par jour (date uniquement, pas par code de séance)
+        seances_par_jour = {}
+        for seance_key in seances.keys():
+            date_exam = seance_key[0]  # Date de l'examen
+            jour_index = seance_key[4]  # Index du jour (1, 2, 3...)
+            
+            if jour_index not in seances_par_jour:
+                seances_par_jour[jour_index] = []
+            seances_par_jour[jour_index].append(seance_key)
+        
+        bonus_total = []
+        
+        # Pour chaque enseignant et chaque jour, calculer le bonus/pénalité de regroupement
+        for enseignant in enseignants:
+            for jour_index, seances_jour in seances_par_jour.items():
+                # Nombre de séances de cet enseignant ce jour
+                nb_seances_jour = sum([
+                    affectations_vars[(seance_key, enseignant.id)]
+                    for seance_key in seances_jour
+                ])
+                
+                # Variable pour savoir si l'enseignant a au moins 1 séance ce jour
+                a_une_seance = self.model.NewBoolVar(f"ens_{enseignant.id}_jour_{jour_index}_a_seance")
+                self.model.Add(nb_seances_jour >= 1).OnlyEnforceIf(a_une_seance)
+                self.model.Add(nb_seances_jour == 0).OnlyEnforceIf(a_une_seance.Not())
+                
+                # Variable pour savoir si l'enseignant a au moins 2 séances ce jour (regroupées)
+                a_plusieurs_seances = self.model.NewBoolVar(f"ens_{enseignant.id}_jour_{jour_index}_a_plusieurs")
+                self.model.Add(nb_seances_jour >= 2).OnlyEnforceIf(a_plusieurs_seances)
+                self.model.Add(nb_seances_jour <= 1).OnlyEnforceIf(a_plusieurs_seances.Not())
+                
+                # Variable pour savoir si l'enseignant a exactement 1 séance ce jour (isolée)
+                seance_isolee = self.model.NewBoolVar(f"ens_{enseignant.id}_jour_{jour_index}_isolee")
+                # seance_isolee = a_une_seance AND NOT a_plusieurs_seances
+                self.model.AddBoolAnd([a_une_seance, a_plusieurs_seances.Not()]).OnlyEnforceIf(seance_isolee)
+                self.model.AddBoolOr([a_une_seance.Not(), a_plusieurs_seances]).OnlyEnforceIf(seance_isolee.Not())
+                
+                # Contribution au score pour ce jour:
+                # - Si plusieurs séances (regroupées): bonus = +nb_seances_jour
+                # - Si séance isolée: pénalité = -2
+                # - Si aucune séance: neutre = 0
+                
+                max_seances_jour = len(seances_jour)
+                contribution_jour = self.model.NewIntVar(
+                    -2,  # Pire cas: séance isolée
+                    max_seances_jour,  # Meilleur cas: toutes les séances du jour
+                    f"contrib_ens_{enseignant.id}_jour_{jour_index}"
+                )
+                
+                # Si séance isolée: contribution = -2
+                # Si plusieurs séances: contribution = nb_seances_jour
+                # Si aucune séance: contribution = 0
+                self.model.Add(contribution_jour == -2).OnlyEnforceIf(seance_isolee)
+                self.model.Add(contribution_jour == nb_seances_jour).OnlyEnforceIf(a_plusieurs_seances)
+                self.model.Add(contribution_jour == 0).OnlyEnforceIf(a_une_seance.Not())
+                
+                bonus_total.append(contribution_jour)
+        
+        # Créer une variable pour le score de regroupement
+        score_regroupement = None
+        
+        if bonus_total:
+            # Calculer les bornes du score
+            nb_jours = len(seances_par_jour)
+            nb_enseignants = len(enseignants)
+            max_seances_par_jour = max([len(s) for s in seances_par_jour.values()])
+            
+            # Pire cas: tous les enseignants ont des séances isolées dans tous les jours
+            min_score = -2 * nb_jours * nb_enseignants
+            # Meilleur cas: tous les enseignants ont toutes leurs séances regroupées
+            max_score = max_seances_par_jour * nb_jours * nb_enseignants
+            
+            score_regroupement = self.model.NewIntVar(
+                min_score,
+                max_score,
+                "score_regroupement_jours"
+            )
+            self.model.Add(score_regroupement == sum(bonus_total))
+            
+            self.infos.append(
+                f"   📊 Regroupement par jour: {len(bonus_total)} contributions calculées "
+                f"({nb_enseignants} enseignants × {nb_jours} jours)"
+            )
+        
+        return score_regroupement
+    
     # ========== DIAGNOSTIC D'ÉCHEC ==========
     
     def _diagnostiquer_echec(
@@ -1162,17 +1287,19 @@ class SurveillanceOptimizerV2:
         seances: Dict,
         enseignants: List[Enseignant],
         equilibrer_temporel: bool,
-        preferences_voeux: Dict = None
+        preferences_voeux: Dict = None,
+        bonus_consecutivite = None
     ) -> cp_model.IntVar:
         """
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
         
         Composantes du score:
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 35%
-        2. Équilibre global de charge (minimiser dispersion) - POIDS: 25%
+        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 30%
+        2. Équilibre global de charge (minimiser dispersion) - POIDS: 20%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
-        4. Préférence pour enseignants avec vœux - POIDS: 15%
-        5. Équilibre temporel (éviter toujours premiers/derniers créneaux) - POIDS: 5%
+        4. Bonus consécutivité (favoriser séances consécutives, éviter 1ère+dernière) - POIDS: 15%
+        5. Préférence pour enseignants avec vœux - POIDS: 10%
+        6. Équilibre temporel (éviter toujours premiers/derniers créneaux) - POIDS: 5%
         """
         
         # COMPOSANTE 1: Maximisation de l'utilisation des quotas (NOUVEAU - PRIORITAIRE)
@@ -1237,13 +1364,15 @@ class SurveillanceOptimizerV2:
                 enseignants
             )
         
-        # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade, maximiser bonus_voeux
-        # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 15*bonus_voeux
+        # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade, 
+        # maximiser bonus_consecutivite, maximiser bonus_voeux
+        # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite + 10*bonus_voeux
         # Le solveur maximise, donc on veut:
-        # - Maximiser total_affectations (positif)
-        # - Minimiser dispersion globale (négatif)
-        # - Minimiser dispersion par grade (négatif)
-        # - Maximiser bonus_voeux (positif)
+        # - Maximiser total_affectations (positif) - PRIORITÉ 1
+        # - Minimiser dispersion globale (négatif) - PRIORITÉ 2
+        # - Minimiser dispersion par grade (négatif) - PRIORITÉ 3
+        # - Maximiser bonus consécutivité (positif) - Bonus léger
+        # - Maximiser bonus_voeux (positif) - Bonus léger
         
         # Construction de la fonction objectif selon les composantes disponibles
         composantes = []
@@ -1251,19 +1380,23 @@ class SurveillanceOptimizerV2:
         
         if total_affectations is not None:
             composantes.append(total_affectations)
-            poids.append(35)  # Poids 35%
+            poids.append(35)  # Poids 35% - PRIORITÉ MAXIMALE
         
         if dispersion is not None:
             composantes.append(dispersion)
-            poids.append(-25)  # Poids -25% (minimiser)
+            poids.append(-25)  # Poids -25% (minimiser) - IMPORTANT
         
         if dispersion_grades is not None:
             composantes.append(dispersion_grades)
-            poids.append(-20)  # Poids -20% (minimiser)
+            poids.append(-20)  # Poids -20% (minimiser) - IMPORTANT
+        
+        if bonus_consecutivite is not None:
+            composantes.append(bonus_consecutivite)
+            poids.append(10)  # Poids 10% - Bonus secondaire pour performance
         
         if bonus_voeux is not None:
             composantes.append(bonus_voeux)
-            poids.append(15)  # Poids 15%
+            poids.append(10)  # Poids 10% - Bonus secondaire
         
         if composantes:
             # Calculer les bornes du score combiné

@@ -85,14 +85,20 @@ async def importer_examens(file: UploadFile = File(...), db: Session = Depends(g
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        count, erreurs = ImportService.importer_examens(file_path, db)
+        count, erreurs, nb_doublons = ImportService.importer_examens(file_path, db)
         
         os.remove(file_path)
         
+        # Construire le message avec info sur les doublons
+        message = f"{count} examens importés avec succès"
+        if nb_doublons > 0:
+            message += f" ({nb_doublons} doublons ignorés)"
+        
         return {
             "success": True,
-            "message": f"{count} examens importés avec succès",
+            "message": message,
             "nb_importes": count,
+            "nb_doublons": nb_doublons,
             "erreurs": erreurs
         }
     

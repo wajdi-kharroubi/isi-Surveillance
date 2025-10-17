@@ -197,14 +197,38 @@ export default function Planning() {
                 <>
                   <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
                     <Users className="w-8 h-8 text-blue-600" />
-                    <div>
+                    <div className="flex-1">
                       <h2 className="text-2xl font-bold text-gray-900">
                         {emploiEnseignant.enseignant.nom} {emploiEnseignant.enseignant.prenom}
                       </h2>
                       <p className="text-sm text-gray-600">
                         Grade: {emploiEnseignant.enseignant.grade} • 
-                        Total surveillances: {emploiEnseignant.emplois.length}
+                        Total surveillances: {emploiEnseignant.enseignant.nb_surveillances_affectees} / {emploiEnseignant.enseignant.quota_max}
                       </p>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-3xl font-bold ${
+                        emploiEnseignant.enseignant.pourcentage_quota >= 100 
+                          ? 'text-green-600' 
+                          : emploiEnseignant.enseignant.pourcentage_quota >= 75 
+                          ? 'text-yellow-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {emploiEnseignant.enseignant.pourcentage_quota}%
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Couverture quota</p>
+                      <div className="mt-2 w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${
+                            emploiEnseignant.enseignant.pourcentage_quota >= 100 
+                              ? 'bg-green-600' 
+                              : emploiEnseignant.enseignant.pourcentage_quota >= 75 
+                              ? 'bg-yellow-600' 
+                              : 'bg-red-600'
+                          }`}
+                          style={{ width: `${Math.min(emploiEnseignant.enseignant.pourcentage_quota, 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
 
