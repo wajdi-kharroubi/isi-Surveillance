@@ -12,7 +12,7 @@ from typing import List, Dict, Tuple, Set
 import time
 
 
-class SurveillanceOptimizerV2:
+class SurveillanceOptimizer:
     """
     Algorithme d'optimisation avancé avec gestion complète des contraintes et priorités.
     

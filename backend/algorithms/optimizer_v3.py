@@ -1,6 +1,6 @@
 """
 Algorithme d'Optimisation Avancé pour la Génération des Plannings de Surveillance
-Version 2.0 - Respect complet des règles de contraintes et priorités
+Version 3.0 - Quota maximum strict avec optimisation avancée
 """
 
 import math
@@ -12,7 +12,7 @@ from typing import List, Dict, Tuple, Set
 import time
 
 
-class SurveillanceOptimizerV2:
+class SurveillanceOptimizerV3:
     """
     Algorithme d'optimisation avancé avec gestion complète des contraintes et priorités.
     
@@ -88,7 +88,8 @@ class SurveillanceOptimizerV2:
         min_surveillants_par_examen: int = 2,
         allow_fallback: bool = True,
         respecter_voeux: bool = True,
-        equilibrer_temporel: bool = True
+        equilibrer_temporel: bool = True,
+        activer_regroupement_temporel: bool = True
     ) -> Tuple[bool, int, float, List[str], Dict]:
         """
         Génère le planning optimal avec respect de toutes les contraintes.
@@ -98,6 +99,7 @@ class SurveillanceOptimizerV2:
             allow_fallback: Autoriser le fallback à 1 surveillant si nécessaire
             respecter_voeux: Prendre en compte les vœux (True fortement recommandé)
             equilibrer_temporel: Équilibrer la répartition des créneaux horaires
+            activer_regroupement_temporel: Activer le bonus de regroupement des séances (défaut: True pour confort enseignants)
             
         Returns:
             (success, nb_affectations, temps_execution, messages, scores)
@@ -253,12 +255,23 @@ class SurveillanceOptimizerV2:
         )
         print(f"      ✓ Contraintes d'équilibre appliquées")
         
-        # CONTRAINTE 7: Favoriser séances consécutives et éviter première+dernière séance
-        print("   → Contrainte 7: Optimisation de la continuité des séances")
-        bonus_consecutivite = self._contrainte_seances_consecutives(
+        # CONTRAINTE 7: Interdire première+dernière séance isolées (PRIORITÉ 7 - CONTRAINTE FORTE)
+        print("   → Contrainte 7: Interdiction première+dernière séance sans autres séances")
+        self._contrainte_interdire_premiere_derniere_isolees(
             seances, enseignants, affectations_vars
         )
-        print(f"      ✓ Bonus de consécutivité calculé (évite 1ère+dernière, favorise consécutivité)")
+        print(f"      ✓ Contrainte appliquée: impossible d'avoir SEULEMENT 1ère ET dernière séance d'un jour")
+        
+        # CONTRAINTE 8 (OPTIONNELLE): Favoriser séances consécutives
+        bonus_consecutivite = None
+        if activer_regroupement_temporel:
+            print("   → Contrainte 8: Optimisation du regroupement des séances (OPTIONNEL - ACTIVÉ)")
+            bonus_consecutivite = self._contrainte_seances_consecutives(
+                seances, enseignants, affectations_vars
+            )
+            print(f"      ✓ Bonus de regroupement calculé (favorise les séances groupées)")
+        else:
+            print("   → Contrainte 8: Regroupement temporel (OPTIONNEL - DÉSACTIVÉ)")
         
         # ===== PHASE 7: FONCTION OBJECTIF =====
         print("\n🎯 Phase 7: Configuration de la fonction objectif...")
@@ -270,29 +283,50 @@ class SurveillanceOptimizerV2:
             enseignants,
             equilibrer_temporel,
             preferences_voeux,
-            bonus_consecutivite
+            bonus_consecutivite,
+            activer_regroupement_temporel
         )
         
-        print(f"      ✓ Fonction objectif configurée:")
-        print(f"         • Maximiser l'utilisation des quotas (35%)")
-        print(f"         • Minimiser la dispersion globale entre enseignants (25%)")
-        print(f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)")
-        print(f"         • Favoriser les séances consécutives (10% - optimisé)")
-        print(f"         • Favoriser les vœux de surveillance (10%)")
+        if activer_regroupement_temporel:
+            print(f"      ✓ Fonction objectif configurée:")
+            print(f"         • Maximiser l'utilisation des quotas (35%)")
+            print(f"         • Minimiser la dispersion globale entre enseignants (25%)")
+            print(f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)")
+            print(f"         • Favoriser les séances regroupées (10% - optimisé)")
+            print(f"         • Favoriser les vœux de surveillance (10%)")
+        else:
+            print(f"      ✓ Fonction objectif configurée:")
+            print(f"         • Maximiser l'utilisation des quotas (40%)")
+            print(f"         • Minimiser la dispersion globale entre enseignants (30%)")
+            print(f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)")
+            print(f"         • Favoriser les vœux de surveillance (10%)")
         
         # ===== PHASE 8: RÉSOLUTION =====
         print("\n⚡ Phase 8: Résolution du problème...")
         
-        # Configuration optimisée du solveur pour rapidité
-        self.solver.parameters.max_time_in_seconds = 36000  # 1 heure max au lieu de 6000
-        self.solver.parameters.num_search_workers = 8  # Parallélisation
+        # Configuration ultra-optimisée du solveur pour performances maximales
+        import os
+        
+        # Détection automatique du nombre de cœurs CPU
+        nb_cores = os.cpu_count() or 8
+        self.solver.parameters.num_search_workers = min(nb_cores, 16)  # Max 16 workers
+        
+        # Timeout optimisé
+        self.solver.parameters.max_time_in_seconds = 900  # 15 minutes max
         self.solver.parameters.log_search_progress = False  # Désactiver les logs verbeux
         
         # Stratégies pour accélérer la recherche
-        # Accepter une solution "assez bonne" plutôt que chercher l'optimale pendant des heures
-        self.solver.parameters.cp_model_presolve = True
-        self.solver.parameters.linearization_level = 2
-        self.solver.parameters.cp_model_probing_level = 2
+        self.solver.parameters.cp_model_presolve = True  # Pré-résolution
+        self.solver.parameters.linearization_level = 2  # Linéarisation avancée
+        self.solver.parameters.cp_model_probing_level = 2  # Probing avancé
+        
+        # NOUVEAUX PARAMÈTRES D'ACCÉLÉRATION ⚡⚡⚡
+        self.solver.parameters.relative_gap_limit = 0.05  # Arrêter à 5% de l'optimal
+        self.solver.parameters.max_deterministic_time = 450.0  # 7.5 min temps déterministe
+        
+        print(f"      → Utilisation de {min(nb_cores, 16)} workers CPU")
+        print(f"      → Timeout: 15 minutes max")
+        print(f"      → Gap relatif accepté: 5%")
         
         status = self.solver.Solve(self.model)
         
@@ -851,6 +885,82 @@ class SurveillanceOptimizerV2:
                     self.model.Add(nb_ens_1 - nb_ens_2 <= tolerance)
                     self.model.Add(nb_ens_2 - nb_ens_1 <= tolerance)
     
+    def _contrainte_interdire_premiere_derniere_isolees(
+        self,
+        seances: Dict,
+        enseignants: List[Enseignant],
+        affectations_vars: Dict
+    ):
+        """
+        CONTRAINTE 7 (FORTE): Interdire d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
+        
+        Règle stricte:
+        - Si un enseignant a la 1ère séance ET la dernière séance d'un jour
+        - Alors il DOIT avoir au moins une autre séance dans ce jour
+        - Sinon, c'est INTERDIT (contrainte forte)
+        
+        Exemple:
+        - Jour avec séances [S1, S2, S3, S4]
+        - INTERDIT: avoir uniquement S1 + S4 (sans S2 ni S3)
+        - AUTORISÉ: S1 + S2, S1 + S3, S1 + S2 + S4, etc.
+        """
+        
+        # Grouper les séances par jour et identifier première/dernière
+        seances_par_jour = {}
+        for seance_key in seances.keys():
+            jour_index = seance_key[4]  # Index du jour (1, 2, 3...)
+            seance_code = seance_key[1]  # Code de la séance (S1, S2, S3, S4)
+            
+            if jour_index not in seances_par_jour:
+                seances_par_jour[jour_index] = []
+            seances_par_jour[jour_index].append((seance_key, seance_code))
+        
+        # Pour chaque jour avec au moins 3 séances (si < 3, pas de problème)
+        nb_contraintes_ajoutees = 0
+        for jour_index, seances_jour in seances_par_jour.items():
+            if len(seances_jour) < 3:
+                # Pas assez de séances pour que la contrainte ait du sens
+                continue
+            
+            # Trier les séances par code (S1 < S2 < S3 < S4)
+            seances_jour_triees = sorted(seances_jour, key=lambda x: x[1])
+            premiere_seance_key = seances_jour_triees[0][0]
+            derniere_seance_key = seances_jour_triees[-1][0]
+            seances_intermediaires = [s[0] for s in seances_jour_triees[1:-1]]
+            
+            # Pour chaque enseignant
+            for enseignant in enseignants:
+                # Variables: enseignant affecté à première/dernière/intermédiaires
+                a_premiere = affectations_vars.get((premiere_seance_key, enseignant.id))
+                a_derniere = affectations_vars.get((derniere_seance_key, enseignant.id))
+                
+                if a_premiere is None or a_derniere is None:
+                    continue
+                
+                # Variable: enseignant a au moins une séance intermédiaire
+                a_intermediaire = [
+                    affectations_vars.get((seance_key, enseignant.id))
+                    for seance_key in seances_intermediaires
+                    if affectations_vars.get((seance_key, enseignant.id)) is not None
+                ]
+                
+                if not a_intermediaire:
+                    continue
+                
+                # CONTRAINTE FORTE: Si (première ET dernière), alors au moins une intermédiaire
+                # Logique: NOT(première AND dernière) OR (au moins une intermédiaire)
+                # Équivalent: première + dernière <= 1 + sum(intermédiaires)
+                # Si première=1 et dernière=1, alors sum(intermédiaires) >= 1
+                
+                self.model.Add(
+                    a_premiere + a_derniere <= 1 + sum(a_intermediaire)
+                )
+                nb_contraintes_ajoutees += 1
+        
+        self.infos.append(
+            f"      → {nb_contraintes_ajoutees} contraintes d'interdiction 1ère+dernière isolées appliquées"
+        )
+    
     def _contrainte_seances_consecutives(
         self,
         seances: Dict,
@@ -858,7 +968,7 @@ class SurveillanceOptimizerV2:
         affectations_vars: Dict
     ):
         """
-        CONTRAINTE 7: Favorise le regroupement des séances par jour.
+        CONTRAINTE 8 (OPTIONNELLE): Favorise le regroupement des séances par jour.
         VERSION OPTIMISÉE pour performance.
         
         Objectifs:
@@ -1288,18 +1398,24 @@ class SurveillanceOptimizerV2:
         enseignants: List[Enseignant],
         equilibrer_temporel: bool,
         preferences_voeux: Dict = None,
-        bonus_consecutivite = None
+        bonus_consecutivite = None,
+        activer_regroupement_temporel: bool = False
     ) -> cp_model.IntVar:
         """
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
         
-        Composantes du score:
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 30%
-        2. Équilibre global de charge (minimiser dispersion) - POIDS: 20%
+        Composantes du score (avec regroupement temporel activé):
+        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 35%
+        2. Équilibre global de charge (minimiser dispersion) - POIDS: 25%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
-        4. Bonus consécutivité (favoriser séances consécutives, éviter 1ère+dernière) - POIDS: 15%
+        4. Bonus regroupement (favoriser séances regroupées) - POIDS: 10%
         5. Préférence pour enseignants avec vœux - POIDS: 10%
-        6. Équilibre temporel (éviter toujours premiers/derniers créneaux) - POIDS: 5%
+        
+        Composantes du score (sans regroupement temporel):
+        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 40%
+        2. Équilibre global de charge (minimiser dispersion) - POIDS: 30%
+        3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
+        4. Préférence pour enseignants avec vœux - POIDS: 10%
         """
         
         # COMPOSANTE 1: Maximisation de l'utilisation des quotas (NOUVEAU - PRIORITAIRE)
@@ -1365,13 +1481,19 @@ class SurveillanceOptimizerV2:
             )
         
         # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade, 
-        # maximiser bonus_consecutivite, maximiser bonus_voeux
+        # maximiser bonus_consecutivite (optionnel), maximiser bonus_voeux
+        # 
+        # Avec regroupement temporel:
         # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite + 10*bonus_voeux
+        # 
+        # Sans regroupement temporel:
+        # Score = 40*total_affectations - 30*dispersion - 20*dispersion_grades + 10*bonus_voeux
+        # 
         # Le solveur maximise, donc on veut:
         # - Maximiser total_affectations (positif) - PRIORITÉ 1
         # - Minimiser dispersion globale (négatif) - PRIORITÉ 2
         # - Minimiser dispersion par grade (négatif) - PRIORITÉ 3
-        # - Maximiser bonus consécutivité (positif) - Bonus léger
+        # - Maximiser bonus regroupement (positif) - Bonus léger (si activé)
         # - Maximiser bonus_voeux (positif) - Bonus léger
         
         # Construction de la fonction objectif selon les composantes disponibles
@@ -1380,19 +1502,21 @@ class SurveillanceOptimizerV2:
         
         if total_affectations is not None:
             composantes.append(total_affectations)
-            poids.append(35)  # Poids 35% - PRIORITÉ MAXIMALE
+            # Poids ajusté selon si regroupement temporel activé
+            poids.append(35 if activer_regroupement_temporel else 40)
         
         if dispersion is not None:
             composantes.append(dispersion)
-            poids.append(-25)  # Poids -25% (minimiser) - IMPORTANT
+            # Poids ajusté selon si regroupement temporel activé
+            poids.append(-25 if activer_regroupement_temporel else -30)
         
         if dispersion_grades is not None:
             composantes.append(dispersion_grades)
             poids.append(-20)  # Poids -20% (minimiser) - IMPORTANT
         
-        if bonus_consecutivite is not None:
+        if activer_regroupement_temporel and bonus_consecutivite is not None:
             composantes.append(bonus_consecutivite)
-            poids.append(10)  # Poids 10% - Bonus secondaire pour performance
+            poids.append(10)  # Poids 10% - Bonus secondaire (seulement si activé)
         
         if bonus_voeux is not None:
             composantes.append(bonus_voeux)

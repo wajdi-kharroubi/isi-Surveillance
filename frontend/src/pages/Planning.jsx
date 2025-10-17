@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { planningAPI, enseignantsAPI } from '../services/api';
-import { Calendar, Users, Clock, MapPin, BookOpen, AlertCircle } from 'lucide-react';
+import { Calendar, Users, Clock, MapPin, BookOpen, AlertCircle, Search } from 'lucide-react';
 
 export default function Planning() {
   const [activeTab, setActiveTab] = useState('seances'); // 'seances' ou 'enseignant'
   const [selectedEnseignant, setSelectedEnseignant] = useState(null);
+  const [searchFilter, setSearchFilter] = useState('');
 
   // Charger la liste des enseignants
   const { data: enseignants = [] } = useQuery({
@@ -40,6 +41,28 @@ export default function Planning() {
     if (!timeStr) return '';
     return timeStr.substring(0, 5); // HH:MM
   };
+
+  // Filtrer les enseignants en fonction de la recherche
+  const enseignantsFiltres = useMemo(() => {
+    if (!searchFilter.trim()) {
+      return enseignants.filter(e => e.participe_surveillance);
+    }
+    
+    const filterLower = searchFilter.toLowerCase().trim();
+    return enseignants
+      .filter(e => e.participe_surveillance)
+      .filter(ens => {
+        const nom = (ens.nom || '').toLowerCase();
+        const prenom = (ens.prenom || '').toLowerCase();
+        const codeSmartex = (ens.code_smartex || '').toLowerCase();
+        const gradeCode = (ens.grade_code || '').toLowerCase();
+        
+        return nom.includes(filterLower) || 
+               prenom.includes(filterLower) || 
+               codeSmartex.includes(filterLower) ||
+               gradeCode.includes(filterLower);
+      });
+  }, [enseignants, searchFilter]);
 
   return (
     <div className="space-y-6">
@@ -164,25 +187,74 @@ export default function Planning() {
       {/* Contenu - Emploi par Enseignant */}
       {activeTab === 'enseignant' && (
         <div className="space-y-6">
-          {/* Sélecteur d'enseignant */}
+          {/* Sélecteur d'enseignant avec filtre de recherche */}
           <div className="card">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Sélectionner un enseignant :
+              Rechercher un enseignant :
             </label>
-            <select
-              value={selectedEnseignant || ''}
-              onChange={(e) => setSelectedEnseignant(Number(e.target.value) || null)}
-              className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">-- Choisir un enseignant --</option>
-              {enseignants
-                .filter(e => e.participe_surveillance)
-                .map((ens) => (
+            
+            {/* Champ de recherche */}
+            <div className="relative mb-4">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Rechercher par nom, prénom ou code enseignant..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              />
+              {searchFilter && (
+                <button
+                  onClick={() => setSearchFilter('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  <span className="text-sm">✕</span>
+                </button>
+              )}
+            </div>
+
+            {/* Sélecteur filtré */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                <span>
+                  {enseignantsFiltres.length} enseignant{enseignantsFiltres.length > 1 ? 's' : ''} trouvé{enseignantsFiltres.length > 1 ? 's' : ''}
+                </span>
+                {selectedEnseignant && (
+                  <button
+                    onClick={() => {
+                      setSelectedEnseignant(null);
+                      setSearchFilter('');
+                    }}
+                    className="text-blue-600 hover:text-blue-700 underline"
+                  >
+                    Réinitialiser
+                  </button>
+                )}
+              </div>
+              
+              <select
+                value={selectedEnseignant || ''}
+                onChange={(e) => setSelectedEnseignant(Number(e.target.value) || null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                size={Math.min(enseignantsFiltres.length + 1, 10)}
+              >
+                <option value="">-- Choisir un enseignant --</option>
+                {enseignantsFiltres.map((ens) => (
                   <option key={ens.id} value={ens.id}>
-                    {ens.nom} {ens.prenom} ({ens.grade_code})
+                    {ens.nom} {ens.prenom} • {ens.code_smartex || 'N/A'} • ({ens.grade_code})
                   </option>
                 ))}
-            </select>
+              </select>
+              
+              {enseignantsFiltres.length === 0 && searchFilter && (
+                <div className="text-center py-4 text-gray-500 text-sm">
+                  <AlertCircle className="w-5 h-5 mx-auto mb-2 text-gray-400" />
+                  Aucun enseignant ne correspond à votre recherche
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Affichage de l'emploi */}

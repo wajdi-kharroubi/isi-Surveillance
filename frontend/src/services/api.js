@@ -75,10 +75,12 @@ export const importAPI = {
 
 // ========== Génération ==========
 export const generationAPI = {
+  // V1: Algorithme avec quota fixe par grade
+  genererV1: (data) => api.post('/generation/generer-v1', data),
   // V2: Algorithme d'optimisation avancé avec système de contraintes hiérarchisées
-  generer: (data) => api.post('/generation/generer-v2', data),
-  // V1: Ancien algorithme (conservé pour compatibilité)
-  genererV1: (data) => api.post('/generation/generer', data),
+  genererV2: (data) => api.post('/generation/generer-v2', data),
+  // V3: Algorithme d'optimisation V3 avec quota maximum strict
+  genererV3: (data) => api.post('/generation/generer-v3', data),
   reinitialiser: () => api.delete('/generation/reinitialiser'),
   verifier: () => api.get('/generation/verification'),
 };

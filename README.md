@@ -68,7 +68,11 @@ npm run package
 - ✅ Convocations individuelles
 - ✅ Listes par créneau
 
-## 📄 Licence
+## � Documentation
+
+- Détails de l’algorithme d’optimisation, règles, contraintes et cas problématiques: `docs/ALGORITHME_SURVEILLANCE.md`
+
+## �📄 Licence
 
 Propriétaire - Établissement d'Enseignement Supérieur
 
