@@ -10,6 +10,7 @@ class EnseignantBase(BaseModel):
     grade: str = Field(..., min_length=1, max_length=50)
     grade_code: str = Field(..., min_length=1, max_length=10)
     code_smartex: str = Field(..., min_length=1, max_length=50)
+    abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant (ex: P.NOM)
     participe_surveillance: bool = True
 
 class EnseignantCreate(EnseignantBase):
@@ -21,6 +22,7 @@ class EnseignantUpdate(BaseModel):
     email: Optional[EmailStr] = None
     grade: Optional[str] = Field(None, min_length=1, max_length=50)
     grade_code: Optional[str] = Field(None, min_length=1, max_length=10)
+    abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant
     participe_surveillance: Optional[bool] = None
 
 class EnseignantResponse(EnseignantBase):

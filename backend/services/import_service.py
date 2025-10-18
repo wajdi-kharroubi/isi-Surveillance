@@ -1,6 +1,6 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-from models.models import Enseignant, Voeu, Examen
+from models.models import Enseignant, Voeu, Examen, Affectation
 from typing import List, Dict, Tuple
 from datetime import datetime
 import logging
@@ -24,6 +24,7 @@ class ImportService:
         - email_ens: Email (identifiant unique)
         - grade_code_ens: Code du grade (PES, MA, PA, AH, AS, TE, PH)
         - code_smartex_ens: Code SmartEx (identifiant) - optionnel, généré automatiquement si absent
+        - abrv_ens: Abréviation de l'enseignant (ex: P.NOM) - optionnel
         - participe_surveillance: "vrai" ou "faux" (optionnel, vrai par défaut)
         
         Le nom complet du grade (grade_ens) est déduit automatiquement du code.
@@ -36,6 +37,10 @@ class ImportService:
         count = 0
         
         try:
+            # SUPPRIMER TOUTES LES AFFECTATIONS EXISTANTES
+            nb_affectations_supprimees = db.query(Affectation).delete()
+            logger.info(f"🗑️  {nb_affectations_supprimees} affectations supprimées avant import des enseignants")
+            
             # SUPPRIMER TOUS LES ENSEIGNANTS EXISTANTS
             nb_supprimes = db.query(Enseignant).delete()
             logger.info(f"🗑️  {nb_supprimes} enseignants supprimés avant import")
@@ -118,6 +123,13 @@ class ImportService:
                         next_code_smartex += 1
                         logger.info(f"📝 Code SmartEx généré automatiquement pour {row['prenom_ens']} {row['nom_ens']}: {code_smartex}")
                     
+                    # Récupérer l'abréviation de l'enseignant (optionnel)
+                    abrv_ens = None
+                    if 'abrv_ens' in df.columns:
+                        abrv_ens_raw = row['abrv_ens']
+                        if pd.notna(abrv_ens_raw) and str(abrv_ens_raw).strip() != '':
+                            abrv_ens = str(abrv_ens_raw).strip()
+                    
                     # Créer l'enseignant (pas besoin de vérifier l'existence, tout est supprimé avant)
                     enseignant = Enseignant(
                         nom=str(row['nom_ens']).strip(),
@@ -126,6 +138,7 @@ class ImportService:
                         grade=grade_nom,
                         grade_code=grade_code,
                         code_smartex=code_smartex,
+                        abrv_ens=abrv_ens,
                         participe_surveillance=participe
                     )
                     db.add(enseignant)
@@ -163,6 +176,10 @@ class ImportService:
         count = 0
         
         try:
+            # SUPPRIMER TOUTES LES AFFECTATIONS EXISTANTES
+            nb_affectations_supprimees = db.query(Affectation).delete()
+            logger.info(f"🗑️  {nb_affectations_supprimees} affectations supprimées avant import des vœux")
+            
             # SUPPRIMER TOUS LES VŒUX EXISTANTS
             nb_supprimes = db.query(Voeu).delete()
             logger.info(f"🗑️  {nb_supprimes} vœux supprimés avant import")
@@ -269,6 +286,10 @@ class ImportService:
         nb_doublons = 0  # Initialiser le compteur de doublons
         
         try:
+            # SUPPRIMER TOUTES LES AFFECTATIONS EXISTANTES
+            nb_affectations_supprimees = db.query(Affectation).delete()
+            logger.info(f"🗑️  {nb_affectations_supprimees} affectations supprimées avant import des examens")
+            
             # SUPPRIMER TOUS LES EXAMENS EXISTANTS
             nb_supprimes = db.query(Examen).delete()
             logger.info(f"🗑️  {nb_supprimes} examens supprimés avant import")
