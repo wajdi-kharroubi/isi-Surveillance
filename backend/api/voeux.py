@@ -9,6 +9,16 @@ from models import (
 
 router = APIRouter(prefix="/voeux", tags=["Voeux"])
 
+# Mapping indice -> nom du jour
+JOURS_SEMAINE = {
+    0: "Lundi",
+    1: "Mardi",
+    2: "Mercredi",
+    3: "Jeudi",
+    4: "Vendredi",
+    5: "Samedi"
+}
+
 
 @router.get("/", response_model=List[VoeuResponse])
 def lister_voeux(
@@ -50,6 +60,7 @@ def lister_voeux(
             "seance": voeu.seance,
             "semestre_code_libelle": voeu.semestre_code_libelle,
             "session_libelle": voeu.session_libelle,
+            "date_voeu": voeu.date_voeu if hasattr(voeu, 'date_voeu') else None,
             "created_at": voeu.created_at
         }
         result.append(voeu_dict)

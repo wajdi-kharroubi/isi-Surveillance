@@ -35,21 +35,23 @@ class EnseignantResponse(EnseignantBase):
 
 # ============ Voeu Schemas ============
 class VoeuBase(BaseModel):
-    jour: int = Field(..., ge=1)  # Numéro du jour
+    jour: str = Field(..., pattern="^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi)$")  # Nom du jour
     seance: str = Field(..., pattern="^(S1|S2|S3|S4)$")  # S1, S2, S3, S4
-    semestre_code_libelle: str = Field(..., max_length=50)
-    session_libelle: str = Field(..., max_length=50)
+    semestre_code_libelle: str = Field(..., max_length=50)  # Semestre1 ou Semestre2
+    session_libelle: str = Field(..., max_length=50)  # Partiel, Examen ou Rattrapage
+    date_voeu: Optional[date] = None  # Date du vœu (optionnel)
 
 class VoeuCreate(VoeuBase):
     enseignant_id: int
     code_smartex_ens: Optional[str] = Field(None, max_length=50)  # Optionnel lors de la création
 
 class VoeuUpdate(BaseModel):
-    jour: Optional[int] = Field(None, ge=1)
+    jour: Optional[str] = Field(None, pattern="^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi)$")
     seance: Optional[str] = Field(None, pattern="^(S1|S2|S3|S4)$")
     semestre_code_libelle: Optional[str] = Field(None, max_length=50)
     session_libelle: Optional[str] = Field(None, max_length=50)
     code_smartex_ens: Optional[str] = Field(None, max_length=50)
+    date_voeu: Optional[date] = None
 
 class VoeuResponse(VoeuBase):
     id: int

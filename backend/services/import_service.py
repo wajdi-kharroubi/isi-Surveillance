@@ -163,11 +163,12 @@ class ImportService:
         ATTENTION : Supprime tous les vœux existants avant l'import !
         
         Colonnes attendues:
-        - code_smartex_ens
-        - nom_ens (optionnel)
-        - prenom_ens (optionnel)
-        - jours_dispo (format: YYYY-MM-DD ou DD/MM/YYYY)
-        - seance_dispo (Matin ou Après-midi)
+        - Enseignant: Abréviation de l'enseignant (ex: P.NOM)
+        - Semestre: Semestre1 ou Semestre2
+        - Session: Partiel ou Examen ou Rattrapage
+        - Date: format j/m/a (ex: 15/01/2025)
+        - Jour: Lundi, Mardi, Mercredi, Jeudi, Vendredi, Samedi
+        - Séances: Liste de séances séparées par des virgules (ex: S1,S3 ou S2,S4)
         
         Returns:
             (nombre_importes, erreurs)
@@ -188,65 +189,72 @@ class ImportService:
             df = pd.read_excel(file_path)
             
             # Vérification des colonnes obligatoires
-            colonnes_requises = [
-                'semestre_code.libelle', 'session.libelle', 
-                'enseignant_uuid.nom_ens', 'enseignant_uuid.prenom_ens', 
-                'jour', 'seance'
-            ]
+            colonnes_requises = ['Enseignant', 'Semestre', 'Session', 'Jour', 'Séances']
             colonnes_manquantes = [col for col in colonnes_requises if col not in df.columns]
             
             if colonnes_manquantes:
                 erreurs.append(f"Colonnes manquantes: {', '.join(colonnes_manquantes)}")
                 return 0, erreurs
             
-            # Mapping des séances vers les horaires
-            seance_mapping = {
-                'S1': 'Matin',      # 08:30-10:00
-                'S2': 'Matin',      # 10:30-12:00
-                'S3': 'Après-midi', # 12:30-14:00
-                'S4': 'Après-midi'  # 14:30-16:00
-            }
+            # Liste des jours valides
+            jours_valides = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
             
             # Import ligne par ligne
             for idx, row in df.iterrows():
                 try:
-                    # Rechercher l'enseignant par nom et prénom
-                    nom = str(row['enseignant_uuid.nom_ens']).strip()
-                    prenom = str(row['enseignant_uuid.prenom_ens']).strip()
+                    # Rechercher l'enseignant par abréviation (abrv_ens)
+                    abrv_ens = str(row['Enseignant']).strip()
                     
                     enseignant = db.query(Enseignant).filter(
-                        Enseignant.nom == nom,
-                        Enseignant.prenom == prenom
+                        Enseignant.abrv_ens == abrv_ens
                     ).first()
                     
                     if not enseignant:
-                        erreurs.append(f"Ligne {idx + 2}: Enseignant {prenom} {nom} introuvable")
+                        erreurs.append(f"Ligne {idx + 2}: Enseignant avec abréviation '{abrv_ens}' introuvable")
                         continue
                     
-                    # Récupérer le jour (indice entier)
-                    jour = int(row['jour'])
-                    
-                    # Récupérer et valider la séance
-                    seance = str(row['seance']).strip().upper()
-                    if seance not in seance_mapping:
-                        erreurs.append(f"Ligne {idx + 2}: Séance invalide '{seance}' (doit être S1, S2, S3 ou S4)")
+                    # Récupérer et valider le jour (capitaliser la première lettre)
+                    jour = str(row['Jour']).strip().capitalize()
+                    if jour not in jours_valides:
+                        erreurs.append(f"Ligne {idx + 2}: Jour invalide '{row['Jour']}' (doit être Lundi, Mardi, Mercredi, Jeudi, Vendredi ou Samedi)")
                         continue
                     
-                    # Récupérer semestre et session directement depuis Excel
-                    semestre_code_libelle = str(row['semestre_code.libelle']).strip()
-                    session_libelle = str(row['session.libelle']).strip()
+                    # Récupérer semestre et session
+                    semestre = str(row['Semestre']).strip()
+                    session = str(row['Session']).strip()
                     
-                    # Créer le vœu (ajout du code_smartex_ens)
-                    voeu = Voeu(
-                        enseignant_id=enseignant.id,
-                        code_smartex_ens=enseignant.code_smartex,
-                        jour=jour,
-                        seance=seance,
-                        semestre_code_libelle=semestre_code_libelle,
-                        session_libelle=session_libelle
-                    )
-                    db.add(voeu)
-                    count += 1
+                    # Récupérer la date (optionnel)
+                    date_voeu = None
+                    if 'Date' in df.columns and pd.notna(row['Date']):
+                        try:
+                            date_voeu = pd.to_datetime(row['Date'], dayfirst=True).date()
+                        except Exception as e:
+                            logger.warning(f"Ligne {idx + 2}: Date invalide '{row['Date']}' - ignorée")
+                    
+                    # Récupérer les séances (ex: "S1,S3" ou "S2,S4" ou "S1,S2,S3,S4")
+                    seances_str = str(row['Séances']).strip().upper()
+                    seances_list = [s.strip() for s in seances_str.split(',')]
+                    
+                    # Valider les séances
+                    seances_valides = ['S1', 'S2', 'S3', 'S4']
+                    for seance in seances_list:
+                        if seance not in seances_valides:
+                            erreurs.append(f"Ligne {idx + 2}: Séance invalide '{seance}' (doit être S1, S2, S3 ou S4)")
+                            continue
+                    
+                    # Créer un vœu pour chaque séance
+                    for seance in seances_list:
+                        voeu = Voeu(
+                            enseignant_id=enseignant.id,
+                            code_smartex_ens=enseignant.code_smartex,
+                            jour=jour,
+                            seance=seance,
+                            semestre_code_libelle=semestre,
+                            session_libelle=session,
+                            date_voeu=date_voeu
+                        )
+                        db.add(voeu)
+                        count += 1
                     
                 except Exception as e:
                     erreurs.append(f"Ligne {idx + 2}: {str(e)}")

@@ -135,11 +135,12 @@ class SurveillanceOptimizerV3:
                 try:
                     print(f"   ✓ Vœux structurés: {len(list_voeux)} entrées")
                     for i, v in enumerate(list_voeux[:15], 1):
+                        date_str = v.get('date_voeu').strftime('%d/%m/%Y') if v.get('date_voeu') else 'N/A'
                         print(
-                            f"      {i:2d}. id={v.get('id')} | nom={v.get('nom')} | jour_idx={v.get('jour')} | seance={v.get('seance')} | heure={v.get('heure')}"
+                            f"      {i:2d}. id={v.get('id')} | nom={v.get('nom')} | date={date_str} | seance={v.get('seance')} | heure={v.get('heure')}"
                         )
                     if len(list_voeux) > 15:
-                        print(f"      ... (+{len(list_voeux) - 10} autres)")
+                        print(f"      ... (+{len(list_voeux) - 15} autres)")
                 except Exception:
                     # Ne pas planter l'algorithme si l'affichage échoue
                     pass
@@ -327,21 +328,21 @@ class SurveillanceOptimizerV3:
 
         if activer_regroupement_temporel:
             print(f"      ✓ Fonction objectif configurée:")
-            print(f"         • Maximiser l'utilisation des quotas (35%)")
+            print(f"         • Maximiser l'utilisation des quotas (25%) ⭐")
             print(f"         • Minimiser la dispersion globale entre enseignants (25%)")
             print(
                 f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
             )
             print(f"         • Favoriser les séances regroupées (10% - optimisé)")
-            print(f"         • Favoriser les vœux de surveillance (10%)")
+            print(f"         • Favoriser les vœux de surveillance (20%) ⭐")
         else:
             print(f"      ✓ Fonction objectif configurée:")
-            print(f"         • Maximiser l'utilisation des quotas (40%)")
+            print(f"         • Maximiser l'utilisation des quotas (25%) ⭐")
             print(f"         • Minimiser la dispersion globale entre enseignants (30%)")
             print(
                 f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
             )
-            print(f"         • Favoriser les vœux de surveillance (10%)")
+            print(f"         • Favoriser les vœux de surveillance (20%) ⭐")
 
         # ===== PHASE 8: RÉSOLUTION =====
         print("\n⚡ Phase 8: Résolution du problème...")
@@ -818,7 +819,7 @@ class SurveillanceOptimizerV3:
             list_voeux: Liste de dictionnaires avec les attributs:
                 - id: Code smartex de l'enseignant
                 - nom: Nom de l'enseignant
-                - jour: Numéro du jour (1, 2, 3...)
+                - date_voeu: Date du vœu (objet date)
                 - seance: Code séance (S1, S2, S3, S4)
                 - heure: Heure de la séance
 
@@ -840,23 +841,24 @@ class SurveillanceOptimizerV3:
         self.infos.append(
             f"   • Nombre d'enseignants avec code_smartex: {len(code_to_id)}"
         )
+        
         if list_voeux:
             self.infos.append(f"   • Exemple vœux (5 premiers):")
             for i, voeu_dict in enumerate(list_voeux[:5]):
                 code_smartex = voeu_dict.get("id")
-                jour = voeu_dict.get("jour")
+                date_voeu = voeu_dict.get("date_voeu")
                 seance_val = voeu_dict.get("seance")
                 ens_id = code_to_id.get(code_smartex, "NON TROUVÉ")
                 self.infos.append(
-                    f"      - code={code_smartex}, nom={voeu_dict.get('nom')}, jour={jour}, seance={seance_val}, ens_id={ens_id}"
+                    f"      - code={code_smartex}, nom={voeu_dict.get('nom')}, date={date_voeu}, seance={seance_val}, ens_id={ens_id}"
                 )
 
-        # Construire un set de tuples (enseignant_id, jour, seance) pour recherche rapide
+        # Construire un set de tuples (enseignant_id, date_voeu, seance) pour recherche rapide
         voeux_set = set()
         voeux_rejetes = []
         for voeu_dict in list_voeux:
             code_smartex = voeu_dict.get("id")
-            jour = voeu_dict.get("jour")
+            date_voeu = voeu_dict.get("date_voeu")
             seance_val = voeu_dict.get("seance")
 
             # Debug: pourquoi certains vœux sont rejetés
@@ -867,16 +869,16 @@ class SurveillanceOptimizerV3:
                 raison_rejet.append(
                     f"code_smartex '{code_smartex}' non trouvé dans enseignants"
                 )
-            if not jour:
-                raison_rejet.append("jour vide")
+            if not date_voeu:
+                raison_rejet.append("date_voeu vide")
             if not seance_val:
                 raison_rejet.append("seance vide")
 
-            if code_smartex and code_smartex in code_to_id and jour and seance_val:
+            if code_smartex and code_smartex in code_to_id and date_voeu and seance_val:
                 enseignant_id = code_to_id[code_smartex]
                 # Normaliser la séance
                 seance = str(seance_val).upper().strip()
-                voeux_set.add((enseignant_id, jour, seance))
+                voeux_set.add((enseignant_id, date_voeu, seance))
             else:
                 voeux_rejetes.append((voeu_dict, raison_rejet))
 
@@ -885,40 +887,27 @@ class SurveillanceOptimizerV3:
         self.infos.append(f"   • Voeux_set créé: {len(voeux_set)} entrées")
         self.infos.append(f"   • Voeux_set (5 premiers): {list(voeux_set)[:5]}")
         self.infos.append(f"   • Voeux rejetés: {len(voeux_rejetes)}")
+        
         if voeux_rejetes:
             self.infos.append(f"   • Exemples de rejets (5 premiers):")
             for voeu_dict, raisons in voeux_rejetes[:5]:
                 self.infos.append(
-                    f"      - {voeu_dict.get('id')} / jour={voeu_dict.get('jour')} / seance={voeu_dict.get('seance')} → Raisons: {', '.join(raisons)}"
+                    f"      - {voeu_dict.get('id')} / date={voeu_dict.get('date_voeu')} / seance={voeu_dict.get('seance')} → Raisons: {', '.join(raisons)}"
                 )
 
         # Pour chaque combinaison (séance, enseignant), vérifier si un vœu existe
-        matches_found = 0
         for seance_key in seances.keys():
             date_exam, seance_code, semestre, session, jour_index = seance_key
-            # IMPORTANT: jour_index est l'index de jour d'examen (1er jour, 2ème jour, etc.)
-            seance_normalized = (
-                seance_code.upper().strip()
-            )  # Normaliser pour comparaison
-
-            # DEBUG: Afficher quelques séances
-            if matches_found == 0 and len(preferences["avec_voeu"]) < 3:
-                self.infos.append(
-                    f"   • Vérification séance: date={date_exam}, jour_index={jour_index}, seance={seance_normalized}"
-                )
-
+            # Normaliser le code de séance pour comparaison
+            seance_normalized = seance_code.upper().strip()
+            
             for enseignant in enseignants:
-                # Vérifier si l'enseignant a un vœu pour ce jour et cette séance
-                # Utiliser jour_index (1er jour, 2ème jour...) et non date_exam.day (jour du mois)
-                lookup_key = (enseignant.id, jour_index, seance_normalized)
+                # Vérifier si l'enseignant a un vœu pour cette date et cette séance
+                lookup_key = (enseignant.id, date_exam, seance_normalized)
+                
                 if lookup_key in voeux_set:
                     # BONUS: Enseignant a exprimé un vœu pour ce créneau
                     preferences["avec_voeu"].append((seance_key, enseignant.id))
-                    if matches_found < 3:
-                        self.infos.append(
-                            f"   ✓ MATCH trouvé: enseignant {enseignant.id}, jour_index={jour_index}, seance={seance_normalized}"
-                        )
-                    matches_found += 1
                 else:
                     # NEUTRE: Pas de vœu pour ce créneau (mais peut être affecté)
                     preferences["sans_voeu"].append((seance_key, enseignant.id))
@@ -1650,17 +1639,19 @@ class SurveillanceOptimizerV3:
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
 
         Composantes du score (avec regroupement temporel activé):
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 35%
+        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 25% ⭐
         2. Équilibre global de charge (minimiser dispersion) - POIDS: 25%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
         4. Bonus regroupement (favoriser séances regroupées) - POIDS: 10%
-        5. Préférence pour enseignants avec vœux - POIDS: 10%
+        5. Préférence pour enseignants avec vœux - POIDS: 20% ⭐ AUGMENTÉ
 
         Composantes du score (sans regroupement temporel):
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 40%
+        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 25% ⭐
         2. Équilibre global de charge (minimiser dispersion) - POIDS: 30%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
-        4. Préférence pour enseignants avec vœux - POIDS: 10%
+        4. Préférence pour enseignants avec vœux - POIDS: 20% ⭐ AUGMENTÉ
+        
+        ⭐ Modifications: Quotas réduit de 35-40% à 25%, Vœux augmenté de 10% à 20%
         """
 
         # COMPOSANTE 1: Maximisation de l'utilisation des quotas (NOUVEAU - PRIORITAIRE)
@@ -1731,18 +1722,19 @@ class SurveillanceOptimizerV3:
         # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade,
         # maximiser bonus_consecutivite (optionnel), maximiser bonus_voeux
         #
+        # POIDS MODIFIÉS:
         # Avec regroupement temporel:
-        # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite + 10*bonus_voeux
+        # Score = 25*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite + 20*bonus_voeux
         #
         # Sans regroupement temporel:
-        # Score = 40*total_affectations - 30*dispersion - 20*dispersion_grades + 10*bonus_voeux
+        # Score = 25*total_affectations - 30*dispersion - 20*dispersion_grades + 20*bonus_voeux
         #
         # Le solveur maximise, donc on veut:
-        # - Maximiser total_affectations (positif) - PRIORITÉ 1
-        # - Minimiser dispersion globale (négatif) - PRIORITÉ 2
-        # - Minimiser dispersion par grade (négatif) - PRIORITÉ 3
-        # - Maximiser bonus regroupement (positif) - Bonus léger (si activé)
-        # - Maximiser bonus_voeux (positif) - Bonus léger
+        # - Maximiser total_affectations (positif) - PRIORITÉ: 25%
+        # - Minimiser dispersion globale (négatif) - PRIORITÉ: 25-30%
+        # - Minimiser dispersion par grade (négatif) - PRIORITÉ: 20%
+        # - Maximiser bonus regroupement (positif) - PRIORITÉ: 10% (si activé)
+        # - Maximiser bonus_voeux (positif) - PRIORITÉ: 20% ⭐ AUGMENTÉ
 
         # Construction de la fonction objectif selon les composantes disponibles
         composantes = []
@@ -1750,13 +1742,13 @@ class SurveillanceOptimizerV3:
 
         if total_affectations is not None:
             composantes.append(total_affectations)
-            # Poids ajusté selon si regroupement temporel activé
-            poids.append(35 if activer_regroupement_temporel else 40)
+            # Poids modifié: 25% au lieu de 35-40%
+            poids.append(25)
 
         if dispersion is not None:
             composantes.append(dispersion)
             # Poids ajusté selon si regroupement temporel activé
-            poids.append(-25 if activer_regroupement_temporel else -30)
+            poids.append(-25)
 
         if dispersion_grades is not None:
             composantes.append(dispersion_grades)
@@ -1768,7 +1760,7 @@ class SurveillanceOptimizerV3:
 
         if bonus_voeux is not None:
             composantes.append(bonus_voeux)
-            poids.append(10)  # Poids 10% - Bonus secondaire
+            poids.append(20)  # Poids 20% ⭐ DOUBLÉ (était 10%)
 
         if composantes:
             # Calculer les bornes du score combiné
@@ -1962,10 +1954,10 @@ class SurveillanceOptimizerV3:
         return 99
 
     def _trier_et_afficher_voeux(self, voeux: List[Voeu]) -> list:
-        """Trie la liste des voeux par jour puis par séance et retourne une liste de dictionnaires d'attributs pour chaque voeu."""
+        """Trie la liste des voeux par date puis par séance et retourne une liste de dictionnaires d'attributs pour chaque voeu."""
 
         def _voeu_sort_key(voeu):
-            jour = self._extract_voeu_jour(voeu) or 0
+            date_voeu = getattr(voeu, "date_voeu", None)
             seance_val = getattr(voeu, "seance_indisponible", None) or getattr(
                 voeu, "seance", None
             )
@@ -1982,7 +1974,9 @@ class SurveillanceOptimizerV3:
                 if code_smartex is not None
                 else (rel_code if rel_code is not None else "")
             )
-            return (jour, seance_idx, sort_ident)
+            # Utiliser date_voeu ou une date par défaut si absente
+            date_sort = date_voeu if date_voeu else date(1900, 1, 1)
+            return (date_sort, seance_idx, sort_ident)
 
         try:
             voeux.sort(key=_voeu_sort_key)
@@ -1991,7 +1985,7 @@ class SurveillanceOptimizerV3:
 
         result = []
         for v in voeux:
-            jour = self._extract_voeu_jour(v)
+            date_voeu = getattr(v, "date_voeu", None)
             seance_val = getattr(v, "seance_indisponible", None) or getattr(
                 v, "seance", None
             )
@@ -2044,7 +2038,7 @@ class SurveillanceOptimizerV3:
                 {
                     "id": ident,
                     "nom": nom,
-                    "jour": jour,
+                    "date_voeu": date_voeu,
                     "seance": seance_val,
                     "heure": heure,
                 }
@@ -2226,35 +2220,72 @@ class SurveillanceOptimizerV3:
         """Calcule les scores de qualité de la solution"""
 
         # Score 1: Respect des vœux (100 = tous respectés)
+        voeux_respectes = 0
+        voeux_violes = 0
+        total_voeux = 0
+        voeux_non_matches = 0
+        
         if list_voeux:
-            voeux_respectes = 0
-            voeux_violes = 0
-
             # Construire un mapping code_smartex -> enseignant_id
             code_to_id = {
                 ens.code_smartex: ens.id for ens in enseignants if ens.code_smartex
             }
 
-            # Créer un set pour une recherche rapide O(1)
+            # Créer un set des dates de séances disponibles pour diagnostic
+            dates_seances_disponibles = set()
+            for seance_key in seances.keys():
+                date_exam, seance_code, semestre, session, jour_index = seance_key
+                dates_seances_disponibles.add((date_exam, seance_code.upper().strip()))
+
+            # Créer un set pour une recherche rapide O(1) avec (enseignant_id, date_voeu, seance)
             voeux_set = set()
+            voeux_rejetes_details = []
+            
             for voeu_dict in list_voeux:
                 code_smartex = voeu_dict.get("id")
-                jour = voeu_dict.get("jour")
+                date_voeu = voeu_dict.get("date_voeu")
                 seance_val = voeu_dict.get("seance")
 
-                if code_smartex and code_smartex in code_to_id and jour and seance_val:
+                if code_smartex and code_smartex in code_to_id and date_voeu and seance_val:
                     enseignant_id = code_to_id[code_smartex]
                     seance = str(seance_val).upper().strip()
-                    voeux_set.add((enseignant_id, jour, seance))
+                    voeux_set.add((enseignant_id, date_voeu, seance))
+                    
+                    # Vérifier si ce vœu correspond à une séance existante
+                    if (date_voeu, seance) not in dates_seances_disponibles:
+                        voeux_rejetes_details.append({
+                            'code': code_smartex,
+                            'date': date_voeu,
+                            'seance': seance,
+                            'raison': 'Aucune séance planifiée pour cette date/séance'
+                        })
+                        voeux_non_matches += 1
+                else:
+                    raisons = []
+                    if not code_smartex:
+                        raisons.append("code_smartex vide")
+                    elif code_smartex not in code_to_id:
+                        raisons.append("code_smartex non trouvé")
+                    if not date_voeu:
+                        raisons.append("date_voeu vide")
+                    if not seance_val:
+                        raisons.append("seance vide")
+                    
+                    voeux_rejetes_details.append({
+                        'code': code_smartex or 'N/A',
+                        'date': date_voeu or 'N/A',
+                        'seance': seance_val or 'N/A',
+                        'raison': ', '.join(raisons)
+                    })
+                    voeux_non_matches += 1
 
             for seance_key in seances.keys():
                 date_exam, seance_code, semestre, session, jour_index = seance_key
-                # IMPORTANT: utiliser jour_index (1er jour, 2ème jour...) et non date_exam.day
                 seance_normalized = seance_code.upper().strip()
 
                 for enseignant in enseignants:
-                    # Vérifier si cet enseignant a un vœu pour cette séance
-                    if (enseignant.id, jour_index, seance_normalized) in voeux_set:
+                    # Vérifier si cet enseignant a un vœu pour cette date et cette séance
+                    if (enseignant.id, date_exam, seance_normalized) in voeux_set:
                         # Si affecté (value=1), c'est respecté, sinon violé
                         if (
                             self.solver.Value(
@@ -2267,10 +2298,18 @@ class SurveillanceOptimizerV3:
                             voeux_violes += 1
 
             total_voeux = voeux_respectes + voeux_violes
+            
+            # Stocker les détails pour l'affichage
+            self.voeux_rejetes_details = voeux_rejetes_details
+            self.voeux_non_matches = voeux_non_matches
+            self.voeux_total_db = len(list_voeux)
+            
             self.score_components["respect_voeux"] = (
                 (voeux_respectes / total_voeux * 100) if total_voeux > 0 else 100
             )
         else:
+            self.voeux_non_matches = 0
+            self.voeux_total_db = 0
             self.score_components["respect_voeux"] = 100
 
         # Score 2: Équilibre global (100 = dispersion minimale)
@@ -2312,6 +2351,67 @@ class SurveillanceOptimizerV3:
         )
 
         self.score_components["score_global"] = score_global
+
+        # Affichage console
+        print("\n" + "=" * 80)
+        print("🎯 RÉSULTATS DE L'OPTIMISATION")
+        print("=" * 80)
+        
+        if list_voeux:
+            print(f"\n📊 ANALYSE DES VŒUX:")
+            print(f"   • Total vœux en base de données: {self.voeux_total_db}")
+            print(f"   • Vœux matchant des séances planifiées: {total_voeux}")
+            print(f"   • Vœux sans séance correspondante: {self.voeux_non_matches}")
+            print(f"\n   📈 PARMI LES VŒUX VALIDES ({total_voeux}):")
+            print(f"      • Vœux respectés (enseignant affecté): {voeux_respectes}")
+            print(f"      • Vœux non respectés (enseignant non affecté): {voeux_violes}")
+            print(f"      • Pourcentage de respect: {self.score_components['respect_voeux']:.1f}%")
+            
+            if self.voeux_non_matches > 0:
+                print(f"\n   ⚠️ VŒUX NON MATCHÉS ({self.voeux_non_matches}):")
+                # Grouper par raison
+                raisons_count = {}
+                dates_non_planifiees_dict = {}  # {(date, seance): [codes enseignants]}
+                voeux_autres_raisons = []
+                
+                for detail in self.voeux_rejetes_details:
+                    raison = detail['raison']
+                    raisons_count[raison] = raisons_count.get(raison, 0) + 1
+                    
+                    if 'Aucune séance planifiée' in raison:
+                        date_str = detail['date'].strftime('%d/%m/%Y') if hasattr(detail['date'], 'strftime') else str(detail['date'])
+                        key = (date_str, detail['seance'])
+                        if key not in dates_non_planifiees_dict:
+                            dates_non_planifiees_dict[key] = []
+                        dates_non_planifiees_dict[key].append(detail['code'])
+                    else:
+                        voeux_autres_raisons.append(detail)
+                
+                print(f"      • Répartition par type:")
+                for raison, count in sorted(raisons_count.items(), key=lambda x: x[1], reverse=True):
+                    print(f"         - {raison}: {count} vœux")
+                
+                if dates_non_planifiees_dict:
+                    print(f"\n      • Liste complète des vœux sans séance correspondante ({len(dates_non_planifiees_dict)} dates/séances différentes):")
+                    for (date_str, seance), codes in sorted(dates_non_planifiees_dict.items()):
+                        print(f"         - {date_str} {seance}: {len(codes)} enseignant(s) ({', '.join(codes[:5])}{', ...' if len(codes) > 5 else ''})")
+                
+                if voeux_autres_raisons:
+                    print(f"\n      • Autres vœux rejetés ({len(voeux_autres_raisons)}):")
+                    for detail in voeux_autres_raisons[:20]:  # Limiter à 20 pour éviter un affichage trop long
+                        print(f"         - Code: {detail['code']}, Date: {detail['date']}, Séance: {detail['seance']} → {detail['raison']}")
+                    if len(voeux_autres_raisons) > 20:
+                        print(f"         ... et {len(voeux_autres_raisons) - 20} autres vœux rejetés")
+        else:
+            print(f"\n📊 RESPECT DES VŒUX:")
+            print(f"   • Aucun vœu fourni")
+        
+        print(f"\n🎯 SCORES:")
+        print(f"   • Respect des vœux: {self.score_components['respect_voeux']:.1f}%")
+        print(f"   • Équilibre global: {self.score_components['equilibre_global']:.1f}%")
+        print(f"   • Quotas respectés: {self.score_components['quota_respecte']:.1f}%")
+        print(f"\n   ⭐ SCORE GLOBAL: {score_global:.1f}%")
+        print("=" * 80 + "\n")
 
         self.infos.append("\n🎯 === SCORES D'OPTIMISATION ===")
         self.infos.append(

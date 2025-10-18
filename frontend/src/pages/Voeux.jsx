@@ -57,7 +57,10 @@ export default function Voeux() {
 
   const jours = useMemo(() => {
     if (!voeux) return [];
-    return [...new Set(voeux.map(v => v.jour))].filter(j => j != null).sort((a, b) => a - b);
+    const uniqueJours = [...new Set(voeux.map(v => v.jour))].filter(j => j != null);
+    // Tri dans l'ordre des jours de la semaine
+    const jourOrder = { 'Lundi': 1, 'Mardi': 2, 'Mercredi': 3, 'Jeudi': 4, 'Vendredi': 5, 'Samedi': 6 };
+    return uniqueJours.sort((a, b) => (jourOrder[a] || 99) - (jourOrder[b] || 99));
   }, [voeux]);
 
   const importMutation = useMutation({
@@ -315,7 +318,7 @@ export default function Voeux() {
               >
                 <option value="all">Tous les jours</option>
                 {jours.map(jour => (
-                  <option key={jour} value={jour}>Jour {jour}</option>
+                  <option key={jour} value={jour}>{jour}</option>
                 ))}
               </select>
             </div>
@@ -398,6 +401,17 @@ export default function Voeux() {
               </th>
               <th>
                 <button 
+                  onClick={() => handleSort('date_voeu')}
+                  className="flex items-center gap-1 hover:text-red-600 transition-colors"
+                >
+                  Date
+                  {sortConfig.key === 'date_voeu' && (
+                    <span>{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>
+                  )}
+                </button>
+              </th>
+              <th>
+                <button 
                   onClick={() => handleSort('jour')}
                   className="flex items-center gap-1 hover:text-red-600 transition-colors"
                 >
@@ -407,6 +421,7 @@ export default function Voeux() {
                   )}
                 </button>
               </th>
+              <th>Horaire</th>
               <th>
                 <button 
                   onClick={() => handleSort('seance')}
@@ -418,7 +433,6 @@ export default function Voeux() {
                   )}
                 </button>
               </th>
-              <th>Horaire</th>
               <th>
                 <button 
                   onClick={() => handleSort('semestre_code_libelle')}
@@ -455,15 +469,22 @@ export default function Voeux() {
                   </span>
                 </td>
                 <td>
-                  <span className="badge badge-info">Jour {voeu.jour}</span>
+                  <span className="text-sm text-gray-700 font-medium">
+                    {voeu.date_voeu ? new Date(voeu.date_voeu).toLocaleDateString('fr-FR') : '-'}
+                  </span>
                 </td>
                 <td>
-                  <span className="badge badge-secondary">{voeu.seance}</span>
+                  <span className="text-sm text-gray-700 font-medium">{voeu.jour}</span>
                 </td>
                 <td className="text-sm text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded inline-block">
                   {getSeanceLabel(voeu.seance)}
                 </td>
-                <td className="text-gray-700">{voeu.semestre_code_libelle}</td>
+                <td>
+                  <span className="badge badge-secondary">{voeu.seance}</span>
+                </td>
+                <td>
+                  <span className="badge badge-info">{voeu.semestre_code_libelle}</span>
+                </td>
                 <td>
                   <span className="badge badge-primary">{voeu.session_libelle}</span>
                 </td>

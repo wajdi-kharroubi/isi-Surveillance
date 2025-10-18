@@ -31,11 +31,12 @@ class Voeu(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
-    code_smartex_ens = Column(String(50), nullable=True, index=True)  # Ajouté : code smartex de l'enseignant
-    semestre_code_libelle = Column(String(50), nullable=True)  # "Semestre 1", "Semestre 2" - correspond à colonne Excel
-    session_libelle = Column(String(50), nullable=True)  # "Principale", "Contrôle" - correspond à colonne Excel
-    jour = Column(Integer, nullable=False)  # Indice du jour (1, 2, 3...) - correspond à colonne Excel
-    seance = Column(String(10), nullable=False)  # Code séance (S1, S2, S3, S4) - correspond à colonne Excel
+    code_smartex_ens = Column(String(50), nullable=True, index=True)  # Code smartex de l'enseignant
+    semestre_code_libelle = Column(String(50), nullable=True)  # "Semestre1", "Semestre2" - colonne "Semestre" dans Excel
+    session_libelle = Column(String(50), nullable=True)  # "Partiel", "Examen", "Rattrapage" - colonne "Session" dans Excel
+    date_voeu = Column(Date, nullable=True)  # Date du vœu (format j/m/a) - colonne "Date" dans Excel
+    jour = Column(String(20), nullable=False)  # Nom du jour (Lundi, Mardi, Mercredi, Jeudi, Vendredi, Samedi) - colonne "Jour" dans Excel
+    seance = Column(String(10), nullable=False)  # Code séance (S1, S2, S3, S4) - colonne "Séances" dans Excel (peut être multiple, un vœu par séance)
     motif = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
