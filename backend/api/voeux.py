@@ -4,7 +4,7 @@ from typing import List
 from database import get_db
 from models import (
     VoeuCreate, VoeuUpdate, VoeuResponse,
-    Voeu
+    Voeu, Affectation
 )
 
 router = APIRouter(prefix="/voeux", tags=["Voeux"])
@@ -95,14 +95,18 @@ def creer_voeu(voeu_data: VoeuCreate, db: Session = Depends(get_db)):
 
 @router.delete("/vider", status_code=status.HTTP_200_OK)
 def vider_voeux(db: Session = Depends(get_db)):
-    """Vide complètement la table voeux"""
+    """Vide complètement la table voeux et les affectations"""
     try:
-        # Utiliser synchronize_session=False pour éviter les problèmes de contraintes
+        # Supprimer d'abord les affectations (pour réinitialiser complètement le planning)
+        nb_affectations = db.query(Affectation).delete(synchronize_session=False)
+        
+        # Puis supprimer les voeux
         nb_supprimes = db.query(Voeu).delete(synchronize_session=False)
         db.commit()
         return {
-            "message": f"Table voeux vidée avec succès",
-            "nb_supprimes": nb_supprimes
+            "message": f"Table voeux et affectations vidées avec succès",
+            "nb_voeux_supprimes": nb_supprimes,
+            "nb_affectations_supprimees": nb_affectations
         }
     except Exception as e:
         db.rollback()

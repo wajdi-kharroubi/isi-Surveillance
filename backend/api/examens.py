@@ -107,14 +107,18 @@ def creer_examen(examen_data: ExamenCreate, db: Session = Depends(get_db)):
 
 @router.delete("/vider", status_code=status.HTTP_200_OK)
 def vider_examens(db: Session = Depends(get_db)):
-    """Vide complètement la table examens"""
+    """Vide complètement la table examens et les affectations associées"""
     try:
-
+        # Supprimer d'abord les affectations (dépendances)
+        nb_affectations = db.query(Affectation).delete(synchronize_session=False)
+        
+        # Puis supprimer les examens
         nb_supprimes = db.query(Examen).delete(synchronize_session=False)
         db.commit()
         return {
-            "message": f"Table examens vidée avec succès",
-            "nb_supprimes": nb_supprimes
+            "message": f"Table examens et affectations vidées avec succès",
+            "nb_examens_supprimes": nb_supprimes,
+            "nb_affectations_supprimees": nb_affectations
         }
     except Exception as e:
         db.rollback()

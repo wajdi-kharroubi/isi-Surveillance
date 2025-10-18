@@ -74,13 +74,18 @@ def creer_enseignant(enseignant_data: EnseignantCreate, db: Session = Depends(ge
 
 @router.delete("/vider", status_code=status.HTTP_200_OK)
 def vider_enseignants(db: Session = Depends(get_db)):
-    """Vide complètement la table enseignants"""
+    """Vide complètement la table enseignants et les affectations associées"""
     try:
+        # Supprimer d'abord les affectations (dépendances)
+        nb_affectations = db.query(Affectation).delete(synchronize_session=False)
+        
+        # Puis supprimer les enseignants
         nb_supprimes = db.query(Enseignant).delete(synchronize_session=False)
         db.commit()
         return {
-            "message": f"Table enseignants vidée avec succès",
-            "nb_supprimes": nb_supprimes
+            "message": f"Table enseignants et affectations vidées avec succès",
+            "nb_enseignants_supprimes": nb_supprimes,
+            "nb_affectations_supprimees": nb_affectations
         }
     except Exception as e:
         db.rollback()
