@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { statistiquesAPI } from '../services/api';
+import { statistiquesAPI, gradesAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { 
   UserGroupIcon, 
@@ -16,9 +16,14 @@ import {
 export default function Dashboard() {
   const navigate = useNavigate();
   
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, error } = useQuery({
     queryKey: ['statistiques'],
     queryFn: () => statistiquesAPI.getGlobal().then(res => res.data),
+  });
+
+  const { data: grades } = useQuery({
+    queryKey: ['grades'],
+    queryFn: () => gradesAPI.getAll().then(res => res.data),
   });
 
   if (isLoading) {
@@ -26,6 +31,24 @@ export default function Dashboard() {
       <div className="flex flex-col items-center justify-center h-96 gap-4">
         <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
         <p className="text-gray-600 font-medium">Chargement des données...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="text-red-500 text-center">
+          <div className="text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold mb-2">Erreur de chargement</h2>
+          <p className="text-sm">Impossible de charger les statistiques. Vérifiez que le backend est démarré.</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Réessayer
+          </button>
+        </div>
       </div>
     );
   }
@@ -52,11 +75,11 @@ export default function Dashboard() {
     {
       title: 'Affectations',
       value: stats?.nb_affectations || 0,
-      subtitle: `${stats?.nb_voeux || 0} vœux`,
+      subtitle: `${stats?.nb_voeux || 0} souhaits`,
       icon: ClipboardDocumentCheckIcon,
-      gradient: 'from-purple-500 to-pink-500',
-      bgGradient: 'from-purple-50 to-pink-50',
-      iconBg: 'bg-gradient-to-br from-purple-500 to-pink-500',
+      gradient: 'from-pink-600 to-pink-600',
+      bgGradient: 'from-pink-50 to-pink-50',
+      iconBg: 'bg-gradient-to-br from-pink-600 to-pink-600',
     },
     {
       title: 'Couverture',
@@ -72,7 +95,7 @@ export default function Dashboard() {
   const quickActions = [
     {
       title: 'Importer vos données',
-      description: 'Téléchargez vos fichiers Excel (Enseignants, Examens, Vœux)',
+      description: 'Téléchargez vos fichiers Excel (Enseignants, Examens, Souhaits)',
       icon: FolderOpenIcon,
       href: '/data-manager',
       color: 'from-blue-500 to-indigo-500',
@@ -85,8 +108,8 @@ export default function Dashboard() {
       description: 'Lancez l\'algorithme d\'optimisation automatique',
       icon: SparklesIcon,
       href: '/generation',
-      color: 'from-purple-500 to-pink-500',
-      bgColor: 'from-purple-50 to-pink-50',
+      color: 'from-pink-600 to-pink-600',
+      bgColor: 'from-pink-50 to-pink-50',
       emoji: '✨',
       priority: true,
     },
@@ -102,6 +125,11 @@ export default function Dashboard() {
     },
   ];
 
+  // Vérifier si la configuration des grades est faite
+  const isGradesConfigured = grades && grades.length > 0 && grades.some(grade => 
+    grade.nb_surveillances > 0 || grade.nb_obligatoire > 0
+  );
+
   const workflowSteps = [
     {
       number: 1,
@@ -113,7 +141,7 @@ export default function Dashboard() {
       number: 2,
       title: 'Configurer les paramètres',
       description: 'Vérifiez les grades et quotas',
-      completed: false,
+      completed: isGradesConfigured,
     },
     {
       number: 3,
@@ -132,27 +160,86 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl shadow-2xl p-8 text-white">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
-        <div className="relative">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center">
-              <RocketLaunchIcon className="w-10 h-10 text-white" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-bold drop-shadow-lg">
-                Tableau de bord
-              </h1>
-              <p className="text-blue-100 text-lg mt-1">
-                Gestion intelligente des surveillances d'examens
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-xl overflow-hidden">
+        <div className="px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                  <RocketLaunchIcon className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">
+                    Bonjour !
+                  </h1>
+                  <p className="text-blue-100 text-sm">
+                    Prêt à optimiser vos surveillances d'examens
+                  </p>
+                </div>
+              </div>
+              <p className="text-white/90 text-sm max-w-lg leading-relaxed">
+                {(stats?.nb_examens || 0) === 0 
+                  ? "Commencez par importer vos données d'examens pour voir les statistiques et générer votre planning."
+                  : "Gérez intelligemment la planification des surveillances avec nos algorithmes d'optimisation avancés."
+                }
               </p>
             </div>
+            
+            {/* Quick Stats in Hero */}
+            <div className="hidden lg:flex items-center gap-6 ml-8">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-white">
+                  {stats?.nb_enseignants || 0}
+                </div>
+                <div className="text-xs text-blue-100 uppercase tracking-wide">
+                  Enseignants
+                </div>
+              </div>
+              <div className="w-px h-12 bg-white/20"></div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-white">
+                  {(stats?.nb_examens || 0) === 0 ? "-" : (stats?.nb_examens || 0)}
+                </div>
+                <div className="text-xs text-blue-100 uppercase tracking-wide">
+                  Examens
+                </div>
+              </div>
+              <div className="w-px h-12 bg-white/20"></div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-white">
+                  {(stats?.nb_affectations || 0) === 0 ? "-" : (stats?.nb_affectations || 0)}
+                </div>
+                <div className="text-xs text-blue-100 uppercase tracking-wide">
+                  Affectations
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-white/90 mt-4 max-w-2xl">
-            Bienvenue ! Cette plateforme vous permet d'automatiser complètement la planification 
-            des surveillances d'examens grâce à des algorithmes d'optimisation avancés.
-          </p>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 mt-6">
+            <button 
+              onClick={() => navigate('/data-manager')}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg backdrop-blur-sm transition-all duration-200 flex items-center gap-2"
+            >
+              <FolderOpenIcon className="w-4 h-4" />
+              {(stats?.nb_examens || 0) === 0 ? "Importer des données" : "Gérer les données"}
+            </button>
+            {(stats?.nb_examens || 0) > 0 && (
+              <button 
+                onClick={() => navigate('/generation')}
+                className="px-4 py-2 bg-white text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition-all duration-200 flex items-center gap-2"
+              >
+                <SparklesIcon className="w-4 h-4" />
+                Générer le planning
+              </button>
+            )}
+          </div>
         </div>
+        
+        {/* Decorative Elements */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
       </div>
 
       {/* Stats Cards */}
@@ -190,24 +277,26 @@ export default function Dashboard() {
             <div
               key={action.title}
               onClick={() => navigate(action.href)}
-              className={`card-interactive bg-gradient-to-br ${action.bgColor} border-2 ${action.priority ? 'border-blue-300 shadow-lg' : 'border-gray-200'}`}
+              className={`card-interactive bg-gradient-to-br ${action.bgColor} border-2 ${action.priority ? 'border-blue-300 shadow-lg' : 'border-gray-200'} flex flex-col h-full`}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`text-5xl`}>
-                  {action.emoji}
+              <div className="flex-1">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={`text-5xl`}>
+                    {action.emoji}
+                  </div>
+                  {action.priority && (
+                    <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                      PRIORITAIRE
+                    </span>
+                  )}
                 </div>
-                {action.priority && (
-                  <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
-                    PRIORITAIRE
-                  </span>
-                )}
+                <h3 className="font-bold text-lg text-gray-900 mb-2">
+                  {action.title}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  {action.description}
+                </p>
               </div>
-              <h3 className="font-bold text-lg text-gray-900 mb-2">
-                {action.title}
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                {action.description}
-              </p>
               <button className={`btn btn-sm bg-gradient-to-r ${action.color} text-white w-full justify-center flex items-center gap-2`}>
                 Accéder
                 <ArrowRightIcon className="w-4 h-4" />
@@ -260,29 +349,51 @@ export default function Dashboard() {
       {/* Help Box */}
       <div className="card bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200">
         <div className="flex items-start gap-4">
-          <div className="text-4xl">💡</div>
+          <div className="text-4xl">{(stats?.nb_examens || 0) === 0 ? "💡" : "💡"}</div>
           <div className="flex-1">
             <h3 className="text-xl font-bold text-gray-900 mb-2">
-              Besoin d'aide pour démarrer ?
+              {(stats?.nb_examens || 0) === 0 ? "Prêt à commencer ?" : "Besoin d'aide pour démarrer ?"}
             </h3>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li className="flex items-start gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <span><strong>Étape 1 :</strong> Rendez-vous sur "Gestionnaire de Données" pour importer vos fichiers Excel</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <span><strong>Étape 2 :</strong> Vérifiez la configuration des grades dans "Configuration"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <span><strong>Étape 3 :</strong> Lancez la génération automatique sur la page "Génération"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <span><strong>Étape 4 :</strong> Consultez et exportez votre planning optimisé</span>
-              </li>
-            </ul>
+            {(stats?.nb_examens || 0) === 0 ? (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-700">
+                  Pour voir des statistiques et générer votre planning, vous devez d'abord importer vos données.
+                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm text-blue-800 font-medium mb-2">📋 Fichiers requis :</p>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• Fichier Excel des enseignants</li>
+                    <li>• Fichier Excel des examens</li>
+                    <li>• Fichier Excel des souhaits (optionnel)</li>
+                  </ul>
+                </div>
+                <button 
+                  onClick={() => navigate('/data-manager')}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Aller à l'import de données →
+                </button>
+              </div>
+            ) : (
+              <ul className="space-y-2 text-sm text-gray-700">
+                <li className="flex items-start gap-2">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <span><strong>Étape 1 :</strong> Rendez-vous sur "Gestionnaire de Données" pour importer vos fichiers Excel</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <span><strong>Étape 2 :</strong> Vérifiez la configuration des grades dans "Configuration"</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <span><strong>Étape 3 :</strong> Lancez la génération automatique sur la page "Génération"</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <span><strong>Étape 4 :</strong> Consultez et exportez votre planning optimisé</span>
+                </li>
+              </ul>
+            )}
           </div>
         </div>
       </div>

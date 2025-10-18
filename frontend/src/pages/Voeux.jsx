@@ -7,7 +7,7 @@ import {
   ArrowUpTrayIcon, 
   MagnifyingGlassIcon, 
   FunnelIcon,
-  CalendarDaysIcon,
+  HeartIcon,
 } from '@heroicons/react/24/outline';
 
 export default function Voeux() {
@@ -178,8 +178,8 @@ export default function Voeux() {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600"></div>
-        <p className="text-gray-600 font-medium">Chargement des vœux...</p>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-red-600"></div>
+        <p className="text-gray-600 font-medium">Chargement des souhaits...</p>
       </div>
     );
   }
@@ -187,17 +187,17 @@ export default function Voeux() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 via-pink-600 to-rose-600 rounded-2xl shadow-2xl p-8 text-white">
+      <div className="relative overflow-hidden bg-gradient-to-br from-red-600 via-red-700 to-red-800 rounded-2xl shadow-2xl p-8 text-white">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
         <div className="relative flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center">
-              <CalendarDaysIcon className="w-10 h-10 text-white" />
+              <HeartIcon className="w-10 h-10 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold drop-shadow-lg">Vœux de surveillance</h1>
-              <p className="text-purple-100 text-lg mt-1">
-                {filteredVoeux?.length || 0} vœu(x)
+              <h1 className="text-4xl font-bold drop-shadow-lg">Souhaits de surveillance</h1>
+              <p className="text-red-100 text-lg mt-1">
+                {filteredVoeux?.length || 0} {filteredVoeux?.length === 1 ? 'souhait' : 'souhaits'}
                 {searchTerm || filterSeance !== 'all' || filterSemestre !== 'all' || filterEnseignant !== 'all' || filterJour !== 'all' ? ' (filtrés)' : ''}
                 {' '} sur {voeux?.length || 0} au total
               </p>
@@ -215,11 +215,11 @@ export default function Voeux() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={importMutation.isPending}
-              className="btn bg-white text-purple-600 hover:bg-purple-50 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn bg-white text-red-600 hover:bg-red-50 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {importMutation.isPending ? (
                 <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
                   Import en cours...
                 </>
               ) : (
@@ -238,88 +238,98 @@ export default function Voeux() {
       </div>
 
       {/* Filters */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-4">
-          <FunnelIcon className="w-5 h-5 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Recherche et Filtres</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {/* Search */}
-          <div className="relative md:col-span-3 lg:col-span-1">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Rechercher (nom, prénom, code)..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
-            />
+      <div className="bg-gradient-to-r from-gray-50 to-red-50 p-6 rounded-2xl border-2 border-gray-200 shadow-lg">
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex-1 flex gap-2 overflow-x-auto">
+            {/* Search Filter */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border-2 border-gray-200 shadow-sm">
+              <MagnifyingGlassIcon className="w-4 h-4 text-red-600" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-xs bg-transparent cursor-pointer"
+              />
+            </div>
+
+            {/* Enseignant Filter */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-4 h-4 text-blue-600" />
+              <select
+                value={filterEnseignant}
+                onChange={(e) => setFilterEnseignant(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-xs bg-transparent cursor-pointer"
+              >
+                <option value="all">Tous les enseignants</option>
+                {enseignants.map(ens => (
+                  <option key={ens.fullName} value={ens.fullName}>{ens.fullName}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Jour Filter */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-4 h-4 text-green-600" />
+              <select
+                value={filterJour}
+                onChange={(e) => setFilterJour(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-xs bg-transparent cursor-pointer"
+              >
+                <option value="all">Tous les jours</option>
+                {jours.map(jour => (
+                  <option key={jour} value={jour}>Jour {jour}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Seance Filter */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-4 h-4 text-orange-600" />
+              <select
+                value={filterSeance}
+                onChange={(e) => setFilterSeance(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-xs bg-transparent cursor-pointer"
+              >
+                <option value="all">Toutes les séances</option>
+                {seances.map(seance => (
+                  <option key={seance} value={seance}>{seance} - {getSeanceLabel(seance)}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Semestre Filter */}
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-4 h-4 text-pink-600" />
+              <select
+                value={filterSemestre}
+                onChange={(e) => setFilterSemestre(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-xs bg-transparent cursor-pointer"
+              >
+                <option value="all">Tous les semestres</option>
+                {semestres.map(sem => (
+                  <option key={sem} value={sem}>{sem}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Reset filters */}
+            {(searchTerm || filterSeance !== 'all' || filterSemestre !== 'all' || filterEnseignant !== 'all' || filterJour !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterSeance('all');
+                  setFilterSemestre('all');
+                  setFilterEnseignant('all');
+                  setFilterJour('all');
+                }}
+                className="px-3 py-2 bg-red-100 text-red-700 rounded-lg font-semibold text-xs hover:bg-red-200 transition-colors border-2 border-red-200"
+              >
+                Réinitialiser filtres
+              </button>
+            )}
           </div>
-
-          {/* Enseignant Filter */}
-          <select
-            value={filterEnseignant}
-            onChange={(e) => setFilterEnseignant(e.target.value)}
-            className="input"
-          >
-            <option value="all">Tous les enseignants</option>
-            {enseignants.map(ens => (
-              <option key={ens.fullName} value={ens.fullName}>{ens.fullName}</option>
-            ))}
-          </select>
-
-          {/* Jour Filter */}
-          <select
-            value={filterJour}
-            onChange={(e) => setFilterJour(e.target.value)}
-            className="input"
-          >
-            <option value="all">Tous les jours</option>
-            {jours.map(jour => (
-              <option key={jour} value={jour}>Jour {jour}</option>
-            ))}
-          </select>
-
-          {/* Seance Filter */}
-          <select
-            value={filterSeance}
-            onChange={(e) => setFilterSeance(e.target.value)}
-            className="input"
-          >
-            <option value="all">Toutes les séances</option>
-            {seances.map(seance => (
-              <option key={seance} value={seance}>{seance} - {getSeanceLabel(seance)}</option>
-            ))}
-          </select>
-
-          {/* Semestre Filter */}
-          <select
-            value={filterSemestre}
-            onChange={(e) => setFilterSemestre(e.target.value)}
-            className="input"
-          >
-            <option value="all">Tous les semestres</option>
-            {semestres.map(sem => (
-              <option key={sem} value={sem}>{sem}</option>
-            ))}
-          </select>
         </div>
-
-        {/* Reset filters */}
-        {(searchTerm || filterSeance !== 'all' || filterSemestre !== 'all' || filterEnseignant !== 'all' || filterJour !== 'all') && (
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setFilterSeance('all');
-              setFilterSemestre('all');
-              setFilterEnseignant('all');
-              setFilterJour('all');
-            }}
-            className="mt-4 text-sm text-purple-600 hover:text-purple-700 font-medium"
-          >
-            ✕ Réinitialiser les filtres
-          </button>
-        )}
       </div>
 
       {/* Table */}
@@ -330,7 +340,7 @@ export default function Voeux() {
               <th>
                 <button 
                   onClick={() => handleSort('enseignant_nom')}
-                  className="flex items-center gap-1 hover:text-purple-600 transition-colors"
+                  className="flex items-center gap-1 hover:text-red-600 transition-colors"
                 >
                   Enseignant
                   {sortConfig.key === 'enseignant_nom' && (
@@ -341,7 +351,7 @@ export default function Voeux() {
               <th>
                 <button 
                   onClick={() => handleSort('code_smartex_ens')}
-                  className="flex items-center gap-1 hover:text-purple-600 transition-colors"
+                  className="flex items-center gap-1 hover:text-red-600 transition-colors"
                 >
                   Code Smartex
                   {sortConfig.key === 'code_smartex_ens' && (
@@ -352,7 +362,7 @@ export default function Voeux() {
               <th>
                 <button 
                   onClick={() => handleSort('jour')}
-                  className="flex items-center gap-1 hover:text-purple-600 transition-colors"
+                  className="flex items-center gap-1 hover:text-red-600 transition-colors"
                 >
                   Jour
                   {sortConfig.key === 'jour' && (
@@ -363,7 +373,7 @@ export default function Voeux() {
               <th>
                 <button 
                   onClick={() => handleSort('seance')}
-                  className="flex items-center gap-1 hover:text-purple-600 transition-colors"
+                  className="flex items-center gap-1 hover:text-red-600 transition-colors"
                 >
                   Séance
                   {sortConfig.key === 'seance' && (
@@ -375,7 +385,7 @@ export default function Voeux() {
               <th>
                 <button 
                   onClick={() => handleSort('semestre_code_libelle')}
-                  className="flex items-center gap-1 hover:text-purple-600 transition-colors"
+                  className="flex items-center gap-1 hover:text-red-600 transition-colors"
                 >
                   Semestre
                   {sortConfig.key === 'semestre_code_libelle' && (
@@ -386,7 +396,7 @@ export default function Voeux() {
               <th>
                 <button 
                   onClick={() => handleSort('session_libelle')}
-                  className="flex items-center gap-1 hover:text-purple-600 transition-colors"
+                  className="flex items-center gap-1 hover:text-red-600 transition-colors"
                 >
                   Session
                   {sortConfig.key === 'session_libelle' && (
@@ -394,7 +404,6 @@ export default function Voeux() {
                   )}
                 </button>
               </th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -404,7 +413,7 @@ export default function Voeux() {
                   {voeu.enseignant_prenom} {voeu.enseignant_nom}
                 </td>
                 <td>
-                  <span className="font-mono text-sm font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg">
+                  <span className="font-mono text-sm font-bold text-red-700 bg-red-50 px-3 py-1 rounded-lg">
                     {voeu.code_smartex_ens || 'N/A'}
                   </span>
                 </td>
@@ -421,11 +430,6 @@ export default function Voeux() {
                 <td>
                   <span className="badge badge-primary">{voeu.session_libelle}</span>
                 </td>
-                <td>
-                  <button className="text-purple-600 hover:text-purple-700 text-sm font-medium transition-colors">
-                    Modifier
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -433,7 +437,7 @@ export default function Voeux() {
         
         {filteredVoeux?.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">Aucun vœu trouvé</p>
+            <p className="text-gray-500 text-lg">Aucun souhait trouvé</p>
             <p className="text-gray-400 text-sm mt-2">Essayez de modifier vos filtres</p>
           </div>
         )}

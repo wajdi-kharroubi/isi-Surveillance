@@ -68,11 +68,11 @@ export default function DataManager() {
   const importVoeuxMutation = useMutation({
     mutationFn: (file) => importAPI.importVoeux(file),
     onSuccess: (response) => {
-      toast.success(response.data.message || 'Vœux importés avec succès!');
+      toast.success(response.data.message || 'Souhaits importés avec succès!');
       queryClient.invalidateQueries(['voeux']);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.detail || 'Erreur lors de l\'import des vœux');
+      toast.error(error.response?.data?.detail || 'Erreur lors de l\'import des souhaits');
     },
   });
 
@@ -131,14 +131,14 @@ export default function DataManager() {
     },
     {
       id: 'voeux',
-      title: 'Vœux',
+      title: 'Souhaits',
       description: 'Préférences de surveillance des enseignants',
-      icon: '📅',
+      icon: '❤️',
       count: voeux?.length || 0,
       mutation: importVoeuxMutation,
-      color: 'from-purple-500 to-pink-500',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200',
+      color: 'from-red-500 to-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-200',
       examples: ['Code enseignant', 'Date', 'Heure', 'Disponibilité'],
     },
   ];
@@ -277,7 +277,7 @@ export default function DataManager() {
           <p className="flex items-start gap-2">
             <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
             <span>
-              <strong>Ordre recommandé :</strong> Importez d'abord les enseignants, puis les examens, et enfin les vœux
+              <strong>Ordre recommandé :</strong> Importez d'abord les enseignants, puis les examens, et enfin les souhaits
             </span>
           </p>
           <p className="flex items-start gap-2">

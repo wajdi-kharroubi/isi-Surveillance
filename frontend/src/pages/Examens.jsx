@@ -16,6 +16,7 @@ export default function Examens() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSemestre, setFilterSemestre] = useState('all');
   const [filterSession, setFilterSession] = useState('all');
+  const [filterSalle, setFilterSalle] = useState('all');
   const queryClient = useQueryClient();
 
   const { data: examens, isLoading } = useQuery({
@@ -32,6 +33,11 @@ export default function Examens() {
   const sessions = useMemo(() => {
     if (!examens) return [];
     return [...new Set(examens.map(e => e.session))].filter(Boolean);
+  }, [examens]);
+
+  const salles = useMemo(() => {
+    if (!examens) return [];
+    return [...new Set(examens.map(e => e.cod_salle))].filter(Boolean).sort();
   }, [examens]);
 
   const importMutation = useMutation({
@@ -101,6 +107,12 @@ export default function Examens() {
       filtered = filtered.filter(e => e.session === filterSession);
     }
     
+    
+    // Filter by salle
+    if (filterSalle !== 'all') {
+      filtered = filtered.filter(e => e.cod_salle === filterSalle);
+    }
+    
     // Sort
     if (sortConfig.key) {
       filtered.sort((a, b) => {
@@ -138,7 +150,7 @@ export default function Examens() {
     }
     
     return filtered;
-  }, [examens, searchTerm, filterSemestre, filterSession, sortConfig]);
+  }, [examens, searchTerm, filterSemestre, filterSession, filterSalle, sortConfig]);
 
   if (isLoading) {
     return (
@@ -163,7 +175,7 @@ export default function Examens() {
               <h1 className="text-4xl font-bold drop-shadow-lg">Examens</h1>
               <p className="text-green-100 text-lg mt-1">
                 {filteredExamens?.length || 0} examen(s)
-                {searchTerm || filterSemestre !== 'all' || filterSession !== 'all' ? ' (filtrés)' : ''}
+                {searchTerm || filterSemestre !== 'all' || filterSession !== 'all' || filterSalle !== 'all' ? ' (filtrés)' : ''}
                 {' '} sur {examens?.length || 0} au total
               </p>
             </div>
@@ -203,62 +215,84 @@ export default function Examens() {
       </div>
 
       {/* Filters */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-4">
-          <FunnelIcon className="w-5 h-5 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Recherche et Filtres</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Rechercher (enseignant, salle, type)..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
-            />
+      <div className="bg-gradient-to-r from-gray-50 to-green-50 p-6 rounded-2xl border-2 border-gray-200 shadow-lg">
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex-1 flex flex-wrap gap-3">
+            {/* Search Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <MagnifyingGlassIcon className="w-5 h-5 text-green-600" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              />
+            </div>
+
+            {/* Semestre Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-5 h-5 text-blue-600" />
+              <select
+                value={filterSemestre}
+                onChange={(e) => setFilterSemestre(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              >
+                <option value="all">Tous les semestres</option>
+                {semestres.map(sem => (
+                  <option key={sem} value={sem}>Semestre {sem.replace('SEMESTRE ', '')}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Session Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-5 h-5 text-purple-600" />
+              <select
+                value={filterSession}
+                onChange={(e) => setFilterSession(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              >
+                <option value="all">Toutes les sessions</option>
+                {sessions.map(sess => (
+                  <option key={sess} value={sess}>
+                    {sess === 'P' ? 'Principale' : sess === 'R' ? 'Rattrapage' : sess}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Salle Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-5 h-5 text-pink-600" />
+              <select
+                value={filterSalle}
+                onChange={(e) => setFilterSalle(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              >
+                <option value="all">Toutes les salles</option>
+                {salles.map(salle => (
+                  <option key={salle} value={salle}>{salle}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Reset filters */}
+            {(searchTerm || filterSemestre !== 'all' || filterSession !== 'all' || filterSalle !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterSemestre('all');
+                  setFilterSession('all');
+                  setFilterSalle('all');
+                }}
+                className="px-4 py-2.5 bg-red-100 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-200 transition-colors border-2 border-red-200"
+              >
+                Réinitialiser filtres
+              </button>
+            )}
           </div>
-
-          {/* Semestre Filter */}
-          <select
-            value={filterSemestre}
-            onChange={(e) => setFilterSemestre(e.target.value)}
-            className="input"
-          >
-            <option value="all">Tous les semestres</option>
-            {semestres.map(sem => (
-              <option key={sem} value={sem}>{sem}</option>
-            ))}
-          </select>
-
-          {/* Session Filter */}
-          <select
-            value={filterSession}
-            onChange={(e) => setFilterSession(e.target.value)}
-            className="input"
-          >
-            <option value="all">Toutes les sessions</option>
-            {sessions.map(sess => (
-              <option key={sess} value={sess}>{sess}</option>
-            ))}
-          </select>
         </div>
-
-        {/* Reset filters */}
-        {(searchTerm || filterSemestre !== 'all' || filterSession !== 'all') && (
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setFilterSemestre('all');
-              setFilterSession('all');
-            }}
-            className="mt-4 text-sm text-green-600 hover:text-green-700 font-medium"
-          >
-            ✕ Réinitialiser les filtres
-          </button>
-        )}
       </div>
 
       {/* Table */}
@@ -326,7 +360,7 @@ export default function Examens() {
                   onClick={() => handleSort('enseignant')}
                   className="flex items-center gap-1 hover:text-green-600 transition-colors"
                 >
-                  Enseignant
+                  Responsable
                   {sortConfig.key === 'enseignant' && (
                     <span>{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>
                   )}
@@ -343,7 +377,6 @@ export default function Examens() {
                   )}
                 </button>
               </th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -356,7 +389,7 @@ export default function Examens() {
                   </div>
                 </td>
                 <td>
-                  <span className="badge badge-info">{exam.semestre}</span>
+                  <span className="badge badge-info">Semestre {exam.semestre.replace('SEMESTRE ', '')}</span>
                 </td>
                 <td>
                   <span className={`badge ${exam.session === 'P' || exam.session === 'Principale' ? 'badge-success' : 'badge-warning'}`}>
@@ -367,11 +400,6 @@ export default function Examens() {
                 <td className="text-gray-600">{exam.enseignant}</td>
                 <td>
                   <span className="badge badge-secondary">{exam.cod_salle}</span>
-                </td>
-                <td>
-                  <button className="text-green-600 hover:text-green-700 text-sm font-medium transition-colors">
-                    Modifier
-                  </button>
                 </td>
               </tr>
             ))}

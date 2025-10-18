@@ -18,6 +18,24 @@ export default function Enseignants() {
   const [filterSurveillance, setFilterSurveillance] = useState('all');
   const queryClient = useQueryClient();
 
+  // Grade code to full name mapping
+  const gradeNames = {
+    'PR': 'Professeur',
+    'MC': 'Maître de conférences',
+    'MA': 'Maître Assistant', 
+    'AS': 'Assistant',
+    'AC': 'Assistant Contractuel',
+    'PTC': 'P. Tronc Commun',
+    'PES': 'P. d\'enseignement secondaire',
+    'EX': 'Expert',
+    'V': 'Vacataire',
+    'VA': 'Vacataire'
+  };
+
+  const getGradeName = (code) => {
+    return gradeNames[code] || code;
+  };
+
   const { data: enseignants, isLoading } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
@@ -191,61 +209,65 @@ export default function Enseignants() {
       </div>
 
       {/* Filters */}
-      <div className="card">
-        <div className="flex items-center gap-2 mb-4">
-          <FunnelIcon className="w-5 h-5 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Recherche et Filtres</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Rechercher (nom, prénom, email, code)..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
-            />
+      <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl border-2 border-gray-200 shadow-lg">
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex-1 flex flex-wrap gap-3">
+            {/* Search Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <MagnifyingGlassIcon className="w-5 h-5 text-blue-600" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              />
+            </div>
+
+            {/* Grade Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-5 h-5 text-green-600" />
+              <select
+                value={filterGrade}
+                onChange={(e) => setFilterGrade(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              >
+                <option value="all">Tous les grades</option>
+                {grades.map(grade => (
+                  <option key={grade} value={grade}>{getGradeName(grade)}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Surveillance Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-5 h-5 text-purple-600" />
+              <select
+                value={filterSurveillance}
+                onChange={(e) => setFilterSurveillance(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              >
+                <option value="all">Toutes les surveillances</option>
+                <option value="yes">Participe</option>
+                <option value="no">Ne participe pas</option>
+              </select>
+            </div>
+
+            {/* Reset filters */}
+            {(searchTerm || filterGrade !== 'all' || filterSurveillance !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterGrade('all');
+                  setFilterSurveillance('all');
+                }}
+                className="px-4 py-2.5 bg-red-100 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-200 transition-colors border-2 border-red-200"
+              >
+                Réinitialiser filtres
+              </button>
+            )}
           </div>
-
-          {/* Grade Filter */}
-          <select
-            value={filterGrade}
-            onChange={(e) => setFilterGrade(e.target.value)}
-            className="input"
-          >
-            <option value="all">Tous les grades</option>
-            {grades.map(grade => (
-              <option key={grade} value={grade}>{grade}</option>
-            ))}
-          </select>
-
-          {/* Surveillance Filter */}
-          <select
-            value={filterSurveillance}
-            onChange={(e) => setFilterSurveillance(e.target.value)}
-            className="input"
-          >
-            <option value="all">Toutes les surveillances</option>
-            <option value="yes">Participe</option>
-            <option value="no">Ne participe pas</option>
-          </select>
         </div>
-
-        {/* Reset filters */}
-        {(searchTerm || filterGrade !== 'all' || filterSurveillance !== 'all') && (
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setFilterGrade('all');
-              setFilterSurveillance('all');
-            }}
-            className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            ✕ Réinitialiser les filtres
-          </button>
-        )}
       </div>
 
       {/* Table */}
@@ -319,7 +341,6 @@ export default function Enseignants() {
                   )}
                 </button>
               </th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -334,7 +355,7 @@ export default function Enseignants() {
                 <td>{ens.prenom}</td>
                 <td className="text-gray-600 text-sm">{ens.email}</td>
                 <td>
-                  <span className="badge badge-info">{ens.grade_code}</span>
+                  <span className="badge badge-info">{getGradeName(ens.grade_code)}</span>
                 </td>
                 <td>
                   {ens.participe_surveillance ? (
@@ -342,11 +363,6 @@ export default function Enseignants() {
                   ) : (
                     <span className="badge badge-danger">✕ Non</span>
                   )}
-                </td>
-                <td>
-                  <button className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors">
-                    Modifier
-                  </button>
                 </td>
               </tr>
             ))}

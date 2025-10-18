@@ -11,6 +11,8 @@ import {
   ChartBarIcon,
   Cog6ToothIcon,
   FolderOpenIcon,
+  FolderIcon,
+  HeartIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Bars3Icon,
@@ -30,10 +32,10 @@ const navigation = [
     description: 'Importer et gérer',
     highlight: true,
     subItems: [
-      { name: 'Gestionnaire de Fichiers', href: '/data-manager', description: 'Import centralisé' },
-      { name: 'Enseignants', href: '/enseignants', description: 'Liste des enseignants' },
-      { name: 'Examens', href: '/examens', description: 'Calendrier d\'examens' },
-      { name: 'Vœux', href: '/voeux', description: 'Préférences' },
+      { name: 'Gestionnaire de Fichiers', href: '/data-manager', description: 'Import centralisé', icon: FolderIcon },
+      { name: 'Enseignants', href: '/enseignants', description: 'Liste des enseignants', icon: UserGroupIcon },
+      { name: 'Examens', href: '/examens', description: 'Calendrier d\'examens', icon: AcademicCapIcon },
+      { name: 'Souhaits', href: '/voeux', description: 'Préférences', icon: HeartIcon },
     ]
   },
   { 
@@ -42,9 +44,9 @@ const navigation = [
     description: 'Génération & Consultation',
     highlight: true,
     subItems: [
-      { name: 'Génération', href: '/generation', description: 'Créer le planning' },
-      { name: 'Consulter Planning', href: '/planning', description: 'Voir le planning' },
-      { name: 'Export', href: '/export', description: 'Télécharger' },
+      { name: 'Génération', href: '/generation', description: 'Créer le planning', icon: SparklesIcon },
+      { name: 'Consulter Planning', href: '/planning', description: 'Voir le planning', icon: DocumentTextIcon },
+      { name: 'Export', href: '/export', description: 'Télécharger', icon: ArrowDownTrayIcon },
     ]
   },
   // { 
@@ -94,34 +96,32 @@ export default function Layout({ children }) {
       {/* Sidebar */}
       <div
         className={`fixed inset-y-0 left-0 bg-white shadow-2xl z-40 border-r border-gray-100 transition-all duration-300 ${
-          isSidebarOpen ? 'w-72 translate-x-0' : 'w-0 -translate-x-full'
+          isSidebarOpen ? 'w-96 translate-x-0' : 'w-0 -translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="relative h-28 px-6 bg-white border-b-2 border-gray-100 flex items-center gap-4 mt-16">
-            <div className="relative flex items-center gap-4 w-full">
-              {/* Logo Image - Replace src with your actual logo path */}
-              <div className="w-16 h-16 flex items-center justify-center">
-                <img 
-                  src="/logo.png" 
-                  alt="Logo" 
-                  className="w-16 h-16 object-contain"
-                  onError={(e) => {
-                    // Fallback to emoji if image not found
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'block';
-                  }}
-                />
-                <span className="text-4xl" style={{ display: 'none' }}>📋</span>
-              </div>
-              {/* Title */}
-              <div className="flex-1">
-                <h1 className="text-xl font-bold text-gray-900">
-                  Surveillance ISI
-                </h1>
-                <p className="text-xs text-gray-500 mt-0.5">Gestion des Examens</p>
-              </div>
+          <div className="relative h-52 px-6 bg-white border-b-2 border-gray-100 flex flex-col items-start justify-center mt-4">
+            {/* Logo Image - Replace src with your actual logo path */}
+            <div className="w-80 h-40 flex items-center justify-center">
+              <img 
+                src="/logo.png" 
+                alt="Logo" 
+                className="w-80 h-40 object-contain"
+                onError={(e) => {
+                  // Fallback to emoji if image not found
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'block';
+                }}
+              />
+              <span className="text-4xl" style={{ display: 'none' }}>📋</span>
+            </div>
+            {/* Title */}
+            <div className="text-left">
+              <h1 className="text-xl font-bold text-gray-900">
+                Surveillance ISI
+              </h1>
+              <p className="text-xs text-gray-500 mt-0.5">Gestion des Examens</p>
             </div>
           </div>
 
@@ -140,81 +140,95 @@ export default function Layout({ children }) {
                     <button
                       onClick={() => toggleMenu(item.name)}
                       className={`
-                        w-full group relative flex items-center px-4 py-3.5 text-sm font-medium rounded-xl transition-all duration-200
+                        w-full group relative flex items-center px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 overflow-hidden
                         ${
                           isAnySubItemActive
-                            ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30'
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-500/40 border border-blue-500/30'
                             : item.highlight
-                            ? 'text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 border-2 border-dashed border-blue-200'
-                            : 'text-gray-700 hover:bg-gray-50'
+                            ? 'text-gray-800 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:shadow-md border border-blue-200/50 hover:border-blue-300'
+                            : 'text-gray-700 hover:bg-gray-100 hover:shadow-sm border border-transparent hover:border-gray-200'
                         }
                       `}
                     >
-                      <item.icon
-                        className={`mr-3 h-5 w-5 transition-transform duration-200 group-hover:scale-110 ${
-                          isAnySubItemActive ? 'text-white' : item.highlight ? 'text-blue-500' : 'text-gray-400'
-                        }`}
-                      />
+                      <div className={`p-2 rounded-md mr-4 transition-all duration-300 ${
+                        isAnySubItemActive 
+                          ? 'bg-white/20' 
+                          : item.highlight 
+                          ? 'bg-blue-100 group-hover:bg-blue-200' 
+                          : 'bg-gray-100 group-hover:bg-gray-200'
+                      }`}>
+                        <item.icon
+                          className={`h-5 w-5 transition-all duration-300 ${
+                            isAnySubItemActive ? 'text-white' : item.highlight ? 'text-blue-600' : 'text-gray-500'
+                          }`}
+                        />
+                      </div>
                       <div className="flex-1 text-left">
-                        <div className={isAnySubItemActive ? 'text-white' : ''}>{item.name}</div>
+                        <div className={`font-semibold ${isAnySubItemActive ? 'text-white' : 'text-gray-900'}`}>
+                          {item.name}
+                        </div>
                         {!isAnySubItemActive && (
-                          <div className="text-xs text-gray-500 group-hover:text-gray-600">
+                          <div className="text-xs text-gray-500 mt-0.5 font-normal">
                             {item.description}
                           </div>
                         )}
                       </div>
-                      {isMenuOpen ? (
-                        <ChevronDownIcon className={`w-4 h-4 ml-2 ${isAnySubItemActive ? 'text-white' : 'text-gray-400'}`} />
-                      ) : (
-                        <ChevronRightIcon className={`w-4 h-4 ml-2 ${isAnySubItemActive ? 'text-white' : 'text-gray-400'}`} />
-                      )}
-                      {item.highlight && !isAnySubItemActive && (
-                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full font-semibold">
-                          ★
-                        </span>
-                      )}
+                      <div className={`ml-3 p-1 rounded-full transition-all duration-300 ${
+                        isAnySubItemActive ? 'bg-white/20' : 'bg-gray-100 group-hover:bg-gray-200'
+                      }`}>
+                        {isMenuOpen ? (
+                          <ChevronDownIcon className={`w-4 h-4 ${isAnySubItemActive ? 'text-white' : 'text-gray-600'}`} />
+                        ) : (
+                          <ChevronRightIcon className={`w-4 h-4 ${isAnySubItemActive ? 'text-white' : 'text-gray-600'}`} />
+                        )}
+                      </div>
                     </button>
                   ) : (
                     <Link
                       to={item.href}
                       className={`
-                        group relative flex items-center px-4 py-3.5 text-sm font-medium rounded-xl transition-all duration-200
+                        group relative flex items-center px-6 py-4 text-sm font-semibold rounded-lg transition-all duration-300 overflow-hidden
                         ${
                           isActive
-                            ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30'
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-500/40 border border-blue-500/30'
                             : item.highlight
-                            ? 'text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 border-2 border-dashed border-blue-200'
-                            : 'text-gray-700 hover:bg-gray-50'
+                            ? 'text-gray-800 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:shadow-md border border-blue-200/50 hover:border-blue-300'
+                            : 'text-gray-700 hover:bg-gray-100 hover:shadow-sm border border-transparent hover:border-gray-200'
                         }
                       `}
                     >
                       {isActive && (
-                        <div className="absolute left-0 w-1 h-8 bg-white rounded-r-full"></div>
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full shadow-sm"></div>
                       )}
-                      <item.icon
-                        className={`mr-3 h-5 w-5 transition-transform duration-200 group-hover:scale-110 ${
-                          isActive ? 'text-white' : item.highlight ? 'text-blue-500' : 'text-gray-400'
-                        }`}
-                      />
+                      <div className={`p-2 rounded-md mr-4 transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-white/20' 
+                          : item.highlight 
+                          ? 'bg-blue-100 group-hover:bg-blue-200' 
+                          : 'bg-gray-100 group-hover:bg-gray-200'
+                      }`}>
+                        <item.icon
+                          className={`h-5 w-5 transition-all duration-300 ${
+                            isActive ? 'text-white' : item.highlight ? 'text-blue-600' : 'text-gray-500'
+                          }`}
+                        />
+                      </div>
                       <div className="flex-1">
-                        <div className={isActive ? 'text-white' : ''}>{item.name}</div>
+                        <div className={`font-semibold ${isActive ? 'text-white' : 'text-gray-900'}`}>
+                          {item.name}
+                        </div>
                         {!isActive && (
-                          <div className="text-xs text-gray-500 group-hover:text-gray-600">
+                          <div className="text-xs text-gray-500 mt-0.5 font-normal">
                             {item.description}
                           </div>
                         )}
                       </div>
-                      {item.highlight && !isActive && (
-                        <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full font-semibold">
-                          ★
-                        </span>
-                      )}
                     </Link>
                   )}
 
                   {/* SubMenu Items */}
                   {hasSubItems && isMenuOpen && (
-                    <div className="mt-1 ml-4 space-y-1 animate-slideDown">
+                    <div className="mt-2 ml-6 space-y-1 animate-fadeIn">
                       {item.subItems.map((subItem) => {
                         const isSubActive = location.pathname === subItem.href;
                         return (
@@ -222,27 +236,37 @@ export default function Layout({ children }) {
                             key={subItem.name}
                             to={subItem.href}
                             className={`
-                              group flex items-center px-4 py-2.5 text-sm rounded-lg transition-all duration-200
+                              group flex items-center px-4 py-3 text-sm rounded-md transition-all duration-300 border-l-2
                               ${
                                 isSubActive
-                                  ? 'bg-blue-100 text-blue-700 font-semibold shadow-sm'
-                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                  ? 'bg-blue-50 text-blue-800 font-semibold border-blue-400 shadow-sm'
+                                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-gray-200 hover:border-gray-300'
                               }
                             `}
                           >
-                            <div className={`w-2 h-2 rounded-full mr-3 ${
-                              isSubActive ? 'bg-blue-500' : 'bg-gray-300 group-hover:bg-gray-400'
-                            }`}></div>
+                            <div className={`p-1.5 rounded-md mr-3 transition-all duration-300 ${
+                              isSubActive 
+                                ? 'bg-blue-100' 
+                                : 'bg-gray-100 group-hover:bg-gray-200'
+                            }`}>
+                              <subItem.icon
+                                className={`w-4 h-4 transition-all duration-300 ${
+                                  isSubActive ? 'text-blue-600' : 'text-gray-500'
+                                }`}
+                              />
+                            </div>
                             <div className="flex-1">
-                              <div>{subItem.name}</div>
+                              <div className={isSubActive ? 'text-blue-900' : 'text-gray-800'}>
+                                {subItem.name}
+                              </div>
                               {!isSubActive && (
-                                <div className="text-xs text-gray-400 group-hover:text-gray-500">
+                                <div className="text-xs text-gray-500 mt-0.5 font-normal">
                                   {subItem.description}
                                 </div>
                               )}
                             </div>
                             {isSubActive && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-sm"></div>
                             )}
                           </Link>
                         );
@@ -256,7 +280,7 @@ export default function Layout({ children }) {
 
           {/* Footer */}
           <div className="px-6 py-4 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-blue-50">
-            <div className="flex items-center gap-3 mb-3">
+            {/* <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold">
                 U
               </div>
@@ -264,7 +288,7 @@ export default function Layout({ children }) {
                 <p className="text-sm font-semibold text-gray-900">Admin</p>
                 <p className="text-xs text-gray-500">Gestionnaire</p>
               </div>
-            </div>
+            </div> */}
             <div className="text-center">
               <p className="text-xs text-gray-400">Version 2.0.0</p>
             </div>
@@ -283,7 +307,7 @@ export default function Layout({ children }) {
       {/* Main content */}
       <div
         className={`transition-all duration-300 ${
-          isSidebarOpen ? 'ml-72' : 'ml-0'
+          isSidebarOpen ? 'ml-96' : 'ml-0'
         }`}
       >
         <main className="p-8 max-w-[1800px] mx-auto">
