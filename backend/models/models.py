@@ -13,6 +13,7 @@ class Enseignant(Base):
     grade = Column(String(50), nullable=False)
     grade_code = Column(String(10), nullable=False)
     code_smartex = Column(String(50), unique=True, nullable=False, index=True)
+    abrv_ens = Column(String(50), nullable=True)  # Abréviation de l'enseignant (ex: P.NOM)
     participe_surveillance = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
