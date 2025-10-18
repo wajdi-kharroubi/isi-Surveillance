@@ -93,6 +93,25 @@ def creer_voeu(voeu_data: VoeuCreate, db: Session = Depends(get_db)):
     return voeu
 
 
+@router.delete("/vider", status_code=status.HTTP_200_OK)
+def vider_voeux(db: Session = Depends(get_db)):
+    """Vide complètement la table voeux"""
+    try:
+        # Utiliser synchronize_session=False pour éviter les problèmes de contraintes
+        nb_supprimes = db.query(Voeu).delete(synchronize_session=False)
+        db.commit()
+        return {
+            "message": f"Table voeux vidée avec succès",
+            "nb_supprimes": nb_supprimes
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la suppression : {str(e)}"
+        )
+
+
 @router.put("/{voeu_id}", response_model=VoeuResponse)
 def modifier_voeu(
     voeu_id: int,
@@ -153,3 +172,4 @@ def rechercher_voeux(
         query = query.filter(Voeu.seance == seance)
     
     return query.all()
+

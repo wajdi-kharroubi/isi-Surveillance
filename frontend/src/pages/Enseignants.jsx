@@ -1,36 +1,107 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { enseignantsAPI, importAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
-import { PlusIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { 
+  PlusIcon, 
+  ArrowUpTrayIcon, 
+  MagnifyingGlassIcon,
+  FunnelIcon,
+  UserGroupIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline';
 
 export default function Enseignants() {
-  const [showImport, setShowImport] = useState(false);
+  const fileInputRef = useRef(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterGrade, setFilterGrade] = useState('all');
+  const [filterSurveillance, setFilterSurveillance] = useState('all');
   const queryClient = useQueryClient();
+
+  // Grade code to full name mapping
+  const gradeNames = {
+    'PR': 'Professeur',
+    'MC': 'Maître de conférences',
+    'MA': 'Maître Assistant', 
+    'AS': 'Assistant',
+    'AC': 'Assistant Contractuel',
+    'PTC': 'P. Tronc Commun',
+    'PES': 'P. d\'enseignement secondaire',
+    'EX': 'Expert',
+    'V': 'Vacataire',
+    'VA': 'Vacataire'
+  };
+
+  const getGradeName = (code) => {
+    return gradeNames[code] || code;
+  };
 
   const { data: enseignants, isLoading } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
   });
 
-  // Tri uniquement
-  const sortedEnseignants = useMemo(() => {
+  // Get unique grades for filter
+  const grades = useMemo(() => {
     if (!enseignants) return [];
+    return [...new Set(enseignants.map(e => e.grade_code))].filter(Boolean);
+  }, [enseignants]);
 
-    let sorted = [...enseignants];
-
-    // Tri
+  // Search and filter
+  const filteredEnseignants = useMemo(() => {
+    if (!enseignants) return [];
+    
+    let filtered = [...enseignants];
+    
+    // Search
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(e =>
+        e.nom?.toLowerCase().includes(search) ||
+        e.prenom?.toLowerCase().includes(search) ||
+        e.email?.toLowerCase().includes(search) ||
+        e.code_smartex?.toLowerCase().includes(search)
+      );
+    }
+    
+    // Filter by grade
+    if (filterGrade !== 'all') {
+      filtered = filtered.filter(e => e.grade_code === filterGrade);
+    }
+    
+    // Filter by surveillance
+    if (filterSurveillance !== 'all') {
+      filtered = filtered.filter(e => 
+        filterSurveillance === 'yes' ? e.participe_surveillance : !e.participe_surveillance
+      );
+    }
+    
+    // Sort
     if (sortConfig.key) {
-      sorted.sort((a, b) => {
+      filtered.sort((a, b) => {
         let aVal = a[sortConfig.key];
         let bVal = b[sortConfig.key];
 
-        // Gestion des valeurs nulles/undefined
         if (aVal === null || aVal === undefined) aVal = '';
         if (bVal === null || bVal === undefined) bVal = '';
 
-        // Conversion en string pour comparaison
+        // Special handling for code_smartex - treat as integer
+        if (sortConfig.key === 'code_smartex') {
+          const aNum = parseInt(aVal);
+          const bNum = parseInt(bVal);
+          
+          // Handle NaN values - put them at the end
+          const aIsNaN = isNaN(aNum);
+          const bIsNaN = isNaN(bNum);
+          
+          if (aIsNaN && bIsNaN) return 0;
+          if (aIsNaN) return 1; // a goes to the end
+          if (bIsNaN) return -1; // b goes to the end
+          
+          return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+
         aVal = String(aVal).toLowerCase();
         bVal = String(bVal).toLowerCase();
 
@@ -40,8 +111,8 @@ export default function Enseignants() {
       });
     }
 
-    return sorted;
-  }, [enseignants, sortConfig]);
+    return filtered;
+  }, [enseignants, searchTerm, filterGrade, filterSurveillance, sortConfig]);
 
   const handleSort = (key) => {
     setSortConfig(prev => ({
@@ -55,12 +126,36 @@ export default function Enseignants() {
     onSuccess: (response) => {
       toast.success(response.data.message);
       queryClient.invalidateQueries(['enseignants']);
-      setShowImport(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de l\'import');
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     },
   });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => enseignantsAPI.vider(),
+    onSuccess: (response) => {
+      toast.success(response.data.message || 'Table enseignants vidée avec succès!');
+      queryClient.invalidateQueries(['enseignants']);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');
+    },
+  });
+
+  const handleDeleteAll = () => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer tous les enseignants ? Cette action est irréversible.')) {
+      deleteAllMutation.mutate();
+    }
+  };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -70,57 +165,147 @@ export default function Enseignants() {
   };
 
   if (isLoading) {
-    return <div>Chargement...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+        <p className="text-gray-600 font-medium">Chargement des enseignants...</p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Enseignants</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            {sortedEnseignants?.length || 0} enseignant(s) enregistré(s)
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowImport(true)}
-            className="btn btn-secondary flex items-center gap-2"
-          >
-            <ArrowUpTrayIcon className="h-5 w-5" />
-            Importer Excel
-          </button>
-          <button className="btn btn-primary flex items-center gap-2">
-            <PlusIcon className="h-5 w-5" />
-            Nouvel enseignant
-          </button>
-        </div>
-      </div>
-
-      {/* Import Modal */}
-      {showImport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Importer des enseignants</h3>
+      {/* Header */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-600 rounded-2xl shadow-2xl p-8 text-white">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+        <div className="relative flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center">
+              <UserGroupIcon className="w-10 h-10 text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold drop-shadow-lg">Enseignants</h1>
+              <p className="text-cyan-100 text-lg mt-1">
+                {filteredEnseignants?.length || 0} enseignant(s) 
+                {searchTerm || filterGrade !== 'all' || filterSurveillance !== 'all' ? ' (filtrés)' : ''} 
+                {' '} sur {enseignants?.length || 0} au total
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
             <input
+              ref={fileInputRef}
               type="file"
               accept=".xlsx,.xls"
               onChange={handleFileUpload}
-              className="input"
+              className="hidden"
               disabled={importMutation.isPending}
             />
-            <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importMutation.isPending}
+              className="btn bg-white text-blue-600 hover:bg-blue-50 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {importMutation.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  Import en cours...
+                </>
+              ) : (
+                <>
+                  <ArrowUpTrayIcon className="h-5 w-5" />
+                  Importer Excel
+                </>
+              )}
+            </button>
+            {enseignants && enseignants.length > 0 && (
               <button
-                onClick={() => setShowImport(false)}
-                className="btn btn-secondary"
-                disabled={importMutation.isPending}
+                onClick={handleDeleteAll}
+                disabled={deleteAllMutation.isPending}
+                className="btn bg-red-500 text-white hover:bg-red-600 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Annuler
+                {deleteAllMutation.isPending ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <TrashIcon className="h-5 w-5" />
+                    Vider la table
+                  </>
+                )}
               </button>
-            </div>
+            )}
+            {/* <button className="btn bg-white text-blue-600 hover:bg-blue-50 shadow-lg flex items-center gap-2">
+              <PlusIcon className="h-5 w-5" />
+              Ajouter
+            </button> */}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl border-2 border-gray-200 shadow-lg">
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex-1 flex flex-wrap gap-3">
+            {/* Search Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <MagnifyingGlassIcon className="w-5 h-5 text-blue-600" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              />
+            </div>
+
+            {/* Grade Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-5 h-5 text-green-600" />
+              <select
+                value={filterGrade}
+                onChange={(e) => setFilterGrade(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              >
+                <option value="all">Tous les grades</option>
+                {grades.map(grade => (
+                  <option key={grade} value={grade}>{getGradeName(grade)}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Surveillance Filter */}
+            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+              <FunnelIcon className="w-5 h-5 text-purple-600" />
+              <select
+                value={filterSurveillance}
+                onChange={(e) => setFilterSurveillance(e.target.value)}
+                className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+              >
+                <option value="all">Toutes les surveillances</option>
+                <option value="yes">Participe</option>
+                <option value="no">Ne participe pas</option>
+              </select>
+            </div>
+
+            {/* Reset filters */}
+            {(searchTerm || filterGrade !== 'all' || filterSurveillance !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterGrade('all');
+                  setFilterSurveillance('all');
+                }}
+                className="px-4 py-2.5 bg-red-100 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-200 transition-colors border-2 border-red-200"
+              >
+                Réinitialiser filtres
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Table */}
       <div className="table-container">
@@ -130,7 +315,7 @@ export default function Enseignants() {
               <th>
                 <button 
                   onClick={() => handleSort('code_smartex')}
-                  className="flex items-center gap-1 hover:text-primary-600 font-semibold"
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                 >
                   Code Smartex
                   {sortConfig.key === 'code_smartex' && (
@@ -141,7 +326,7 @@ export default function Enseignants() {
               <th>
                 <button 
                   onClick={() => handleSort('nom')}
-                  className="flex items-center gap-1 hover:text-primary-600 font-semibold"
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                 >
                   Nom
                   {sortConfig.key === 'nom' && (
@@ -152,7 +337,7 @@ export default function Enseignants() {
               <th>
                 <button 
                   onClick={() => handleSort('prenom')}
-                  className="flex items-center gap-1 hover:text-primary-600 font-semibold"
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                 >
                   Prénom
                   {sortConfig.key === 'prenom' && (
@@ -163,7 +348,7 @@ export default function Enseignants() {
               <th>
                 <button 
                   onClick={() => handleSort('email')}
-                  className="flex items-center gap-1 hover:text-primary-600 font-semibold"
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                 >
                   Email
                   {sortConfig.key === 'email' && (
@@ -174,7 +359,7 @@ export default function Enseignants() {
               <th>
                 <button 
                   onClick={() => handleSort('grade_code')}
-                  className="flex items-center gap-1 hover:text-primary-600 font-semibold"
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                 >
                   Grade
                   {sortConfig.key === 'grade_code' && (
@@ -185,7 +370,7 @@ export default function Enseignants() {
               <th>
                 <button 
                   onClick={() => handleSort('participe_surveillance')}
-                  className="flex items-center gap-1 hover:text-primary-600 font-semibold"
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
                 >
                   Surveillance
                   {sortConfig.key === 'participe_surveillance' && (
@@ -193,39 +378,40 @@ export default function Enseignants() {
                   )}
                 </button>
               </th>
-              <th>Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
-            {sortedEnseignants?.map((ens) => (
+          <tbody>
+            {filteredEnseignants?.map((ens) => (
               <tr key={ens.id}>
                 <td>
-                  <span className="font-mono text-sm font-semibold text-primary-700">
+                  <span className="font-mono text-sm font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg">
                     {ens.code_smartex}
                   </span>
                 </td>
-                <td className="font-medium">{ens.nom}</td>
+                <td className="font-semibold">{ens.nom}</td>
                 <td>{ens.prenom}</td>
-                <td className="text-gray-500 text-sm">{ens.email}</td>
+                <td className="text-gray-600 text-sm">{ens.email}</td>
                 <td>
-                  <span className="badge badge-info">{ens.grade_code}</span>
+                  <span className="badge badge-info">{getGradeName(ens.grade_code)}</span>
                 </td>
                 <td>
                   {ens.participe_surveillance ? (
-                    <span className="badge badge-success">Oui</span>
+                    <span className="badge badge-success">✓ Oui</span>
                   ) : (
-                    <span className="badge badge-danger">Non</span>
+                    <span className="badge badge-danger">✕ Non</span>
                   )}
-                </td>
-                <td>
-                  <button className="text-primary-600 hover:text-primary-700 text-sm">
-                    Modifier
-                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        
+        {filteredEnseignants?.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">Aucun enseignant trouvé</p>
+            <p className="text-gray-400 text-sm mt-2">Essayez de modifier vos filtres</p>
+          </div>
+        )}
       </div>
     </div>
   );

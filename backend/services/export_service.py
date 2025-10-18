@@ -219,10 +219,26 @@ class ExportService:
         """Génère une convocation Word pour un enseignant"""
         doc = Document()
         
-        # En-tête "Note à"
+        # Ajouter l'en-tête ISI
+        self._ajouter_entete(doc)
+        
+        # Ajouter le pied de page ISI
+        self._ajouter_pied_de_page(doc)
+        
+        # Ajouter un retour à la ligne après l'entête
+        doc.add_paragraph()
+        
+        # En-tête "Note à" - centré et en bleu
         note_para = doc.add_paragraph()
-        note_para.add_run('Note à\n').bold = True
-        note_para.add_run(f'M./Mme {enseignant.nom} {enseignant.prenom}')
+        note_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_note = note_para.add_run('Notes à\n')
+        run_note.bold = True
+        run_note.font.size = Pt(14)
+        run_note.font.color.rgb = RGBColor(0, 51, 153)
+        
+        run_nom = note_para.add_run(f'M./Mme {enseignant.nom} {enseignant.prenom}')
+        run_nom.font.size = Pt(12)
+        run_nom.font.color.rgb = RGBColor(0, 51, 153)
         
         doc.add_paragraph()
         
@@ -256,23 +272,45 @@ class ExportService:
         
         # Tableau des surveillances simplifié : Date | Heure | Durée
         table = doc.add_table(rows=1, cols=3)
-        table.style = 'Light Grid Accent 1'
+        table.style = 'Table Grid'
+        
+        # Définir les largeurs de colonnes
+        table.autofit = False
+        table.allow_autofit = False
+        for row in table.rows:
+            row.cells[0].width = Inches(2.5)   # Date
+            row.cells[1].width = Inches(2.0)   # Heure
+            row.cells[2].width = Inches(2.0)   # Durée
         
         hdr_cells = table.rows[0].cells
-        hdr_cells[0].text = 'Date'
-        hdr_cells[1].text = 'Heure'
-        hdr_cells[2].text = 'Durée'
         
-        # Rendre l'en-tête en gras
-        for cell in hdr_cells:
-            for paragraph in cell.paragraphs:
-                for run in paragraph.runs:
-                    run.bold = True
+        # Styliser l'en-tête du tableau
+        for i, header_text in enumerate(['Date', 'Heure', 'Durée']):
+            cell = hdr_cells[i]
+            cell.paragraphs[0].clear()
+            self._set_cell_vertical_alignment(cell, 'center')
+            p = cell.paragraphs[0]
+            run = p.add_run(header_text)
+            run.font.bold = True
+            run.font.size = Pt(11)
+            run.font.color.rgb = RGBColor(255, 255, 255)  # Texte blanc
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            # Fond bleu vif pour l'en-tête
+            self._set_cell_background(cell, "003399")
         
         for seance in seances_list:
             row_cells = table.add_row().cells
+            
+            # Date
+            self._set_cell_vertical_alignment(row_cells[0], 'center')
             row_cells[0].text = seance['date'].strftime('%d/%m/%Y')
+            row_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            # Heure
+            self._set_cell_vertical_alignment(row_cells[1], 'center')
             row_cells[1].text = seance['h_debut'].strftime('%H:%M')
+            row_cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             
             # Calculer la durée
             h_debut = seance['h_debut']
@@ -290,16 +328,15 @@ class ExportService:
             else:
                 duree_str = f"{heures}h00"
             
+            # Durée
+            self._set_cell_vertical_alignment(row_cells[2], 'center')
             row_cells[2].text = duree_str
+            row_cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         doc.add_paragraph()
         
         # Pied de page
-        doc.add_paragraph("Nous comptons sur votre présence.")
-        doc.add_paragraph()
-        
-        signature = doc.add_paragraph("Le Responsable des Examens")
-        signature.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
         
         # Sauvegarder
         doc.save(filepath)
@@ -333,6 +370,12 @@ class ExportService:
             # Créer un document avec toutes les séances du jour
             doc = Document()
             
+            # Ajouter l'en-tête au document
+            self._ajouter_entete(doc)
+            
+            # Ajouter le pied de page au document
+            self._ajouter_pied_de_page(doc)
+            
             # Trier les créneaux par heure de début
             creneaux_tries = sorted(creneaux.items(), key=lambda x: x[0][0])
             
@@ -340,7 +383,7 @@ class ExportService:
                 # Ajouter le contenu de la séance
                 self._ajouter_seance_au_document(doc, date_exam, h_debut, h_fin, liste_examens)
                 
-                # Ajouter un saut de page sauf pour la dernière séance
+                # Ajouter un saut de page entre les séances (chaque séance sur sa propre page)
                 if idx < len(creneaux_tries) - 1:
                     doc.add_page_break()
             
@@ -359,7 +402,9 @@ class ExportService:
         h_fin, 
         examens: List[Examen]
     ):
-        """Ajoute une séance à un document Word existant"""
+        """Ajoute une séance à un document Word existant avec mise en forme professionnelle"""
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
         
         # Pour chaque groupe (même session/semestre) dans ce créneau
         # Regrouper les examens par session et semestre
@@ -377,16 +422,32 @@ class ExportService:
             
             # Déterminer le numéro de séance en fonction de l'heure
             numero_seance = self._determiner_numero_seance(h_debut)
-            
-            # En-tête avec les informations
-            p = doc.add_paragraph()
-            p.add_run(f"AU : 2024-2025 – Semestre : {semestre.split()[-1]} – Session : {session_text}").bold = True
-            
-            p2 = doc.add_paragraph()
-            p2.add_run(f"Date : {date_exam.strftime('%d/%m/%Y')} – Heure : {h_debut.strftime('%H:%M')}-{h_fin.strftime('%H:%M')} Séance : {numero_seance}")
-            
+            # Ajout d'un retour à la ligne après l'entête
             doc.add_paragraph()
+            # === INFORMATIONS DE LA SÉANCE (TITRE CENTRÉ ET EN GRAS) ===
+            # Ligne 1 : AU, Semestre, Session - centré, gras, plus grand
+            p_info = doc.add_paragraph()
+            p_info.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run_info = p_info.add_run(
+                f"AU : 2024-2025 - Semestre : {semestre.split()[-1]} - Session : {session_text}"
+            )
+            run_info.font.bold = True
+            run_info.font.size = Pt(14)
+            run_info.font.color.rgb = RGBColor(0, 51, 153)  # Bleu plus vif
+            p_info.space_after = Pt(6)
             
+            # Ligne 2 : Date et horaire - centré, gras, plus grand
+            p_date = doc.add_paragraph()
+            p_date.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run_date = p_date.add_run(
+                f"Date : {date_exam.strftime('%d/%m/%Y')} - Séance : {numero_seance}"
+            )
+            run_date.font.bold = True
+            run_date.font.size = Pt(12)
+            run_date.font.color.rgb = RGBColor(0, 51, 153)  # Bleu plus vif
+            p_date.space_after = Pt(12)
+            
+            # === TABLEAU DES SURVEILLANTS ===
             # Récupérer tous les enseignants affectés à ce créneau
             enseignants_affectes = []
             for examen in examens_groupe:
@@ -408,24 +469,403 @@ class ExportService:
             # Créer le tableau avec 3 colonnes : Enseignant | Salle | Signature
             if enseignants_affectes:
                 table = doc.add_table(rows=1, cols=3)
-                table.style = 'Light Grid Accent 1'
+                table.style = 'Table Grid'
                 
-                # En-têtes
+                # Définir les largeurs de colonnes (ajustées pour tenir dans la page)
+                table.autofit = False
+                table.allow_autofit = False
+                
+                # Largeur totale disponible : environ 7 pouces (marges de 0.5" de chaque côté)
+                for row in table.rows:
+                    row.cells[0].width = Inches(3.5)   # Enseignant (50%)
+                    row.cells[1].width = Inches(1.75)  # Salle (25%)
+                    row.cells[2].width = Inches(1.75)  # Signature (25%)
+                
+                # Définir la largeur totale du tableau
+                from docx.oxml import OxmlElement
+                from docx.oxml.ns import qn
+                tbl = table._element
+                tblPr = tbl.tblPr
+                if tblPr is None:
+                    tblPr = OxmlElement('w:tblPr')
+                    tbl.insert(0, tblPr)
+                
+                # Définir la largeur du tableau en pourcentage
+                tblW = OxmlElement('w:tblW')
+                tblW.set(qn('w:w'), '5000')  # 100% de la largeur disponible
+                tblW.set(qn('w:type'), 'pct')
+                tblPr.append(tblW)
+                
+                # En-têtes avec style
                 hdr_cells = table.rows[0].cells
-                hdr_cells[0].text = 'Enseignant'
-                hdr_cells[1].text = 'Salle'
-                hdr_cells[2].text = 'Signature'
+                for i, header_text in enumerate(['Enseignant', 'Salle', 'Signature']):
+                    cell = hdr_cells[i]
+                    cell.paragraphs[0].clear()
+                    self._set_cell_vertical_alignment(cell, 'center')
+                    p = cell.paragraphs[0]
+                    run = p.add_run(header_text)
+                    run.font.bold = True
+                    run.font.size = Pt(11)
+                    run.font.color.rgb = RGBColor(255, 255, 255)  # Texte blanc
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    
+                    # Fond bleu vif pour l'en-tête
+                    self._set_cell_background(cell, "003399")  # Bleu plus vif et saturé
                 
                 # Ajouter chaque enseignant
                 for ens in sorted(enseignants_affectes, key=lambda x: (x['nom'], x['prenom'])):
                     row_cells = table.add_row().cells
+                    
+                    # Définir la hauteur de ligne compacte
+                    from docx.oxml import OxmlElement
+                    from docx.oxml.ns import qn
+                    
+                    tr = row_cells[0]._element.getparent()
+                    trPr = tr.get_or_add_trPr()
+                    trHeight = OxmlElement('w:trHeight')
+                    # Hauteur fixe de 300 twips (environ 0.53 cm) - compact mais lisible
+                    trHeight.set(qn('w:val'), '300')
+                    trHeight.set(qn('w:hRule'), 'exact')  # Hauteur exacte
+                    trPr.append(trHeight)
+                    
+                    # Nom de l'enseignant
+                    self._set_cell_vertical_alignment(row_cells[0], 'center')
                     row_cells[0].text = f"{ens['nom']} {ens['prenom']}"
-                    row_cells[1].text = ''  # Champ vide
-                    row_cells[2].text = ''  # Champ vide
+                    row_cells[0].paragraphs[0].runs[0].font.size = Pt(8)  # Police plus petite
+                    row_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    
+                    # Salle (vide)
+                    self._set_cell_vertical_alignment(row_cells[1], 'center')
+                    row_cells[1].text = ''
+                    
+                    # Signature (vide)
+                    self._set_cell_vertical_alignment(row_cells[2], 'center')
+                    row_cells[2].text = ''
+                    
+                    # Aucun espacement pour maximiser l'espace
+                    for cell in row_cells:
+                        cell.paragraphs[0].space_after = Pt(0)
+                        cell.paragraphs[0].space_before = Pt(0)
             else:
                 doc.add_paragraph("⚠️ Aucun surveillant affecté", style='Intense Quote')
             
-            doc.add_paragraph()  # Espace entre les groupes
+            # Ne rien ajouter ici - le pied de page sera ajouté via la section footer du document
+    
+    def _set_table_borders(self, table):
+        """Définit les bordures d'un tableau (style simple)"""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        
+        tbl = table._element
+        tblPr = tbl.tblPr
+        if tblPr is None:
+            tblPr = OxmlElement('w:tblPr')
+            tbl.insert(0, tblPr)
+        
+        tblBorders = OxmlElement('w:tblBorders')
+        for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+            border = OxmlElement(f'w:{border_name}')
+            border.set(qn('w:val'), 'single')
+            border.set(qn('w:sz'), '12')  # Taille de bordure
+            border.set(qn('w:space'), '0')
+            border.set(qn('w:color'), '000000')  # Noir
+            tblBorders.append(border)
+        tblPr.append(tblBorders)
+    
+    def _set_cell_background(self, cell, color_hex):
+        """Définit la couleur de fond d'une cellule"""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        
+        cell_properties = cell._element.get_or_add_tcPr()
+        cell_shading = OxmlElement('w:shd')
+        cell_shading.set(qn('w:fill'), color_hex)
+        cell_properties.append(cell_shading)
+    
+    def _set_cell_vertical_alignment(self, cell, alignment='center'):
+        """Définit l'alignement vertical d'une cellule
+        
+        Args:
+            cell: Cellule du tableau
+            alignment: 'top', 'center', 'bottom' (défaut: 'center')
+        """
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        
+        tc = cell._element
+        tcPr = tc.get_or_add_tcPr()
+        vAlign = OxmlElement('w:vAlign')
+        vAlign.set(qn('w:val'), alignment)
+        tcPr.append(vAlign)
+    
+    def _add_horizontal_line(self, doc, color_hex="000000"):
+        """Ajoute une ligne horizontale en utilisant une bordure de paragraphe
+        
+        Args:
+            doc: Document Word
+            color_hex: Couleur de la ligne en hexadécimal (sans #)
+        """
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        
+        p = doc.add_paragraph()
+        pPr = p._element.get_or_add_pPr()
+        
+        # Créer l'élément de bordure
+        pBdr = OxmlElement('w:pBdr')
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'), 'single')
+        bottom.set(qn('w:sz'), '12')  # Épaisseur
+        bottom.set(qn('w:space'), '1')
+        bottom.set(qn('w:color'), color_hex)
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+        
+        # Réduire l'espacement
+        p.space_before = Pt(3)
+        p.space_after = Pt(3)
+    
+    def _add_horizontal_line_to_section(self, section, color_hex="000000"):
+        """Ajoute une ligne horizontale dans une section (header ou footer)
+        
+        Args:
+            section: Section du document (header ou footer)
+            color_hex: Couleur de la ligne en hexadécimal (sans #)
+        """
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        
+        p = section.add_paragraph()
+        pPr = p._element.get_or_add_pPr()
+        
+        # Créer l'élément de bordure
+        pBdr = OxmlElement('w:pBdr')
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'), 'single')
+        bottom.set(qn('w:sz'), '12')
+        bottom.set(qn('w:space'), '1')
+        bottom.set(qn('w:color'), color_hex)
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+        
+        p.paragraph_format.space_before = Pt(3)
+        p.paragraph_format.space_after = Pt(3)
+    
+    def _ajouter_entete(self, doc):
+        """Ajoute l'en-tête au document Word
+        
+        Args:
+            doc: Document Word
+        """
+        # Accéder à la section du document
+        section = doc.sections[0]
+        header = section.header
+        
+        # Définir les marges de la section pour supprimer les espaces à gauche
+        section.left_margin = Inches(0.5)
+        section.right_margin = Inches(0.5)
+        section.top_margin = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+        
+        # Créer un tableau pour l'en-tête avec 3 lignes et 3 colonnes
+        # La largeur totale doit être spécifiée pour les tableaux dans header/footer
+        header_table = header.add_table(rows=3, cols=3, width=Inches(7.5))
+        header_table.autofit = False
+        header_table.allow_autofit = False
+        
+        # Définir les largeurs de colonnes
+        for row in header_table.rows:
+            row.cells[0].width = Inches(1.5)  # Logo (réduit)
+            row.cells[1].width = Inches(4.5)  # Titres (augmenté)
+            row.cells[2].width = Inches(1.5)  # Référence
+        
+        # === LIGNE 1 : Titre principal et référence ===
+        # Logo ISI (ligne 1, colonne 1) - sera fusionné avec les lignes 2 et 3
+        cell_logo_row1 = header_table.rows[0].cells[0]
+        cell_logo_row1.text = ""
+        
+        # Titre principal (ligne 1, colonne 2)
+        cell_titre1 = header_table.rows[0].cells[1]
+        cell_titre1.text = ""
+        self._set_cell_vertical_alignment(cell_titre1, 'center')
+        p_titre1 = cell_titre1.paragraphs[0]
+        run_titre1 = p_titre1.add_run("GESTION DES EXAMENS ET DÉLIBÉRATIONS")
+        run_titre1.font.size = Pt(13)
+        run_titre1.font.bold = True
+        run_titre1.font.color.rgb = RGBColor(0, 51, 153)
+        p_titre1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Référence document (ligne 1, colonne 3)
+        cell_ref1 = header_table.rows[0].cells[2]
+        cell_ref1.text = ""
+        self._set_cell_vertical_alignment(cell_ref1, 'center')
+        p_ref1 = cell_ref1.paragraphs[0]
+        run_ref1 = p_ref1.add_run("EXD-FR-08-01")
+        run_ref1.font.size = Pt(10)
+        run_ref1.font.bold = True
+        run_ref1.font.color.rgb = RGBColor(0, 51, 153)
+        p_ref1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # === LIGNE 2 : Sous-titre et date d'approbation ===
+        # Logo ISI (fusionner les 3 lignes pour la colonne 1)
+        cell_logo = header_table.rows[0].cells[0]
+        cell_logo.merge(header_table.rows[1].cells[0])
+        cell_logo.merge(header_table.rows[2].cells[0])
+        cell_logo.text = ""
+        self._set_cell_vertical_alignment(cell_logo, 'center')
+        
+        # Ajouter l'image du logo ISI
+        logo_path = os.path.join(os.path.dirname(__file__), '..', 'logo', 'logoISI.png')
+        if os.path.exists(logo_path):
+            p_logo = cell_logo.paragraphs[0]
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run_logo = p_logo.add_run()
+            run_logo.add_picture(logo_path, width=Inches(1.2))
+        else:
+            # Si le logo n'existe pas, utiliser le texte comme fallback
+            p_logo1 = cell_logo.paragraphs[0]
+            p_logo1.paragraph_format.space_after = Pt(0)
+            run_logo1 = p_logo1.add_run("INSTITUT")
+            run_logo1.font.size = Pt(7)
+            run_logo1.font.color.rgb = RGBColor(0, 51, 153)
+            p_logo1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            p_logo2 = cell_logo.add_paragraph()
+            p_logo2.paragraph_format.space_after = Pt(0)
+            run_logo2 = p_logo2.add_run("SUPÉRIEUR")
+            run_logo2.font.size = Pt(7)
+            run_logo2.font.color.rgb = RGBColor(0, 51, 153)
+            p_logo2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            p_logo3 = cell_logo.add_paragraph()
+            p_logo3.paragraph_format.space_after = Pt(2)
+            run_logo3 = p_logo3.add_run("INFORMATIQUE  ")
+            run_logo3.font.size = Pt(7)
+            run_logo3.font.color.rgb = RGBColor(0, 51, 153)
+            run_logo3_isi = p_logo3.add_run("ISI")
+            run_logo3_isi.font.size = Pt(11)
+            run_logo3_isi.font.bold = True
+            run_logo3_isi.font.color.rgb = RGBColor(0, 153, 0)  # Vert plus vif
+            p_logo3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            p_logo4 = cell_logo.add_paragraph()
+            p_logo4.paragraph_format.space_after = Pt(0)
+            run_logo4 = p_logo4.add_run("المعهد العالي للإعلامية")
+            run_logo4.font.size = Pt(7)
+            run_logo4.font.color.rgb = RGBColor(0, 51, 153)
+            p_logo4.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Sous-titre (ligne 2, colonne 2)
+        cell_titre2 = header_table.rows[1].cells[1]
+        cell_titre2.text = ""
+        self._set_cell_vertical_alignment(cell_titre2, 'center')
+        p_titre2 = cell_titre2.paragraphs[0]
+        run_titre2 = p_titre2.add_run("Procédure d'exécution des épreuves")
+        run_titre2.font.size = Pt(13)
+        run_titre2.font.color.rgb = RGBColor(0, 51, 153)
+        run_titre2.font.bold = True
+        p_titre2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Date d'approbation (ligne 2, colonne 3)
+        cell_ref2 = header_table.rows[1].cells[2]
+        cell_ref2.text = ""
+        self._set_cell_vertical_alignment(cell_ref2, 'center')
+        p_ref2 = cell_ref2.paragraphs[0]
+        run_ref2_label = p_ref2.add_run("Date d'approbation ")
+        run_ref2_label.font.size = Pt(10)
+        run_ref2_label.font.color.rgb = RGBColor(0, 51, 153)
+        run_ref2_label.font.bold = True
+        p_ref2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_ref2_date = cell_ref2.add_paragraph()
+        run_ref2_date = p_ref2_date.add_run("0504-24")
+        run_ref2_date.font.size = Pt(10)
+        run_ref2_date.font.bold = True
+        run_ref2_date.font.color.rgb = RGBColor(0, 51, 153)
+        p_ref2_date.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # === LIGNE 3 : Liste d'affectation et page ===
+        # Liste d'affectation (ligne 3, colonne 2)
+        cell_titre3 = header_table.rows[2].cells[1]
+        cell_titre3.text = ""
+        self._set_cell_vertical_alignment(cell_titre3, 'center')
+        p_titre3 = cell_titre3.paragraphs[0]
+        run_titre3 = p_titre3.add_run("Liste d'affectation des surveillants")
+        run_titre3.font.size = Pt(12)
+        run_titre3.font.bold = True
+        run_titre3.font.color.rgb = RGBColor(0, 51, 153)
+        p_titre3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Page (ligne 3, colonne 3)
+        cell_ref3 = header_table.rows[2].cells[2]
+        cell_ref3.text = ""
+        self._set_cell_vertical_alignment(cell_ref3, 'center')
+        p_ref3 = cell_ref3.paragraphs[0]
+        run_ref3 = p_ref3.add_run("Page 1/1")
+        run_ref3.font.size = Pt(10)
+        run_ref3.font.bold = True
+        run_ref3.font.color.rgb = RGBColor(0, 51, 153)
+        p_ref3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Ajouter les bordures au tableau d'en-tête
+        self._set_table_borders(header_table)
+        
+    
+    def _ajouter_pied_de_page(self, doc):
+        """Ajoute le pied de page au document Word
+        
+        Args:
+            doc: Document Word
+        """
+        # Accéder à la section du document
+        section = doc.sections[0]
+        footer = section.footer
+        
+        # Ligne de séparation bleue
+        p_line = footer.paragraphs[0]
+        pPr = p_line._element.get_or_add_pPr()
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        
+        pBdr = OxmlElement('w:pBdr')
+        top = OxmlElement('w:top')
+        top.set(qn('w:val'), 'single')
+        top.set(qn('w:sz'), '12')
+        top.set(qn('w:space'), '1')
+        top.set(qn('w:color'), '003399')  # Bleu plus vif
+        pBdr.append(top)
+        pPr.append(pBdr)
+        
+        # Adresse en arabe
+        p_arabic = footer.add_paragraph()
+        run_arabic = p_arabic.add_run(
+" نهج 02 أبو الريحان البيروني 2080 أريانة الهاتف: 71706164 الفاكس: 71706698 البريد الإلكتروني"
+        )
+        run_arabic.font.size = Pt(8)
+        
+        # Email en bleu vif
+        run_email1 = p_arabic.add_run(" ISI@isi.rnu.tn")
+        run_email1.font.size = Pt(8)
+        run_email1.font.color.rgb = RGBColor(0, 51, 204)  # Bleu plus vif
+        run_email1.font.underline = True
+        
+        p_arabic.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_arabic.paragraph_format.space_after = Pt(2)
+        
+        # Adresse en français
+        p_french = footer.add_paragraph()
+        run_french = p_french.add_run(
+            "02 Rue Abou Raihane Bayrouni 2080 Ariana   Tél :71706164   Email : "
+        )
+        run_french.font.size = Pt(8)
+        
+        # Email en bleu vif
+        run_email2 = p_french.add_run("ISI@isi.rnu.tn")
+        run_email2.font.size = Pt(8)
+        run_email2.font.color.rgb = RGBColor(0, 51, 204)  # Bleu plus vif
+        run_email2.font.underline = True
+        
+        p_french.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_french.paragraph_format.space_after = Pt(2)
     
     def generer_excel_global(self, date_debut: date = None, date_fin: date = None) -> str:
         """Génère un fichier Excel avec toutes les affectations"""

@@ -45,19 +45,6 @@ class Voeu(Base):
         return f"<Voeu {self.enseignant_id} - Jour {self.jour} Séance {self.seance}>"
 
 
-class Salle(Base):
-    __tablename__ = "salles"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    code_salle = Column(String(50), unique=True, nullable=False, index=True)
-    capacite = Column(Integer, nullable=True)
-    batiment = Column(String(50), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    def __repr__(self):
-        return f"<Salle {self.code_salle}>"
-
-
 class Examen(Base):
     __tablename__ = "examens"
     
@@ -97,19 +84,6 @@ class Affectation(Base):
     
     def __repr__(self):
         return f"<Affectation Examen:{self.examen_id} Enseignant:{self.enseignant_id} Salle:{self.cod_salle}>"
-
-
-class Configuration(Base):
-    __tablename__ = "configurations"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    cle = Column(String(100), unique=True, nullable=False, index=True)
-    valeur = Column(Text, nullable=False)
-    description = Column(Text, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    def __repr__(self):
-        return f"<Configuration {self.cle}={self.valeur}>"
 
 
 class GradeConfig(Base):

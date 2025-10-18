@@ -32,21 +32,22 @@ MIN_SURVEILLANTS_FALLBACK = 1  # En cas de manque
 
 # Session Types
 SESSIONS = ["Normale", "Rattrapage", "Contrôle Continu"]
-SEANCES = ["Matin", "Après-midi"]
+SEANCES = ["S1", "S2", "S3", "S4"]
 TYPES_EXAMEN = ["Écrit", "TP", "Oral"]
 
 # Grades Enseignants (ordre hiérarchique)
 GRADES = {
-    "PES": {"nom": "Professeur de l'Enseignement Supérieur", "code": "PES", "nb_surveillances": 3},
     "PR": {"nom": "Professeur", "code": "PR", "nb_surveillances": 4},
-    "MC": {"nom": "Maître de Conférences", "code": "MC", "nb_surveillances": 5},
-    "MA": {"nom": "Maître Assistant", "code": "MA", "nb_surveillances": 6},
-    "AC": {"nom": "Assistant Contractuel", "code": "AC", "nb_surveillances": 7},
+    "MC": {"nom": "Maître de Conférences", "code": "MC", "nb_surveillances": 4},
+    "MA": {"nom": "Maître Assistant", "code": "MA", "nb_surveillances": 7},
     "AS": {"nom": "Assistant", "code": "AS", "nb_surveillances": 8},
-    "PTC": {"nom": "Personnel Technique et Contractuel", "code": "PTC", "nb_surveillances": 9},
-    "VA": {"nom": "Vacataire", "code": "VA", "nb_surveillances": 10},
-    "V": {"nom": "Visiteur", "code": "V", "nb_surveillances": 10},
-    "EX": {"nom": "Expert Externe", "code": "EX", "nb_surveillances": 5}
+    "AC": {"nom": "Assistant Contractuel", "code": "AC", "nb_surveillances": 9},
+    "PTC": {"nom": "Professeur Tronc Commun", "code": "PTC", "nb_surveillances": 9},
+    "PES": {"nom": "Professeur de l'Enseignement Secondaire", "code": "PES", "nb_surveillances": 9},
+    "EX": {"nom": "Expert", "code": "EX", "nb_surveillances": 3},
+    "V": {"nom": "Vacataire", "code": "V", "nb_surveillances": 4},
+    #"VA": {"nom": "Vacataire", "code": "VA", "nb_surveillances": 4},
+
 }
 
 # CORS Settings

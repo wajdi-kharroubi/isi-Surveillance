@@ -1,6 +1,6 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-from models.models import Enseignant, Voeu, Examen, Salle
+from models.models import Enseignant, Voeu, Examen
 from typing import List, Dict, Tuple
 from datetime import datetime
 import logging

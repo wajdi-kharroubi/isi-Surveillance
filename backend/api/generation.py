@@ -198,6 +198,8 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
     Paramètres:
         - min_surveillants_par_salle: Nombre minimum de surveillants par examen (défaut: 2)
         - allow_single_surveillant: Autoriser le fallback à 1 surveillant si nécessaire
+        - max_time_in_seconds: Temps maximum de résolution en secondes (défaut: 900 = 15 min, range: 10-3600)
+        - relative_gap_limit: Gap relatif accepté pour arrêter l'optimisation (défaut: 0.01 = 1%, range: 0.0-1.0)
     
     Retour:
         - success: Statut de la génération
@@ -214,7 +216,9 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
             allow_fallback=request.allow_single_surveillant,
             respecter_voeux=True,
             equilibrer_temporel=True,
-            activer_regroupement_temporel=True  # ✅ Activé par défaut pour le confort enseignants
+            activer_regroupement_temporel=True,  # ✅ Activé par défaut pour le confort enseignants
+            max_time_in_seconds=request.max_time_in_seconds,
+            relative_gap_limit=request.relative_gap_limit
         )
         
         if success:

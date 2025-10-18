@@ -60,26 +60,6 @@ class VoeuResponse(VoeuBase):
     class Config:
         from_attributes = True
 
-# ============ Salle Schemas ============
-class SalleBase(BaseModel):
-    code_salle: str = Field(..., min_length=1, max_length=50)
-    capacite: Optional[int] = None
-    batiment: Optional[str] = Field(None, max_length=50)
-
-class SalleCreate(SalleBase):
-    pass
-
-class SalleUpdate(BaseModel):
-    capacite: Optional[int] = None
-    batiment: Optional[str] = Field(None, max_length=50)
-
-class SalleResponse(SalleBase):
-    id: int
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
 # ============ Examen Schemas ============
 class ExamenBase(BaseModel):
     dateExam: date
@@ -112,42 +92,14 @@ class ExamenResponse(ExamenBase):
     class Config:
         from_attributes = True
 
-# ============ Affectation Schemas ============
-class AffectationBase(BaseModel):
-    examen_id: int
-    enseignant_id: int
-    cod_salle: str = Field(..., max_length=50)
-    est_responsable: bool = False
-
-class AffectationCreate(AffectationBase):
-    pass
-
-class AffectationUpdate(BaseModel):
-    est_responsable: Optional[bool] = None
-
-class AffectationResponse(AffectationBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# ============ Import Schemas ============
-class ImportEnseignantsRequest(BaseModel):
-    file_path: str
-
-class ImportVoeuxRequest(BaseModel):
-    file_path: str
-
-class ImportExamensRequest(BaseModel):
-    file_path: str
 
 # ============ Generation Schemas ============
 class GenerationRequest(BaseModel):
     min_surveillants_par_salle: int = Field(default=2, ge=1)
     allow_single_surveillant: bool = True
     priorite_grade: bool = True
+    max_time_in_seconds: int = Field(default=600, ge=60, le=3600, description="Temps maximum de résolution en secondes (10s - 1h)")
+    relative_gap_limit: float = Field(default=0.05, ge=0.0, le=1.0, description="Gap relatif accepté pour arrêter l'optimisation (0.05 = 5%)")
 
 class GenerationResponse(BaseModel):
     success: bool
@@ -161,7 +113,6 @@ class StatistiquesResponse(BaseModel):
     nb_enseignants: int
     nb_enseignants_actifs: int
     nb_examens: int
-    nb_salles: int
     nb_affectations: int
     nb_voeux: int
     taux_couverture: float
@@ -190,10 +141,3 @@ class GradeConfigResponse(GradeConfigBase):
     
     class Config:
         from_attributes = True
-
-# ============ Export Schemas ============
-class ExportRequest(BaseModel):
-    format: str = Field(..., pattern="^(pdf|excel|word)$")
-    type_export: str = Field(..., pattern="^(planning|convocations|listes)$")
-    date_debut: Optional[date] = None
-    date_fin: Optional[date] = None

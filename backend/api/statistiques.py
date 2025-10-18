@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
 from models import StatistiquesResponse
-from models.models import Enseignant, Examen, Affectation, Voeu, Salle
+from models.models import Enseignant, Examen, Affectation, Voeu
 
 router = APIRouter(prefix="/statistiques", tags=["Statistiques"])
 
@@ -16,7 +16,7 @@ def obtenir_statistiques(db: Session = Depends(get_db)):
         Enseignant.participe_surveillance == True
     ).count()
     nb_examens = db.query(Examen).count()
-    nb_salles = db.query(Salle).count()
+    # nb_salles supprimé car le modèle Salle n'existe pas
     nb_affectations = db.query(Affectation).count()
     nb_voeux = db.query(Voeu).count()
     
@@ -31,7 +31,7 @@ def obtenir_statistiques(db: Session = Depends(get_db)):
         nb_enseignants=nb_enseignants,
         nb_enseignants_actifs=nb_enseignants_actifs,
         nb_examens=nb_examens,
-        nb_salles=nb_salles,
+    # nb_salles supprimé
         nb_affectations=nb_affectations,
         nb_voeux=nb_voeux,
         taux_couverture=round(taux_couverture, 2)

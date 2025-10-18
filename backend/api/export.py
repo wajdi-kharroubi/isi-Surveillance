@@ -3,10 +3,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database import get_db
 from services import ExportService
-from models import ExportRequest
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 import os
+import zipfile
+import tempfile
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
@@ -37,17 +38,29 @@ def exporter_planning_pdf(
 
 @router.post("/convocations")
 def exporter_convocations(db: Session = Depends(get_db)):
-    """Génère les convocations individuelles pour tous les enseignants"""
+    """Génère les convocations individuelles pour tous les enseignants et retourne un fichier ZIP"""
     try:
         export_service = ExportService(db)
         filepaths = export_service.generer_convocations_individuelles()
         
-        return {
-            "success": True,
-            "message": f"{len(filepaths)} convocations générées",
-            "nb_fichiers": len(filepaths),
-            "fichiers": [os.path.basename(f) for f in filepaths]
-        }
+        if not filepaths:
+            raise HTTPException(status_code=404, detail="Aucune convocation à générer")
+        
+        # Créer un fichier ZIP temporaire
+        zip_filename = f"convocations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for filepath in filepaths:
+                if os.path.exists(filepath):
+                    zipf.write(filepath, os.path.basename(filepath))
+        
+        return FileResponse(
+            path=zip_path,
+            media_type='application/zip',
+            filename=zip_filename,
+            background=None  # Le fichier sera supprimé après l'envoi
+        )
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
@@ -55,17 +68,29 @@ def exporter_convocations(db: Session = Depends(get_db)):
 
 @router.post("/listes-creneaux")
 def exporter_listes_creneaux(db: Session = Depends(get_db)):
-    """Génère les listes de surveillants par créneau"""
+    """Génère les listes de surveillants par créneau et retourne un fichier ZIP"""
     try:
         export_service = ExportService(db)
         filepaths = export_service.generer_listes_par_creneau()
         
-        return {
-            "success": True,
-            "message": f"{len(filepaths)} listes générées",
-            "nb_fichiers": len(filepaths),
-            "fichiers": [os.path.basename(f) for f in filepaths]
-        }
+        if not filepaths:
+            raise HTTPException(status_code=404, detail="Aucune liste à générer")
+        
+        # Créer un fichier ZIP temporaire
+        zip_filename = f"listes_creneaux_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for filepath in filepaths:
+                if os.path.exists(filepath):
+                    zipf.write(filepath, os.path.basename(filepath))
+        
+        return FileResponse(
+            path=zip_path,
+            media_type='application/zip',
+            filename=zip_filename,
+            background=None  # Le fichier sera supprimé après l'envoi
+        )
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")

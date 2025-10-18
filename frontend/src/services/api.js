@@ -26,6 +26,7 @@ export const enseignantsAPI = {
   update: (id, data) => api.put(`/enseignants/${id}`, data),
   delete: (id) => api.delete(`/enseignants/${id}`),
   search: (params) => api.get('/enseignants/search/', { params }),
+  vider: () => api.delete('/enseignants/vider'),
 };
 
 // ========== Examens ==========
@@ -36,6 +37,7 @@ export const examensAPI = {
   update: (id, data) => api.put(`/examens/${id}`, data),
   delete: (id) => api.delete(`/examens/${id}`),
   search: (params) => api.get('/examens/search/', { params }),
+  vider: () => api.delete('/examens/vider'),
 };
 
 // ========== Voeux ==========
@@ -46,6 +48,7 @@ export const voeuxAPI = {
   update: (id, data) => api.put(`/voeux/${id}`, data),
   delete: (id) => api.delete(`/voeux/${id}`),
   search: (params) => api.get('/voeux/search/', { params }),
+  vider: () => api.delete('/voeux/vider'),
 };
 
 // ========== Import ==========
@@ -92,8 +95,14 @@ export const exportAPI = {
       params, 
       responseType: 'blob' 
     }),
-  convocations: () => api.post('/export/convocations'),
-  listesCreneaux: () => api.post('/export/listes-creneaux'),
+  convocations: () => 
+    api.post('/export/convocations', null, { 
+      responseType: 'blob' 
+    }),
+  listesCreneaux: () => 
+    api.post('/export/listes-creneaux', null, { 
+      responseType: 'blob' 
+    }),
   planningExcel: (params) => 
     api.post('/export/planning-excel', null, { 
       params, 

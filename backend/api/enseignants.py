@@ -4,7 +4,7 @@ from typing import List
 from database import get_db
 from models import (
     EnseignantCreate, EnseignantUpdate, EnseignantResponse,
-    Enseignant
+    Enseignant, Voeu, Affectation
 )
 
 router = APIRouter(prefix="/enseignants", tags=["Enseignants"])
@@ -70,6 +70,24 @@ def creer_enseignant(enseignant_data: EnseignantCreate, db: Session = Depends(ge
     db.refresh(enseignant)
     
     return enseignant
+
+
+@router.delete("/vider", status_code=status.HTTP_200_OK)
+def vider_enseignants(db: Session = Depends(get_db)):
+    """Vide complètement la table enseignants"""
+    try:
+        nb_supprimes = db.query(Enseignant).delete(synchronize_session=False)
+        db.commit()
+        return {
+            "message": f"Table enseignants vidée avec succès",
+            "nb_supprimes": nb_supprimes
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la suppression : {str(e)}"
+        )
 
 
 @router.put("/{enseignant_id}", response_model=EnseignantResponse)
@@ -148,3 +166,4 @@ def rechercher_enseignants(
         query = query.filter(Enseignant.grade_code == grade)
     
     return query.all()
+
