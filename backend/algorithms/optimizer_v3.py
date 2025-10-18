@@ -328,21 +328,21 @@ class SurveillanceOptimizerV3:
 
         if activer_regroupement_temporel:
             print(f"      ✓ Fonction objectif configurée:")
-            print(f"         • Maximiser l'utilisation des quotas (25%) ⭐")
+            print(f"         • Maximiser l'utilisation des quotas (35%)")
             print(f"         • Minimiser la dispersion globale entre enseignants (25%)")
             print(
                 f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
             )
             print(f"         • Favoriser les séances regroupées (10% - optimisé)")
-            print(f"         • Favoriser les vœux de surveillance (20%) ⭐")
+            print(f"         • Favoriser les vœux de surveillance (10%)")
         else:
             print(f"      ✓ Fonction objectif configurée:")
-            print(f"         • Maximiser l'utilisation des quotas (25%) ⭐")
+            print(f"         • Maximiser l'utilisation des quotas (40%)")
             print(f"         • Minimiser la dispersion globale entre enseignants (30%)")
             print(
                 f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
             )
-            print(f"         • Favoriser les vœux de surveillance (20%) ⭐")
+            print(f"         • Favoriser les vœux de surveillance (10%)")
 
         # ===== PHASE 8: RÉSOLUTION =====
         print("\n⚡ Phase 8: Résolution du problème...")
@@ -1639,19 +1639,17 @@ class SurveillanceOptimizerV3:
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
 
         Composantes du score (avec regroupement temporel activé):
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 25% ⭐
+        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 35%
         2. Équilibre global de charge (minimiser dispersion) - POIDS: 25%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
         4. Bonus regroupement (favoriser séances regroupées) - POIDS: 10%
-        5. Préférence pour enseignants avec vœux - POIDS: 20% ⭐ AUGMENTÉ
+        5. Préférence pour enseignants avec vœux - POIDS: 10%
 
         Composantes du score (sans regroupement temporel):
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 25% ⭐
+        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 40%
         2. Équilibre global de charge (minimiser dispersion) - POIDS: 30%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
-        4. Préférence pour enseignants avec vœux - POIDS: 20% ⭐ AUGMENTÉ
-        
-        ⭐ Modifications: Quotas réduit de 35-40% à 25%, Vœux augmenté de 10% à 20%
+        4. Préférence pour enseignants avec vœux - POIDS: 10%
         """
 
         # COMPOSANTE 1: Maximisation de l'utilisation des quotas (NOUVEAU - PRIORITAIRE)
@@ -1722,19 +1720,18 @@ class SurveillanceOptimizerV3:
         # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade,
         # maximiser bonus_consecutivite (optionnel), maximiser bonus_voeux
         #
-        # POIDS MODIFIÉS:
         # Avec regroupement temporel:
-        # Score = 25*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite + 20*bonus_voeux
+        # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite + 10*bonus_voeux
         #
         # Sans regroupement temporel:
-        # Score = 25*total_affectations - 30*dispersion - 20*dispersion_grades + 20*bonus_voeux
+        # Score = 40*total_affectations - 30*dispersion - 20*dispersion_grades + 10*bonus_voeux
         #
         # Le solveur maximise, donc on veut:
-        # - Maximiser total_affectations (positif) - PRIORITÉ: 25%
-        # - Minimiser dispersion globale (négatif) - PRIORITÉ: 25-30%
-        # - Minimiser dispersion par grade (négatif) - PRIORITÉ: 20%
-        # - Maximiser bonus regroupement (positif) - PRIORITÉ: 10% (si activé)
-        # - Maximiser bonus_voeux (positif) - PRIORITÉ: 20% ⭐ AUGMENTÉ
+        # - Maximiser total_affectations (positif) - PRIORITÉ 1
+        # - Minimiser dispersion globale (négatif) - PRIORITÉ 2
+        # - Minimiser dispersion par grade (négatif) - PRIORITÉ 3
+        # - Maximiser bonus regroupement (positif) - Bonus léger (si activé)
+        # - Maximiser bonus_voeux (positif) - Bonus léger
 
         # Construction de la fonction objectif selon les composantes disponibles
         composantes = []
@@ -1742,13 +1739,13 @@ class SurveillanceOptimizerV3:
 
         if total_affectations is not None:
             composantes.append(total_affectations)
-            # Poids modifié: 25% au lieu de 35-40%
-            poids.append(25)
+            # Poids ajusté selon si regroupement temporel activé
+            poids.append(35 if activer_regroupement_temporel else 40)
 
         if dispersion is not None:
             composantes.append(dispersion)
             # Poids ajusté selon si regroupement temporel activé
-            poids.append(-25)
+            poids.append(-25 if activer_regroupement_temporel else -30)
 
         if dispersion_grades is not None:
             composantes.append(dispersion_grades)
@@ -1760,7 +1757,7 @@ class SurveillanceOptimizerV3:
 
         if bonus_voeux is not None:
             composantes.append(bonus_voeux)
-            poids.append(20)  # Poids 20% ⭐ DOUBLÉ (était 10%)
+            poids.append(10)  # Poids 10% - Bonus secondaire
 
         if composantes:
             # Calculer les bornes du score combiné
