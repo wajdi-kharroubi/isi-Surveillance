@@ -23,10 +23,11 @@ class ImportService:
         - prenom_ens: Prénom
         - email_ens: Email (identifiant unique)
         - grade_code_ens: Code du grade (PES, MA, PA, AH, AS, TE, PH)
-        - code_smartex_ens: Code SmartEx (identifiant)
+        - code_smartex_ens: Code SmartEx (identifiant) - optionnel, généré automatiquement si absent
         - participe_surveillance: "vrai" ou "faux" (optionnel, vrai par défaut)
         
         Le nom complet du grade (grade_ens) est déduit automatiquement du code.
+        Si code_smartex_ens est absent ou vide, un code unique entier est généré automatiquement.
         
         Returns:
             (nombre_importes, erreurs)
@@ -42,16 +43,38 @@ class ImportService:
             
             df = pd.read_excel(file_path)
             
-            # Vérification des colonnes obligatoires (sans grade_ens)
+            # Vérification des colonnes obligatoires (code_smartex_ens n'est plus obligatoire)
             colonnes_requises = [
                 'nom_ens', 'prenom_ens', 'email_ens', 
-                'grade_code_ens', 'code_smartex_ens'
+                'grade_code_ens'
             ]
             colonnes_manquantes = [col for col in colonnes_requises if col not in df.columns]
             
             if colonnes_manquantes:
                 erreurs.append(f"Colonnes manquantes: {', '.join(colonnes_manquantes)}")
                 return 0, erreurs
+            
+            # Trouver le code unique de départ pour les enseignants sans code_smartex
+            # Chercher le maximum des codes existants dans le fichier
+            codes_existants = []
+            if 'code_smartex_ens' in df.columns:
+                for val in df['code_smartex_ens']:
+                    if pd.notna(val) and val != '' and str(val).strip() != '':
+                        try:
+                            code_int = int(float(val))
+                            codes_existants.append(code_int)
+                        except (ValueError, TypeError):
+                            # Ignorer les codes non numériques
+                            pass
+            
+            # Définir le code de départ
+            if codes_existants:
+                max_code_smartex = max(codes_existants)
+                next_code_smartex = max_code_smartex + 1
+                logger.info(f"🔢 Code maximum trouvé: {max_code_smartex}, prochain code: {next_code_smartex}")
+            else:
+                next_code_smartex = 10000
+                logger.info(f"🔢 Aucun code existant, démarrage à: {next_code_smartex}")
             
             # Import ligne par ligne
             for idx, row in df.iterrows():
@@ -78,12 +101,22 @@ class ImportService:
                         elif val in ['vrai', 'true', '1', 'oui', 'yes']:
                             participe = True
                     
-                    # Convertir code_smartex en entier pour éviter les .0
-                    code_smartex_raw = row['code_smartex_ens']
-                    try:
-                        code_smartex = str(int(float(code_smartex_raw)))
-                    except (ValueError, TypeError):
-                        code_smartex = str(code_smartex_raw).strip()
+                    # Gérer code_smartex_ens - générer un code unique si absent ou vide
+                    code_smartex = None
+                    if 'code_smartex_ens' in df.columns:
+                        code_smartex_raw = row['code_smartex_ens']
+                        if pd.notna(code_smartex_raw) and str(code_smartex_raw).strip() != '':
+                            try:
+                                # Convertir en entier pour éviter les .0
+                                code_smartex = str(int(float(code_smartex_raw)))
+                            except (ValueError, TypeError):
+                                code_smartex = str(code_smartex_raw).strip()
+                    
+                    # Si code_smartex est toujours None ou vide, générer un code unique
+                    if not code_smartex or code_smartex.strip() == '':
+                        code_smartex = str(next_code_smartex)
+                        next_code_smartex += 1
+                        logger.info(f"📝 Code SmartEx généré automatiquement pour {row['prenom_ens']} {row['nom_ens']}: {code_smartex}")
                     
                     # Créer l'enseignant (pas besoin de vérifier l'existence, tout est supprimé avant)
                     enseignant = Enseignant(

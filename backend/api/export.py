@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from sqlalchemy.orm import Session
 from database import get_db
 from services import ExportService
@@ -126,18 +127,18 @@ def exporter_convocation_enseignant(
             raise HTTPException(status_code=500, detail="Erreur lors de la génération de la convocation")
         
         # Fonction pour supprimer le fichier après l'envoi
-        def cleanup():
+        def cleanup(path: str):
             try:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
+                if os.path.exists(path):
+                    os.remove(path)
             except Exception as e:
-                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+                print(f"Erreur lors de la suppression de {path}: {str(e)}")
         
         return FileResponse(
             path=filepath,
             media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             filename=os.path.basename(filepath),
-            background=cleanup
+            background=BackgroundTask(cleanup, filepath)
         )
     
     except ValueError as e:
@@ -169,18 +170,18 @@ def exporter_liste_creneau(
             raise HTTPException(status_code=500, detail="Erreur lors de la génération de la liste")
         
         # Fonction pour supprimer le fichier après l'envoi
-        def cleanup():
+        def cleanup(path: str):
             try:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
+                if os.path.exists(path):
+                    os.remove(path)
             except Exception as e:
-                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+                print(f"Erreur lors de la suppression de {path}: {str(e)}")
         
         return FileResponse(
             path=filepath,
             media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             filename=os.path.basename(filepath),
-            background=cleanup
+            background=BackgroundTask(cleanup, filepath)
         )
     
     except ValueError as e:

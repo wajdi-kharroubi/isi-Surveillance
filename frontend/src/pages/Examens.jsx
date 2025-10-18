@@ -110,6 +110,8 @@ export default function Examens() {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(e =>
         e.enseignant?.toLowerCase().includes(search) ||
+        e.responsable_nom?.toLowerCase().includes(search) ||
+        e.responsable_prenom?.toLowerCase().includes(search) ||
         e.cod_salle?.toLowerCase().includes(search) ||
         e.type_ex?.toLowerCase().includes(search)
       );
@@ -434,7 +436,20 @@ export default function Examens() {
                   </span>
                 </td>
                 <td className="text-gray-700">{exam.type_ex === 'E' ? 'Examen' : 'DS'}</td>
-                <td className="text-gray-600">{exam.enseignant}</td>
+                <td className="text-gray-600">
+                  {exam.responsable_nom && exam.responsable_prenom ? (
+                    <div>
+                      <div className="font-semibold text-gray-900">
+                        {exam.responsable_nom} {exam.responsable_prenom}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        ({exam.enseignant})
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-gray-500 italic">{exam.enseignant}</span>
+                  )}
+                </td>
                 <td>
                   <span className="badge badge-secondary">{exam.cod_salle}</span>
                 </td>

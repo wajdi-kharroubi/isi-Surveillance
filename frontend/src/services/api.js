@@ -128,6 +128,9 @@ export const exportAPI = {
 export const planningAPI = {
   getEmploiEnseignant: (enseignantId) => api.get(`/planning/emploi-enseignant/${enseignantId}`),
   getEmploiSeances: () => api.get('/planning/emploi-seances'),
+  ajouterEnseignantSeance: (data) => api.post('/planning/ajouter-enseignant-seance', data),
+  supprimerEnseignantSeance: (data) => api.delete('/planning/supprimer-enseignant-seance', { data }),
+  ajouterEnseignantParDateHeure: (data) => api.post('/planning/ajouter-enseignant-par-date-heure', data),
 };
 
 // ========== Statistiques ==========

@@ -88,6 +88,8 @@ class ExamenResponse(ExamenBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    responsable_nom: Optional[str] = None  # Nom du responsable d'examen
+    responsable_prenom: Optional[str] = None  # Prénom du responsable d'examen
     
     class Config:
         from_attributes = True
@@ -113,6 +115,7 @@ class StatistiquesResponse(BaseModel):
     nb_enseignants: int
     nb_enseignants_actifs: int
     nb_examens: int
+    nb_salles: int
     nb_affectations: int
     nb_voeux: int
     taux_couverture: float
@@ -141,3 +144,40 @@ class GradeConfigResponse(GradeConfigBase):
     
     class Config:
         from_attributes = True
+
+# ============ Affectation Schemas ============
+class AjouterEnseignantSeanceRequest(BaseModel):
+    """
+    Requête pour ajouter un enseignant à une séance.
+    Le backend détermine automatiquement si l'enseignant doit être responsable
+    en vérifiant s'il est déjà responsable dans un autre examen de cette séance.
+    """
+    enseignant_id: int = Field(..., description="ID de l'enseignant à ajouter")
+    date_examen: date = Field(..., description="Date de la séance")
+    h_debut: time = Field(..., description="Heure de début de la séance")
+    h_fin: time = Field(..., description="Heure de fin de la séance")
+    session: str = Field(..., description="Session (P=Principale, R=Rattrapage)")
+    semestre: str = Field(..., description="Semestre (SEMESTRE 1 ou SEMESTRE 2)")
+
+class SupprimerEnseignantSeanceRequest(BaseModel):
+    enseignant_id: int = Field(..., description="ID de l'enseignant à supprimer")
+    date_examen: date = Field(..., description="Date de la séance")
+    h_debut: time = Field(..., description="Heure de début de la séance")
+    h_fin: time = Field(..., description="Heure de fin de la séance")
+    session: str = Field(..., description="Session (P=Principale, R=Rattrapage)")
+    semestre: str = Field(..., description="Semestre (SEMESTRE 1 ou SEMESTRE 2)")
+
+class AjouterEnseignantParDateHeureRequest(BaseModel):
+    """
+    Requête pour ajouter un enseignant à une séance en spécifiant uniquement la date et l'heure.
+    Le backend recherchera automatiquement la séance correspondante.
+    """
+    enseignant_id: int = Field(..., description="ID de l'enseignant à ajouter")
+    date_examen: date = Field(..., description="Date de la séance")
+    h_debut: time = Field(..., description="Heure de début de la séance")
+
+class AffectationOperationResponse(BaseModel):
+    success: bool
+    message: str
+    nb_affectations_modifiees: int
+    est_responsable: Optional[bool] = Field(None, description="Indique si l'enseignant a été marqué comme responsable")

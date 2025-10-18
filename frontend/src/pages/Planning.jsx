@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { planningAPI, enseignantsAPI, exportAPI } from '../services/api';
 import { 
   Calendar, 
@@ -16,9 +16,12 @@ import {
   Star,
   Grid3x3,
   List,
+  Trash2,
 } from 'lucide-react';
+import GestionEnseignantsSeanceInline from '../components/GestionEnseignantsSeanceInline';
 
 export default function Planning() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('seances');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [selectedEnseignant, setSelectedEnseignant] = useState(null);
@@ -28,6 +31,8 @@ export default function Planning() {
   const [dateFilter, setDateFilter] = useState('all');
   const [heureFilter, setHeureFilter] = useState('all');
   const [expandedSeance, setExpandedSeance] = useState(null); // Pour gérer l'expansion des séances en mode liste
+  const [showAddSeanceForm, setShowAddSeanceForm] = useState(false); // Pour afficher le formulaire d'ajout
+  const [selectedSeanceKey, setSelectedSeanceKey] = useState(''); // Clé de la séance sélectionnée (date|h_debut|h_fin)
 
   const { data: enseignants = [] } = useQuery({
     queryKey: ['enseignants'],
@@ -40,10 +45,49 @@ export default function Planning() {
     enabled: activeTab === 'seances',
   });
 
+  // Récupérer la liste des séances disponibles pour le formulaire d'ajout
+  const { data: seancesDisponibles = [] } = useQuery({
+    queryKey: ['seances-disponibles'],
+    queryFn: () => planningAPI.getEmploiSeances().then(res => res.data),
+    enabled: activeTab === 'enseignant' && showAddSeanceForm,
+  });
+
   const { data: emploiEnseignant, isLoading: loadingEnseignant } = useQuery({
     queryKey: ['emploi-enseignant', selectedEnseignant],
     queryFn: () => planningAPI.getEmploiEnseignant(selectedEnseignant).then(res => res.data),
     enabled: activeTab === 'enseignant' && selectedEnseignant !== null,
+  });
+
+  // Mutation pour supprimer un enseignant d'une séance
+  const supprimerSeanceMutation = useMutation({
+    mutationFn: planningAPI.supprimerEnseignantSeance,
+    onSuccess: () => {
+      // Recharger les données de l'enseignant
+      queryClient.invalidateQueries(['emploi-enseignant', selectedEnseignant]);
+      queryClient.invalidateQueries(['emploi-seances']);
+      queryClient.invalidateQueries(['statistiques']);
+    },
+  });
+
+  // Mutation pour ajouter un enseignant à une séance par date et heure
+  const ajouterSeanceMutation = useMutation({
+    mutationFn: planningAPI.ajouterEnseignantParDateHeure,
+    onSuccess: (response) => {
+      // Recharger les données
+      queryClient.invalidateQueries(['emploi-enseignant', selectedEnseignant]);
+      queryClient.invalidateQueries(['emploi-seances']);
+      queryClient.invalidateQueries(['statistiques']);
+      
+      // Réinitialiser le formulaire
+      setShowAddSeanceForm(false);
+      setSelectedSeanceKey('');
+      
+      // Afficher un message de succès (optionnel, vous pouvez utiliser toast)
+      alert(response.data.message);
+    },
+    onError: (error) => {
+      alert(error.response?.data?.detail || 'Erreur lors de l\'ajout de la séance');
+    },
   });
 
   const formatDate = (dateStr) => {
@@ -117,6 +161,41 @@ export default function Planning() {
     setActiveTab('enseignant');
     // Scroll vers le haut pour voir le planning
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Fonction pour supprimer un enseignant d'une séance
+  const handleSupprimerSeance = (emploi) => {
+    if (!confirm(`Voulez-vous vraiment retirer cet enseignant de cette séance du ${formatDate(emploi.date)} ?`)) {
+      return;
+    }
+
+    supprimerSeanceMutation.mutate({
+      enseignant_id: selectedEnseignant,
+      date_examen: emploi.date,
+      h_debut: emploi.h_debut,
+      h_fin: emploi.h_fin,
+      session: emploi.session,
+      semestre: emploi.semestre,
+    });
+  };
+
+  // Fonction pour ajouter une séance à l'enseignant
+  const handleAjouterSeance = (e) => {
+    e.preventDefault();
+    
+    if (!selectedSeanceKey) {
+      alert('Veuillez sélectionner une séance');
+      return;
+    }
+
+    // Extraire date et heure de la clé sélectionnée
+    const [date, h_debut, h_fin] = selectedSeanceKey.split('|');
+
+    ajouterSeanceMutation.mutate({
+      enseignant_id: selectedEnseignant,
+      date_examen: date,
+      h_debut: h_debut
+    });
   };
 
   // Fonction pour déterminer le numéro de séance en fonction de l'heure
@@ -483,6 +562,11 @@ export default function Planning() {
                                 <span className="px-3 py-1.5 bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 rounded-lg font-bold text-xs border-2 border-green-200">
                                   {seance.semestre}
                                 </span>
+                                {seance.enseignants && seance.enseignants.length > 0 && (
+                                  <span className="px-3 py-1.5 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 rounded-lg font-bold text-xs border-2 border-blue-200">
+                                    {seance.enseignants.length} enseignant{seance.enseignants.length > 1 ? 's' : ''}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             
@@ -511,46 +595,13 @@ export default function Planning() {
                             </div>
                           </div>
 
-                          {/* Enseignants de la séance */}
-                          {seance.enseignants && seance.enseignants.length > 0 && (
-                            <div className="mt-6 pt-6 border-t-2 border-gray-100">
-                              <div className="flex items-center gap-2 mb-4">
-                                <Users className="w-5 h-5 text-indigo-600" />
-                                <p className="text-sm font-black text-gray-800">
-                                  {seance.enseignants.length} Enseignant{seance.enseignants.length > 1 ? 's' : ''} affecté{seance.enseignants.length > 1 ? 's' : ''}
-                                </p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                {seance.enseignants.map((enseignant, idx) => (
-                                  <button
-                                    key={idx}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEnseignantClick(enseignant.id);
-                                    }}
-                                    className={`group relative flex items-center gap-2 px-4 py-3 rounded-xl border-2 hover:shadow-md transition-all duration-200 cursor-pointer ${
-                                      enseignant.est_responsable 
-                                        ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-300 hover:border-orange-400'
-                                        : 'bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200 hover:border-blue-400'
-                                    }`}
-                                  >
-                                    {enseignant.est_responsable && (
-                                      <div className="absolute -top-2 -right-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-2 py-0.5 rounded-lg text-[10px] font-black shadow-lg">
-                                        RESPONSABLE
-                                      </div>
-                                    )}
-                                    <Users className={`w-4 h-4 flex-shrink-0 group-hover:scale-110 transition-transform ${
-                                      enseignant.est_responsable ? 'text-orange-600' : 'text-blue-600'
-                                    }`} />
-                                    <div className="flex-1 min-w-0 text-left">
-                                      <p className="font-black text-gray-900 text-sm truncate">{enseignant.nom} {enseignant.prenom}</p>
-                                      <p className="text-xs text-gray-600 font-semibold">Surveillant</p>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          {/* Gestion des enseignants de la séance */}
+                          <div className="mt-6 pt-6 border-t-2 border-gray-100">
+                            <GestionEnseignantsSeanceInline 
+                              seance={seance}
+                              onEnseignantClick={handleEnseignantClick}
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -629,43 +680,12 @@ export default function Planning() {
                         </div>
 
                         {/* Section des enseignants (expansible) */}
-                        {expandedSeance === index && seance.enseignants && seance.enseignants.length > 0 && (
+                        {expandedSeance === index && (
                           <div className="px-6 pb-6 pt-2 border-t-2 border-gray-100 bg-gradient-to-br from-gray-50 to-blue-50 animate-slideDown">
-                            <div className="flex items-center gap-2 mb-4">
-                              <Users className="w-5 h-5 text-indigo-600" />
-                              <p className="text-sm font-black text-gray-800">
-                                {seance.enseignants.length} Enseignant{seance.enseignants.length > 1 ? 's' : ''} affecté{seance.enseignants.length > 1 ? 's' : ''}
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {seance.enseignants.map((enseignant, idx) => (
-                                <button
-                                  key={idx}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEnseignantClick(enseignant.id);
-                                  }}
-                                  className={`group relative flex items-center gap-2 px-4 py-3 rounded-xl border-2 hover:shadow-md transition-all duration-200 cursor-pointer ${
-                                    enseignant.est_responsable 
-                                      ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-300 hover:border-orange-400'
-                                      : 'bg-white border-gray-200 hover:border-blue-400'
-                                  }`}
-                                >
-                                  {enseignant.est_responsable && (
-                                    <div className="absolute -top-2 -right-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-2 py-0.5 rounded-lg text-[10px] font-black shadow-lg">
-                                      RESPONSABLE
-                                    </div>
-                                  )}
-                                  <Users className={`w-4 h-4 flex-shrink-0 group-hover:scale-110 transition-transform ${
-                                    enseignant.est_responsable ? 'text-orange-600' : 'text-blue-600'
-                                  }`} />
-                                  <div className="flex-1 min-w-0 text-left">
-                                    <p className="font-black text-gray-900 text-sm truncate">{enseignant.nom} {enseignant.prenom}</p>
-                                    <p className="text-xs text-gray-600 font-semibold">Surveillant</p>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
+                            <GestionEnseignantsSeanceInline 
+                              seance={seance}
+                              onEnseignantClick={handleEnseignantClick}
+                            />
                           </div>
                         )}
                       </div>
@@ -865,6 +885,124 @@ export default function Planning() {
                         </div>
                       </div>
 
+                      {/* Bouton pour ajouter une séance */}
+                      <div className="px-8 pt-6">
+                        {!showAddSeanceForm ? (
+                          <button
+                            onClick={() => setShowAddSeanceForm(true)}
+                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg hover:shadow-xl font-bold text-lg"
+                          >
+                            <Calendar className="w-6 h-6" />
+                            Ajouter une séance de surveillance
+                          </button>
+                        ) : (
+                          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 p-6 shadow-lg">
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                                  <Calendar className="w-6 h-6 text-white" />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900">
+                                  Ajouter une séance
+                                </h3>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setShowAddSeanceForm(false);
+                                  setSelectedSeanceKey('');
+                                }}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Fermer"
+                              >
+                                <span className="text-2xl leading-none">×</span>
+                              </button>
+                            </div>
+
+                            <form onSubmit={handleAjouterSeance} className="space-y-4">
+                              {/* Sélecteur de séance */}
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                  <Calendar className="w-4 h-4 inline mr-2" />
+                                  Sélectionner une séance disponible
+                                </label>
+                                <select
+                                  value={selectedSeanceKey}
+                                  onChange={(e) => setSelectedSeanceKey(e.target.value)}
+                                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 font-medium"
+                                  required
+                                >
+                                  <option value="">-- Choisir une séance --</option>
+                                  {seancesDisponibles
+                                    .sort((a, b) => {
+                                      // Trier par date puis par heure
+                                      if (a.date !== b.date) return a.date.localeCompare(b.date);
+                                      return a.h_debut.localeCompare(b.h_debut);
+                                    })
+                                    .map((seance) => {
+                                      const key = `${seance.date}|${seance.h_debut}|${seance.h_fin}`;
+                                      const dateFormatee = new Date(seance.date).toLocaleDateString('fr-FR', {
+                                        weekday: 'short',
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric'
+                                      });
+                                      return (
+                                        <option key={key} value={key}>
+                                          {dateFormatee} • {formatTime(seance.h_debut)} - {formatTime(seance.h_fin)} • {seance.session} {seance.semestre} • ({seance.nb_enseignants} enseignant{seance.nb_enseignants > 1 ? 's' : ''})
+                                        </option>
+                                      );
+                                    })
+                                  }
+                                </select>
+                              </div>
+
+                              {/* Info */}
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <p className="text-xs text-blue-800">
+                                  <strong>💡 Astuce :</strong> Sélectionnez une séance dans la liste des séances disponibles.
+                                  {emploiEnseignant.enseignant.nb_surveillances_affectees >= emploiEnseignant.enseignant.quota_max && (
+                                    <span className="block mt-1 text-amber-700 font-bold">
+                                      ⚠️ Attention : Le quota de cet enseignant est déjà atteint ({emploiEnseignant.enseignant.pourcentage_quota}%)
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+
+                              {/* Boutons */}
+                              <div className="flex gap-3 pt-2">
+                                <button
+                                  type="submit"
+                                  disabled={ajouterSeanceMutation.isPending}
+                                  className="flex-1 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg font-semibold"
+                                >
+                                  {ajouterSeanceMutation.isPending ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      Ajout en cours...
+                                    </span>
+                                  ) : (
+                                    'Ajouter la séance'
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowAddSeanceForm(false);
+                                    setSelectedSeanceKey('');
+                                  }}
+                                  className="px-5 py-2.5 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-semibold"
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        )}
+                      </div>
+
                       {/* Liste des surveillances */}
                       <div className="p-8">
                         {emploiEnseignant.emplois.length === 0 ? (
@@ -962,10 +1100,24 @@ export default function Planning() {
                                       )}
                                     </div>
 
-                                    {/* Numéro de séance */}
-                                    <div className="text-center bg-gray-50 px-4 py-3 rounded-xl border-2 border-gray-200">
-                                      <p className="text-xs text-gray-500 font-bold mb-1">Séance</p>
-                                      <p className="text-3xl font-black text-gray-900">#{index + 1}</p>
+                                    {/* Actions et numéro de séance */}
+                                    <div className="flex flex-col gap-3">
+                                      {/* Numéro de séance */}
+                                      <div className="text-center bg-gray-50 px-4 py-3 rounded-xl border-2 border-gray-200">
+                                        <p className="text-xs text-gray-500 font-bold mb-1">Séance</p>
+                                        <p className="text-3xl font-black text-gray-900">#{index + 1}</p>
+                                      </div>
+
+                                      {/* Bouton supprimer */}
+                                      <button
+                                        onClick={() => handleSupprimerSeance(emploi)}
+                                        disabled={supprimerSeanceMutation.isPending}
+                                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 disabled:bg-gray-200 disabled:text-gray-400 transition-all border-2 border-red-200 hover:border-red-300 group"
+                                        title="Retirer de cette séance"
+                                      >
+                                        <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                        <span className="text-xs font-bold">Retirer</span>
+                                      </button>
                                     </div>
                                   </div>
                                 </div>

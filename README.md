@@ -67,10 +67,29 @@ npm run package
 - ✅ Export PDF, Word, Excel
 - ✅ Convocations individuelles
 - ✅ Listes par créneau
+- ✅ **NOUVEAU** : Gestion manuelle des affectations (ajout/suppression d'enseignants par séance)
+- ✅ **NOUVEAU** : Statistiques corrigées (nombre de surveillances et de salles)
 
-## � Documentation
+## 📚 Documentation
 
-- Détails de l’algorithme d’optimisation, règles, contraintes et cas problématiques: `docs/ALGORITHME_SURVEILLANCE.md`
+### Documentation générale
+- Détails de l'algorithme d'optimisation, règles, contraintes et cas problématiques: `docs/ALGORITHME_SURVEILLANCE.md`
+
+### Nouvelles fonctionnalités (Octobre 2025)
+- **📘 Gestion des affectations** : [`GESTION_AFFECTATIONS.md`](GESTION_AFFECTATIONS.md)
+  - Documentation complète des nouveaux endpoints
+  - Exemples d'utilisation avec curl, JavaScript, Python
+  - Guide d'intégration frontend
+
+- **📋 Résumé des modifications** : [`README_MODIFICATIONS_AFFECTATIONS.md`](README_MODIFICATIONS_AFFECTATIONS.md)
+  - Vue d'ensemble de toutes les modifications
+  - Fichiers modifiés et créés
+  - Impact sur le système
+
+- **🧪 Guide de test** : [`GUIDE_TEST_AFFECTATIONS.md`](GUIDE_TEST_AFFECTATIONS.md)
+  - Tests pas à pas des nouveaux endpoints
+  - Validation des cas d'erreur
+  - Checklist de validation complète
 
 ## �📄 Licence
 

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
-from models import ExamenCreate, ExamenUpdate, ExamenResponse, Examen, Affectation
+from models import ExamenCreate, ExamenUpdate, ExamenResponse, Examen, Affectation, Enseignant
 
 router = APIRouter(prefix="/examens", tags=["Examens"])
 
@@ -30,7 +30,32 @@ def lister_examens(
     else:
         examens = query.offset(skip).limit(limit).all()
 
-    return examens
+    # Enrichir chaque examen avec le nom et prénom du responsable
+    result = []
+    for examen in examens:
+        # Chercher l'enseignant responsable par code_smartex
+        responsable = db.query(Enseignant).filter(
+            Enseignant.code_smartex == examen.enseignant
+        ).first()
+        
+        examen_dict = {
+            "id": examen.id,
+            "dateExam": examen.dateExam,
+            "h_debut": examen.h_debut,
+            "h_fin": examen.h_fin,
+            "session": examen.session,
+            "type_ex": examen.type_ex,
+            "semestre": examen.semestre,
+            "enseignant": examen.enseignant,
+            "cod_salle": examen.cod_salle,
+            "created_at": examen.created_at,
+            "updated_at": examen.updated_at,
+            "responsable_nom": responsable.nom if responsable else None,
+            "responsable_prenom": responsable.prenom if responsable else None,
+        }
+        result.append(examen_dict)
+
+    return result
 
 
 @router.get("/{examen_id}", response_model=ExamenResponse)
@@ -44,7 +69,28 @@ def obtenir_examen(examen_id: int, db: Session = Depends(get_db)):
             detail=f"Examen avec l'ID {examen_id} introuvable",
         )
 
-    return examen
+    # Chercher l'enseignant responsable par code_smartex
+    responsable = db.query(Enseignant).filter(
+        Enseignant.code_smartex == examen.enseignant
+    ).first()
+
+    examen_dict = {
+        "id": examen.id,
+        "dateExam": examen.dateExam,
+        "h_debut": examen.h_debut,
+        "h_fin": examen.h_fin,
+        "session": examen.session,
+        "type_ex": examen.type_ex,
+        "semestre": examen.semestre,
+        "enseignant": examen.enseignant,
+        "cod_salle": examen.cod_salle,
+        "created_at": examen.created_at,
+        "updated_at": examen.updated_at,
+        "responsable_nom": responsable.nom if responsable else None,
+        "responsable_prenom": responsable.prenom if responsable else None,
+    }
+
+    return examen_dict
 
 
 @router.post("/", response_model=ExamenResponse, status_code=status.HTTP_201_CREATED)
@@ -139,5 +185,32 @@ def rechercher_examens(
     if type_ex:
         query = query.filter(Examen.type_ex == type_ex)
 
-    return query.all()
+    examens = query.all()
+
+    # Enrichir chaque examen avec le nom et prénom du responsable
+    result = []
+    for examen in examens:
+        # Chercher l'enseignant responsable par code_smartex
+        responsable = db.query(Enseignant).filter(
+            Enseignant.code_smartex == examen.enseignant
+        ).first()
+        
+        examen_dict = {
+            "id": examen.id,
+            "dateExam": examen.dateExam,
+            "h_debut": examen.h_debut,
+            "h_fin": examen.h_fin,
+            "session": examen.session,
+            "type_ex": examen.type_ex,
+            "semestre": examen.semestre,
+            "enseignant": examen.enseignant,
+            "cod_salle": examen.cod_salle,
+            "created_at": examen.created_at,
+            "updated_at": examen.updated_at,
+            "responsable_nom": responsable.nom if responsable else None,
+            "responsable_prenom": responsable.prenom if responsable else None,
+        }
+        result.append(examen_dict)
+
+    return result
 

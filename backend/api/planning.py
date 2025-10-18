@@ -2,6 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
 from models.models import Enseignant, Affectation, Examen, GradeConfig
+from models.schemas import (
+    AjouterEnseignantSeanceRequest, 
+    SupprimerEnseignantSeanceRequest, 
+    AjouterEnseignantParDateHeureRequest,
+    AffectationOperationResponse
+)
 from typing import List, Dict
 from datetime import datetime
 
@@ -142,3 +148,236 @@ def emploi_seances(db: Session = Depends(get_db)):
             }
         )
     return result
+
+
+@router.post("/ajouter-enseignant-seance", response_model=AffectationOperationResponse)
+def ajouter_enseignant_seance(
+    request: AjouterEnseignantSeanceRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Ajoute un enseignant à une séance spécifique.
+    L'enseignant sera affecté à tous les examens de cette séance.
+    """
+    # Vérifier que l'enseignant existe
+    enseignant = db.query(Enseignant).filter(Enseignant.id == request.enseignant_id).first()
+    if not enseignant:
+        raise HTTPException(status_code=404, detail=f"Enseignant avec ID {request.enseignant_id} introuvable")
+    
+    # Vérifier que l'enseignant participe aux surveillances
+    if not enseignant.participe_surveillance:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"L'enseignant {enseignant.nom} {enseignant.prenom} ne participe pas aux surveillances"
+        )
+    
+    # Récupérer tous les examens de la séance
+    examens_seance = db.query(Examen).filter(
+        Examen.dateExam == request.date_examen,
+        Examen.h_debut == request.h_debut,
+        Examen.h_fin == request.h_fin,
+        Examen.session == request.session,
+        Examen.semestre == request.semestre
+    ).all()
+    
+    if not examens_seance:
+        raise HTTPException(
+            status_code=404,
+            detail="Aucun examen trouvé pour cette séance"
+        )
+    
+    # Vérifier si l'enseignant est déjà affecté à cette séance
+    affectations_existantes = db.query(Affectation).filter(
+        Affectation.enseignant_id == request.enseignant_id,
+        Affectation.examen_id.in_([ex.id for ex in examens_seance])
+    ).all()
+    
+    if affectations_existantes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"L'enseignant {enseignant.nom} {enseignant.prenom} est déjà affecté à cette séance"
+        )
+    
+    # Vérifier si l'enseignant est responsable d'un examen dans cette séance
+    # On compare le code_smartex de l'enseignant avec le champ 'enseignant' des examens de la séance
+    # (le champ 'enseignant' contient le code_smartex du responsable de l'examen)
+    est_responsable_examen = False
+    for examen in examens_seance:
+        if examen.enseignant == enseignant.code_smartex:
+            est_responsable_examen = True
+            break
+    
+    doit_etre_responsable = est_responsable_examen
+    
+    # Ajouter l'enseignant à tous les examens de la séance
+    nb_affectations = 0
+    for examen in examens_seance:
+        affectation = Affectation(
+            examen_id=examen.id,
+            enseignant_id=request.enseignant_id,
+            cod_salle=examen.cod_salle,
+            est_responsable=doit_etre_responsable
+        )
+        db.add(affectation)
+        nb_affectations += 1
+    
+    db.commit()
+    
+    # Message personnalisé selon le statut responsable
+    message = f"✅ Enseignant {enseignant.nom} {enseignant.prenom} ajouté avec succès à la séance ({nb_affectations} affectations créées)"
+    if doit_etre_responsable:
+        message += " ⭐ Marqué comme responsable (responsable d'un examen dans cette séance)"
+    
+    return AffectationOperationResponse(
+        success=True,
+        message=message,
+        nb_affectations_modifiees=nb_affectations,
+        est_responsable=doit_etre_responsable
+    )
+
+
+@router.delete("/supprimer-enseignant-seance", response_model=AffectationOperationResponse)
+def supprimer_enseignant_seance(
+    request: SupprimerEnseignantSeanceRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Supprime un enseignant d'une séance spécifique.
+    Toutes les affectations de cet enseignant pour cette séance seront supprimées.
+    """
+    # Vérifier que l'enseignant existe
+    enseignant = db.query(Enseignant).filter(Enseignant.id == request.enseignant_id).first()
+    if not enseignant:
+        raise HTTPException(status_code=404, detail=f"Enseignant avec ID {request.enseignant_id} introuvable")
+    
+    # Récupérer tous les examens de la séance
+    examens_seance = db.query(Examen).filter(
+        Examen.dateExam == request.date_examen,
+        Examen.h_debut == request.h_debut,
+        Examen.h_fin == request.h_fin,
+        Examen.session == request.session,
+        Examen.semestre == request.semestre
+    ).all()
+    
+    if not examens_seance:
+        raise HTTPException(
+            status_code=404,
+            detail="Aucun examen trouvé pour cette séance"
+        )
+    
+    # Récupérer toutes les affectations de cet enseignant pour cette séance
+    affectations_a_supprimer = db.query(Affectation).filter(
+        Affectation.enseignant_id == request.enseignant_id,
+        Affectation.examen_id.in_([ex.id for ex in examens_seance])
+    ).all()
+    
+    if not affectations_a_supprimer:
+        raise HTTPException(
+            status_code=404,
+            detail=f"L'enseignant {enseignant.nom} {enseignant.prenom} n'est pas affecté à cette séance"
+        )
+    
+    # Supprimer les affectations
+    nb_supprimees = len(affectations_a_supprimer)
+    for affectation in affectations_a_supprimer:
+        db.delete(affectation)
+    
+    db.commit()
+    
+    return AffectationOperationResponse(
+        success=True,
+        message=f"✅ Enseignant {enseignant.nom} {enseignant.prenom} supprimé avec succès de la séance ({nb_supprimees} affectations supprimées)",
+        nb_affectations_modifiees=nb_supprimees
+    )
+
+
+@router.post("/ajouter-enseignant-par-date-heure", response_model=AffectationOperationResponse)
+def ajouter_enseignant_par_date_heure(
+    request: AjouterEnseignantParDateHeureRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Ajoute un enseignant à une séance en spécifiant uniquement la date et l'heure de début.
+    Le backend recherchera automatiquement tous les examens correspondants et affectera l'enseignant.
+    L'enseignant sera automatiquement marqué comme responsable s'il est responsable d'un examen dans cette séance.
+    """
+    # Vérifier que l'enseignant existe
+    enseignant = db.query(Enseignant).filter(Enseignant.id == request.enseignant_id).first()
+    if not enseignant:
+        raise HTTPException(status_code=404, detail=f"Enseignant avec ID {request.enseignant_id} introuvable")
+    
+    # Vérifier que l'enseignant participe aux surveillances
+    if not enseignant.participe_surveillance:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"L'enseignant {enseignant.nom} {enseignant.prenom} ne participe pas aux surveillances"
+        )
+    
+    # Récupérer tous les examens qui correspondent à cette date et heure de début
+    examens_seance = db.query(Examen).filter(
+        Examen.dateExam == request.date_examen,
+        Examen.h_debut == request.h_debut
+    ).all()
+    
+    if not examens_seance:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Aucun examen trouvé pour la date {request.date_examen} à {request.h_debut}"
+        )
+    
+    # Extraire les informations de la séance (on prend le premier examen comme référence)
+    premier_examen = examens_seance[0]
+    h_fin = premier_examen.h_fin
+    session = premier_examen.session
+    semestre = premier_examen.semestre
+    
+    # Vérifier si l'enseignant est déjà affecté à cette séance
+    affectations_existantes = db.query(Affectation).filter(
+        Affectation.enseignant_id == request.enseignant_id,
+        Affectation.examen_id.in_([ex.id for ex in examens_seance])
+    ).all()
+    
+    if affectations_existantes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"L'enseignant {enseignant.nom} {enseignant.prenom} est déjà affecté à cette séance"
+        )
+    
+    # Vérifier si l'enseignant est responsable d'un examen dans cette séance
+    # On compare le code_smartex de l'enseignant avec le champ 'enseignant' des examens de la séance
+    est_responsable_examen = False
+    for examen in examens_seance:
+        if examen.enseignant == enseignant.code_smartex:
+            est_responsable_examen = True
+            break
+    
+    doit_etre_responsable = est_responsable_examen
+    
+    # Ajouter l'enseignant à tous les examens de la séance
+    nb_affectations = 0
+    for examen in examens_seance:
+        affectation = Affectation(
+            examen_id=examen.id,
+            enseignant_id=request.enseignant_id,
+            cod_salle=examen.cod_salle,
+            est_responsable=doit_etre_responsable
+        )
+        db.add(affectation)
+        nb_affectations += 1
+    
+    db.commit()
+    
+    # Message personnalisé selon le statut responsable
+    message = f"✅ Enseignant {enseignant.nom} {enseignant.prenom} ajouté avec succès à la séance du {request.date_examen} à {request.h_debut} ({nb_affectations} affectations créées)"
+    if doit_etre_responsable:
+        message += " ⭐ Marqué comme responsable (responsable d'un examen dans cette séance)"
+    
+    # Ajouter les informations de la séance dans le message
+    message += f"\n📅 Séance: {request.h_debut} - {h_fin} | Session: {session} | Semestre: {semestre}"
+    
+    return AffectationOperationResponse(
+        success=True,
+        message=message,
+        nb_affectations_modifiees=nb_affectations,
+        est_responsable=doit_etre_responsable
+    )

@@ -10,14 +10,27 @@ router = APIRouter(prefix="/statistiques", tags=["Statistiques"])
 @router.get("/", response_model=StatistiquesResponse)
 def obtenir_statistiques(db: Session = Depends(get_db)):
     """Retourne les statistiques globales du système"""
+    from sqlalchemy import func, distinct
     
     nb_enseignants = db.query(Enseignant).count()
     nb_enseignants_actifs = db.query(Enseignant).filter(
         Enseignant.participe_surveillance == True
     ).count()
     nb_examens = db.query(Examen).count()
-    # nb_salles supprimé car le modèle Salle n'existe pas
-    nb_affectations = db.query(Affectation).count()
+    
+    # Calculer le nombre de salles uniques
+    nb_salles = db.query(func.count(func.distinct(Examen.cod_salle))).scalar() or 0
+    
+    # Compter les surveillances uniques (par enseignant et séance)
+    # Une séance = même date, même heure de début
+    nb_affectations = db.query(
+        func.count(distinct(func.concat(
+            Affectation.enseignant_id, '-',
+            func.date(Examen.dateExam), '-',
+            Examen.h_debut
+        )))
+    ).join(Examen, Affectation.examen_id == Examen.id).scalar() or 0
+    
     nb_voeux = db.query(Voeu).count()
     
     # Calculer le taux de couverture
@@ -31,7 +44,7 @@ def obtenir_statistiques(db: Session = Depends(get_db)):
         nb_enseignants=nb_enseignants,
         nb_enseignants_actifs=nb_enseignants_actifs,
         nb_examens=nb_examens,
-    # nb_salles supprimé
+        nb_salles=nb_salles,
         nb_affectations=nb_affectations,
         nb_voeux=nb_voeux,
         taux_couverture=round(taux_couverture, 2)
