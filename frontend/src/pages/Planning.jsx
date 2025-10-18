@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { planningAPI, enseignantsAPI } from '../services/api';
+import { planningAPI, enseignantsAPI, exportAPI } from '../services/api';
 import { 
   Calendar, 
   Users, 
@@ -117,6 +117,70 @@ export default function Planning() {
     setActiveTab('enseignant');
     // Scroll vers le haut pour voir le planning
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Fonction pour déterminer le numéro de séance en fonction de l'heure
+  const determinerSeance = (hDebut) => {
+    const [heures, minutes] = hDebut.split(':').map(Number);
+    const heureMinutes = heures * 60 + minutes;
+
+    if (heureMinutes >= 510 && heureMinutes < 630) return 'S1'; // 8:30 - 10:29
+    if (heureMinutes >= 630 && heureMinutes < 750) return 'S2'; // 10:30 - 12:29
+    if (heureMinutes >= 750 && heureMinutes < 870) return 'S3'; // 12:30 - 14:29
+    if (heureMinutes >= 870) return 'S4'; // 14:30+
+    return 'S1'; // Par défaut
+  };
+
+  // Fonction pour télécharger un fichier blob
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Fonction pour exporter la liste d'une séance
+  const handleExportSeance = async (seance) => {
+    try {
+      const numeroSeance = determinerSeance(seance.h_debut);
+      const response = await exportAPI.listeCreneau({
+        date_exam: seance.date,
+        seance: numeroSeance
+      });
+      
+      const filename = `liste_seance_${seance.date}_${numeroSeance}.docx`;
+      downloadBlob(response.data, filename);
+      
+      // Notification succès (optionnel - vous pouvez ajouter un toast)
+      console.log('✅ Liste exportée avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'export de la séance:', error);
+      alert('Erreur lors de l\'export de la liste de séance. Veuillez réessayer.');
+    }
+  };
+
+  // Fonction pour exporter la convocation d'un enseignant
+  const handleExportConvocationEnseignant = async (enseignantId) => {
+    try {
+      const response = await exportAPI.convocationEnseignant(enseignantId);
+      
+      const enseignant = enseignants.find(e => e.id === enseignantId);
+      const filename = enseignant 
+        ? `convocation_${enseignant.nom}_${enseignant.prenom}.docx`
+        : `convocation_enseignant_${enseignantId}.docx`;
+      
+      downloadBlob(response.data, filename);
+      
+      // Notification succès (optionnel)
+      console.log('✅ Convocation exportée avec succès');
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'export de la convocation:', error);
+      alert('Erreur lors de l\'export de la convocation. Veuillez réessayer.');
+    }
   };
 
   return (
@@ -436,8 +500,7 @@ export default function Planning() {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // TODO: Implement export logic
-                                  console.log('Export séance:', seance.date);
+                                  handleExportSeance(seance);
                                 }}
                                 className="btn bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 flex items-center justify-center gap-2 text-xs font-bold shadow-lg px-3 py-2"
                                 title="Exporter cette séance"
@@ -544,8 +607,7 @@ export default function Planning() {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // TODO: Implement export logic
-                                  console.log('Export séance:', seance.date);
+                                  handleExportSeance(seance);
                                 }}
                                 className="btn bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:opacity-90 flex items-center gap-2 text-sm font-bold shadow-lg px-4 py-2"
                                 title="Exporter cette séance"
@@ -764,8 +826,7 @@ export default function Planning() {
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              // TODO: Implement export logic
-                              console.log('Export enseignant:', emploiEnseignant.enseignant.id);
+                              handleExportConvocationEnseignant(emploiEnseignant.enseignant.id);
                             }}
                             className="btn bg-white text-purple-600 hover:bg-purple-50 flex items-center gap-2 text-base font-bold shadow-2xl px-6 py-3 border-2 border-white/30"
                             title="Exporter le planning de cet enseignant"

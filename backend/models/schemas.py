@@ -98,7 +98,7 @@ class GenerationRequest(BaseModel):
     min_surveillants_par_salle: int = Field(default=2, ge=1)
     allow_single_surveillant: bool = True
     priorite_grade: bool = True
-    max_time_in_seconds: int = Field(default=600, ge=60, le=3600, description="Temps maximum de résolution en secondes (10s - 1h)")
+    max_time_in_seconds: int = Field(default=600, ge=1, le=36000, description="Temps maximum de résolution en secondes (1s - 10h)")
     relative_gap_limit: float = Field(default=0.05, ge=0.0, le=1.0, description="Gap relatif accepté pour arrêter l'optimisation (0.05 = 5%)")
 
 class GenerationResponse(BaseModel):

@@ -99,9 +99,18 @@ export const exportAPI = {
     api.post('/export/convocations', null, { 
       responseType: 'blob' 
     }),
+  convocationEnseignant: (enseignantId) =>
+    api.post(`/export/convocation/${enseignantId}`, null, {
+      responseType: 'blob'
+    }),
   listesCreneaux: () => 
     api.post('/export/listes-creneaux', null, { 
       responseType: 'blob' 
+    }),
+  listeCreneau: (params) =>
+    api.post('/export/liste-creneau', null, {
+      params,
+      responseType: 'blob'
     }),
   planningExcel: (params) => 
     api.post('/export/planning-excel', null, { 

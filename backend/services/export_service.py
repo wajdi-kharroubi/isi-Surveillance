@@ -50,12 +50,17 @@ class ExportService:
         """Détermine le numéro de séance en fonction de l'heure de début
         
         Args:
-            h_debut: Heure de début de la séance (time object)
+            h_debut: Heure de début de la séance (time object ou string "HH:MM")
             
         Returns:
             Numéro de séance (S1, S2, S3, S4)
         """
         from datetime import time
+        
+        # Si c'est un string, le convertir en time object
+        if isinstance(h_debut, str):
+            heures, minutes = map(int, h_debut.split(':'))
+            h_debut = time(heures, minutes)
         
         # Convertir en minutes depuis minuit pour faciliter la comparaison
         heure_minutes = h_debut.hour * 60 + h_debut.minute
@@ -84,6 +89,29 @@ class ExportService:
                 return "S3"
             else:
                 return "S4"
+    
+    @staticmethod
+    def _obtenir_horaires_seance(seance: str) -> tuple:
+        """Retourne les horaires (h_debut, h_fin) pour un numéro de séance
+        
+        Args:
+            seance: Numéro de séance (S1, S2, S3, S4)
+            
+        Returns:
+            Tuple (h_debut, h_fin) au format string "HH:MM"
+        """
+        horaires = {
+            'S1': ('08:30', '10:00'),
+            'S2': ('10:30', '12:00'),
+            'S3': ('12:30', '14:00'),
+            'S4': ('14:30', '16:00')
+        }
+        
+        seance_upper = seance.upper()
+        if seance_upper not in horaires:
+            raise ValueError(f"Séance invalide '{seance}'. Doit être S1, S2, S3 ou S4")
+        
+        return horaires[seance_upper]
     
     def generer_planning_global_pdf(self, date_debut: date = None, date_fin: date = None) -> str:
         """Génère le planning global en PDF"""
@@ -364,7 +392,8 @@ class ExportService:
         
         # Générer un document par jour avec toutes ses séances
         for date_exam, creneaux in sorted(jours.items()):
-            filename = f"listes_seances_{date_exam.strftime('%Y%m%d')}.docx"
+            # Utiliser le même format que generer_liste_creneau_specifique: YYYY-MM-DD
+            filename = f"liste_seance_{date_exam.strftime('%Y-%m-%d')}.docx"
             filepath = os.path.join(self.export_dir, filename)
             
             # Créer un document avec toutes les séances du jour
@@ -914,4 +943,87 @@ class ExportService:
         df.to_excel(filepath, index=False, sheet_name='Planning')
         
         logger.info(f"✅ Planning Excel généré: {filepath}")
+        return filepath
+    
+    def generer_convocation_enseignant(self, enseignant_id: int) -> str:
+        """Génère la convocation pour un enseignant spécifique
+        
+        Args:
+            enseignant_id: ID de l'enseignant
+            
+        Returns:
+            Chemin du fichier Word généré
+        """
+        # Récupérer l'enseignant
+        enseignant = self.db.query(Enseignant).filter(Enseignant.id == enseignant_id).first()
+        if not enseignant:
+            raise ValueError(f"Enseignant avec l'ID {enseignant_id} introuvable")
+        
+        # Récupérer les affectations
+        affectations = self.db.query(Affectation).options(
+            joinedload(Affectation.examen)
+        ).filter(
+            Affectation.enseignant_id == enseignant.id
+        ).join(Examen).order_by(Examen.dateExam, Examen.h_debut).all()
+        
+        if not affectations:
+            raise ValueError(f"Aucune affectation trouvée pour l'enseignant {enseignant.nom} {enseignant.prenom}")
+        
+        # Générer Word
+        filename_word = f"convocation_{enseignant.nom}_{enseignant.prenom}.docx"
+        filepath_word = os.path.join(self.export_dir, filename_word)
+        self._generer_convocation_word(enseignant, affectations, filepath_word)
+        
+        logger.info(f"✅ Convocation générée pour {enseignant.nom} {enseignant.prenom}: {filepath_word}")
+        return filepath_word
+    
+    def generer_liste_creneau_specifique(self, date_exam: date, seance: str) -> str:
+        """Génère la liste des surveillants pour un créneau spécifique
+        
+        Args:
+            date_exam: Date de l'examen
+            seance: Numéro de séance (S1, S2, S3, S4)
+            
+        Returns:
+            Chemin du fichier Word généré
+        """
+        from datetime import time as dt_time
+        
+        # Obtenir les horaires de la séance (format string "HH:MM")
+        h_debut_str, h_fin_str = self._obtenir_horaires_seance(seance)
+        
+        # Convertir les strings en objets time pour la requête SQL
+        h_debut_time = dt_time(*map(int, h_debut_str.split(':')))
+        h_fin_time = dt_time(*map(int, h_fin_str.split(':')))
+        
+        # Récupérer les examens pour ce créneau
+        examens = self.db.query(Examen).filter(
+            Examen.dateExam == date_exam,
+            Examen.h_debut == h_debut_time,
+            Examen.h_fin == h_fin_time
+        ).all()
+        
+        if not examens:
+            raise ValueError(f"Aucun examen trouvé pour la séance {seance.upper()} du {date_exam}")
+        
+        # Générer le nom du fichier
+        filename = f"liste_seance_{date_exam.strftime('%Y%m%d')}_{seance.upper()}_{datetime.now().strftime('%H%M%S')}.docx"
+        filepath = os.path.join(self.export_dir, filename)
+        
+        # Créer un document
+        doc = Document()
+        
+        # Ajouter l'en-tête
+        self._ajouter_entete(doc)
+        
+        # Ajouter le pied de page
+        self._ajouter_pied_de_page(doc)
+        
+        # Ajouter le contenu de la séance (utiliser les strings pour l'affichage)
+        self._ajouter_seance_au_document(doc, date_exam, h_debut_str, h_fin_str, examens)
+        
+        # Sauvegarder le document
+        doc.save(filepath)
+        
+        logger.info(f"✅ Liste générée pour la séance {seance.upper()} du {date_exam}: {filepath}")
         return filepath

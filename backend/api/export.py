@@ -55,6 +55,14 @@ def exporter_convocations(db: Session = Depends(get_db)):
                 if os.path.exists(filepath):
                     zipf.write(filepath, os.path.basename(filepath))
         
+        # Supprimer les fichiers individuels après création du ZIP
+        for filepath in filepaths:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+        
         return FileResponse(
             path=zip_path,
             media_type='application/zip',
@@ -85,6 +93,14 @@ def exporter_listes_creneaux(db: Session = Depends(get_db)):
                 if os.path.exists(filepath):
                     zipf.write(filepath, os.path.basename(filepath))
         
+        # Supprimer les fichiers individuels après création du ZIP
+        for filepath in filepaths:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+        
         return FileResponse(
             path=zip_path,
             media_type='application/zip',
@@ -92,6 +108,83 @@ def exporter_listes_creneaux(db: Session = Depends(get_db)):
             background=None  # Le fichier sera supprimé après l'envoi
         )
     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/convocation/{enseignant_id}")
+def exporter_convocation_enseignant(
+    enseignant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Exporte la convocation d'un enseignant spécifique"""
+    try:
+        export_service = ExportService(db)
+        filepath = export_service.generer_convocation_enseignant(enseignant_id)
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=500, detail="Erreur lors de la génération de la convocation")
+        
+        # Fonction pour supprimer le fichier après l'envoi
+        def cleanup():
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+        
+        return FileResponse(
+            path=filepath,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            filename=os.path.basename(filepath),
+            background=cleanup
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/liste-creneau")
+def exporter_liste_creneau(
+    date_exam: date = Query(..., description="Date de l'examen"),
+    seance: str = Query(..., description="Numéro de séance (S1, S2, S3, S4)"),
+    db: Session = Depends(get_db)
+):
+    """Exporte la liste des surveillants pour un créneau spécifique"""
+    try:
+        # Valider le format de la séance
+        seance_upper = seance.upper()
+        if seance_upper not in ['S1', 'S2', 'S3', 'S4']:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Séance invalide '{seance}'. Doit être S1, S2, S3 ou S4"
+            )
+        
+        export_service = ExportService(db)
+        filepath = export_service.generer_liste_creneau_specifique(date_exam, seance_upper)
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=500, detail="Erreur lors de la génération de la liste")
+        
+        # Fonction pour supprimer le fichier après l'envoi
+        def cleanup():
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+        
+        return FileResponse(
+            path=filepath,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            filename=os.path.basename(filepath),
+            background=cleanup
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
