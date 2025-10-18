@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
+import DataManager from './pages/DataManager';
 import Enseignants from './pages/Enseignants';
 import Examens from './pages/Examens';
 import Voeux from './pages/Voeux';
@@ -15,6 +16,7 @@ function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/data-manager" element={<DataManager />} />
         <Route path="/enseignants" element={<Enseignants />} />
         <Route path="/examens" element={<Examens />} />
         <Route path="/voeux" element={<Voeux />} />

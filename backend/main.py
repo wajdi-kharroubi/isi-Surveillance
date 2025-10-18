@@ -17,7 +17,7 @@ app = FastAPI(
     description="API pour la gestion et génération des créneaux de surveillance des examens",
     version="1.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
 )
 
 # Configuration CORS
@@ -30,7 +30,17 @@ app.add_middleware(
 )
 
 # Import des routers
-from api import enseignants, examens, voeux, imports, generation, export, statistiques, grades, planning
+from api import (
+    enseignants,
+    examens,
+    voeux,
+    imports,
+    generation,
+    export,
+    statistiques,
+    grades,
+    planning,
+)
 
 # Enregistrement des routers
 app.include_router(enseignants.router, prefix="/api")
@@ -43,6 +53,7 @@ app.include_router(statistiques.router, prefix="/api")
 app.include_router(grades.router, prefix="/api")
 app.include_router(planning.router, prefix="/api")
 
+
 # Routes de base
 @app.get("/")
 def root():
@@ -51,39 +62,36 @@ def root():
         "application": "Gestion Surveillances",
         "version": "1.0.0",
         "status": "running",
-        "docs": "/api/docs"
+        "docs": "/api/docs",
     }
+
 
 @app.get("/api/health")
 def health_check():
     """Vérification de l'état du service"""
-    return {
-        "status": "healthy",
-        "service": "surveillance-api"
-    }
+    return {"status": "healthy", "service": "surveillance-api"}
+
 
 @app.on_event("startup")
 async def startup_event():
     """Actions au démarrage de l'application"""
     logger.info("🚀 Démarrage de l'application...")
-    
+
     # Initialiser la base de données
     init_db()
     logger.info("✅ Base de données initialisée")
-    
+
     logger.info(f"📡 API disponible sur http://{HOST}:{PORT}")
     logger.info(f"📚 Documentation sur http://{HOST}:{PORT}/api/docs")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Actions à l'arrêt de l'application"""
     logger.info("🛑 Arrêt de l'application...")
 
+
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
-        host=HOST,
-        port=PORT,
-        reload=RELOAD,
-        log_level=LOG_LEVEL.lower()
+        "main:app", host=HOST, port=PORT, reload=RELOAD, log_level=LOG_LEVEL.lower()
     )
