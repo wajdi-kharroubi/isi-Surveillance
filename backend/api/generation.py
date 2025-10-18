@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import GenerationRequest, GenerationResponse
+from models.models import Affectation, Examen
 from algorithms.optimizer_v1 import SurveillanceOptimizer
 from algorithms.optimizer_v2 import SurveillanceOptimizerV2
 from algorithms.optimizer_v3 import SurveillanceOptimizerV3
@@ -45,6 +46,16 @@ def generer_planning_v1(request: GenerationRequest, db: Session = Depends(get_db
         )
         
         if success:
+            # Calculer le nombre de surveillances uniques (comme dans le dashboard)
+            from sqlalchemy import func, distinct
+            nb_surveillances_uniques = db.query(
+                func.count(distinct(func.concat(
+                    Affectation.enseignant_id, '-',
+                    func.date(Examen.dateExam), '-',
+                    Examen.h_debut
+                )))
+            ).join(Examen, Affectation.examen_id == Examen.id).scalar() or 0
+            
             # Ajouter les scores aux messages
             messages_avec_scores = messages + [
                 "\n📊 === SCORES V1 (Quota Fixe) ===",
@@ -56,8 +67,8 @@ def generer_planning_v1(request: GenerationRequest, db: Session = Depends(get_db
             
             return GenerationResponse(
                 success=True,
-                message=f"✅ Planning V1 généré avec succès en {temps_exec:.2f}s - {nb_affectations} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
-                nb_affectations=nb_affectations,
+                message=f"✅ Planning V1 généré avec succès en {temps_exec:.2f}s - {nb_surveillances_uniques} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
+                nb_affectations=nb_surveillances_uniques,
                 temps_generation=temps_exec,
                 warnings=messages_avec_scores
             )
@@ -131,6 +142,16 @@ def generer_planning_v2(request: GenerationRequest, db: Session = Depends(get_db
         )
         
         if success:
+            # Calculer le nombre de surveillances uniques (comme dans le dashboard)
+            from sqlalchemy import func, distinct
+            nb_surveillances_uniques = db.query(
+                func.count(distinct(func.concat(
+                    Affectation.enseignant_id, '-',
+                    func.date(Examen.dateExam), '-',
+                    Examen.h_debut
+                )))
+            ).join(Examen, Affectation.examen_id == Examen.id).scalar() or 0
+            
             # Ajouter les scores aux messages
             messages_avec_scores = messages + [
                 "\n🎯 === SCORES D'OPTIMISATION ===",
@@ -142,8 +163,8 @@ def generer_planning_v2(request: GenerationRequest, db: Session = Depends(get_db
             
             return GenerationResponse(
                 success=True,
-                message=f"✅ Planning V2 généré avec succès en {temps_exec:.2f}s - {nb_affectations} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
-                nb_affectations=nb_affectations,
+                message=f"✅ Planning V2 généré avec succès en {temps_exec:.2f}s - {nb_surveillances_uniques} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
+                nb_affectations=nb_surveillances_uniques,
                 temps_generation=temps_exec,
                 warnings=messages_avec_scores
             )
@@ -222,6 +243,16 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
         )
         
         if success:
+            # Calculer le nombre de surveillances uniques (comme dans le dashboard)
+            from sqlalchemy import func, distinct
+            nb_surveillances_uniques = db.query(
+                func.count(distinct(func.concat(
+                    Affectation.enseignant_id, '-',
+                    func.date(Examen.dateExam), '-',
+                    Examen.h_debut
+                )))
+            ).join(Examen, Affectation.examen_id == Examen.id).scalar() or 0
+            
             # Ajouter les scores aux messages
             messages_avec_scores = messages + [
                 "\n🎯 === SCORES D'OPTIMISATION V3 ===",
@@ -233,8 +264,8 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
             
             return GenerationResponse(
                 success=True,
-                message=f"✅ Planning V3 généré avec succès en {temps_exec:.2f}s - {nb_affectations} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
-                nb_affectations=nb_affectations,
+                message=f"✅ Planning V3 généré avec succès en {temps_exec:.2f}s - {nb_surveillances_uniques} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
+                nb_affectations=nb_surveillances_uniques,
                 temps_generation=temps_exec,
                 warnings=messages_avec_scores
             )

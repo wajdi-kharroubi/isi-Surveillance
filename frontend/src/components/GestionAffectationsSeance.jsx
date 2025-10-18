@@ -266,11 +266,11 @@ export default function GestionAffectationsSeance({ seance, onSuccess }) {
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900">
-                    {ens.nom} {ens.prenom}
+                    {ens.nom.charAt(0).toUpperCase() + ens.nom.slice(1).toLowerCase()} {ens.prenom}
                   </p>
                   {ens.est_responsable && (
-                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 text-xs font-semibold rounded-full border border-green-300">
-                      <span>⭐</span> Responsable
+                    <span className="inline-flex items-center gap-1 mt-1 px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-black rounded-xl shadow-md">
+                      RESPONSABLE
                     </span>
                   )}
                 </div>

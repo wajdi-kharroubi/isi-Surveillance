@@ -365,14 +365,18 @@ class SurveillanceOptimizerV3:
         self.solver.parameters.cp_model_probing_level = 2  # Probing avancé
 
         # NOUVEAUX PARAMÈTRES D'ACCÉLÉRATION ⚡⚡⚡
-        self.solver.parameters.relative_gap_limit = relative_gap_limit  # Gap relatif accepté (paramètre configurable)
+        self.solver.parameters.relative_gap_limit = (
+            relative_gap_limit  # Gap relatif accepté (paramètre configurable)
+        )
         self.solver.parameters.max_deterministic_time = (
             max_time_in_seconds / 2.0  # Temps déterministe = moitié du temps max
-            )
+        )
 
         print(f"      → Utilisation de {min(nb_cores, 16)} workers CPU")
-        print(f"      → Timeout: {max_time_in_seconds} secondes ({max_time_in_seconds/60:.1f} min)")
-        print(f"      → Gap relatif accepté: {relative_gap_limit*100:.1f}%")
+        print(
+            f"      → Timeout: {max_time_in_seconds} secondes ({max_time_in_seconds / 60:.1f} min)"
+        )
+        print(f"      → Gap relatif accepté: {relative_gap_limit * 100:.1f}%")
 
         status = self.solver.Solve(self.model)
 
@@ -1891,8 +1895,10 @@ class SurveillanceOptimizerV3:
                     responsables[examen.id] = enseignant.id
                 else:
                     # Log si le code smartex n'est pas trouvé
+                    date_str = examen.dateExam.strftime("%d/%m/%Y")
+                    time_str = f"{examen.h_debut.strftime('%H:%M')}-{examen.h_fin.strftime('%H:%M')}"
                     self.warnings.append(
-                        f"⚠️ Code smartex '{examen.enseignant}' non trouvé pour examen {examen.id}"
+                        f"⚠️ Enseignant responsable non trouvé (code '{examen.enseignant}') - Examen du {date_str} de {time_str} en salle {examen.cod_salle}"
                     )
 
         return responsables

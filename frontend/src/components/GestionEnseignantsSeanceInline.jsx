@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { planningAPI, enseignantsAPI } from '../services/api';
-import { XMarkIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PlusIcon, StarIcon } from '@heroicons/react/24/solid';
 
 /**
  * Composant compact pour gérer les enseignants d'une séance
@@ -80,18 +80,20 @@ export default function GestionEnseignantsSeanceInline({ seance, onUpdate }) {
         {seance.enseignants?.map((ens) => (
           <div
             key={ens.id}
-            className="group inline-flex items-center gap-1.5 pl-3 pr-1 py-1.5 bg-white border-2 border-blue-200 rounded-full hover:border-blue-400 transition-all"
+            className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border-2 border-blue-200 rounded-full hover:border-blue-400 transition-all"
           >
-            <span className="text-sm font-medium text-gray-700">
-              {ens.nom} {ens.prenom}
-            </span>
             {ens.est_responsable && (
-              <span className="text-xs">⭐</span>
+              <span className="absolute -top-1.5 -left-1.5 inline-flex items-center justify-center w-5 h-5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full shadow-md opacity-90">
+                <StarIcon className="w-3 h-3" />
+              </span>
             )}
+            <span className="text-sm font-medium text-gray-700">
+              {ens.nom.charAt(0).toUpperCase() + ens.nom.slice(1).toLowerCase()} {ens.prenom}
+            </span>
             <button
               onClick={() => handleSupprimer(ens.id)}
               disabled={supprimerMutation.isPending}
-              className="w-5 h-5 flex items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-600 hover:text-white disabled:bg-gray-200 disabled:text-gray-400 transition-all opacity-0 group-hover:opacity-100"
+              className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-600 hover:text-white disabled:bg-gray-200 disabled:text-gray-400 transition-all opacity-0 group-hover:opacity-100 shadow-md"
               title="Retirer"
             >
               <XMarkIcon className="w-3 h-3 stroke-[3]" />

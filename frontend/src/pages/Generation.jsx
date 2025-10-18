@@ -411,8 +411,6 @@ export default function Generation() {
           </div>
           
           <div className="p-6 space-y-6">
-            <p className="text-gray-700 text-lg">{result.message}</p>
-            
             {result.success && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 p-5 rounded-xl border-2 border-blue-200">
@@ -433,20 +431,30 @@ export default function Generation() {
               </div>
             )}
             
-            {result.warnings && result.warnings.length > 0 && (
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-5 border-2 border-gray-200">
-                <div className="flex items-center gap-2 mb-4">
-                  <ChartBarIcon className="w-5 h-5 text-gray-600" />
-                  <p className="text-sm font-semibold text-gray-900">
-                    Statistiques d'Optimisation
-                  </p>
+            {result.warnings && result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).length > 0 && (
+              <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 rounded-xl p-6 border-2 border-amber-200 shadow-md">
+                <div className="flex items-center gap-3 mb-5 pb-4 border-b-2 border-amber-200">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center shadow-md">
+                    <ExclamationTriangleIcon className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-900">
+                      Statistiques d'Optimisation
+                    </p>
+                    <p className="text-xs text-amber-700 font-medium">
+                      {result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).length} avertissement{result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).length > 1 ? 's' : ''}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {result.warnings.map((warning, idx) => (
-                    <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                      <p className="text-sm font-mono text-gray-700 whitespace-pre-wrap">
-                        {warning}
-                      </p>
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                  {result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).map((warning, idx) => (
+                    <div key={idx} className="bg-white p-4 rounded-lg border-l-4 border-amber-400 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl flex-shrink-0 leading-none mt-0.5">⚠️</span>
+                        <p className="text-sm text-gray-800 font-medium leading-relaxed flex-1">
+                          {warning.replace('⚠️ ', '')}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>

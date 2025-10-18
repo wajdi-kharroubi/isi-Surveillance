@@ -264,22 +264,21 @@ export default function Planning() {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Hero Header avec statistiques */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 rounded-3xl shadow-2xl">
+      {/* Hero Header - Compact */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
         
-        <div className="relative p-8">
-          {/* Header principal */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-5">
-              <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-3xl flex items-center justify-center shadow-2xl border-2 border-white/30">
-                <Calendar className="w-11 h-11 text-white" />
+        <div className="relative px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center shadow-lg border border-white/30">
+                <Calendar className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-5xl font-black text-white drop-shadow-lg mb-2">
+                <h1 className="text-2xl font-bold text-white drop-shadow-md">
                   Planning de Surveillance
                 </h1>
-                <p className="text-blue-100 text-lg font-medium">
+                <p className="text-blue-100 text-sm font-medium">
                   Visualisez et gérez les affectations en temps réel
                 </p>
               </div>
@@ -287,97 +286,44 @@ export default function Planning() {
             
             <button 
               onClick={() => window.location.href = '/export'}
-              className="px-6 py-3 bg-white text-blue-600 hover:bg-blue-50 rounded-xl shadow-xl flex items-center gap-2 border-2 border-white/50 font-bold text-base transition-all duration-200 hover:scale-105 hover:shadow-2xl"
+              className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105"
             >
-              <Download className="w-5 h-5" />
-              Exporter Planning
+              <Download className="w-4 h-4" />
+              Exporter
             </button>
           </div>
-
-          {/* Statistiques Cards */}
-          {activeTab === 'seances' && !loadingSeances && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 shadow-xl border-2 border-white/50 hover:scale-105 transition-transform duration-300">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <Calendar className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-600">Total Séances</p>
-                    <p className="text-3xl font-black text-gray-900">{statistiques.totalSeances}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 shadow-xl border-2 border-white/50 hover:scale-105 transition-transform duration-300">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <Users className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-600">Surveillants</p>
-                    <p className="text-3xl font-black text-gray-900">{statistiques.totalSurveillants}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 shadow-xl border-2 border-white/50 hover:scale-105 transition-transform duration-300">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <BookOpen className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-600">Total Examens</p>
-                    <p className="text-3xl font-black text-gray-900">{statistiques.totalExamens}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-5 shadow-xl border-2 border-white/50 hover:scale-105 transition-transform duration-300">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <Star className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-600">Moyenne/Séance</p>
-                    <p className="text-3xl font-black text-gray-900">{statistiques.moyenneSurveillants}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
       {/* Tabs Navigation */}
-      <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
-        <nav className="flex border-b-2 border-gray-100">
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+        <nav className="flex border-b border-gray-200">
           <button
             onClick={() => setActiveTab('seances')}
             className={`${
               activeTab === 'seances'
-                ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg'
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md'
                 : 'bg-white text-gray-600 hover:bg-gray-50'
-            } flex-1 py-5 px-8 font-bold text-base flex items-center justify-center gap-3 transition-all duration-300 relative`}
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
-            <Calendar className="w-6 h-6" />
+            <Calendar className="w-5 h-5" />
             <span>Vue par Séances</span>
             {activeTab === 'seances' && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
             )}
           </button>
           <button
             onClick={() => setActiveTab('enseignant')}
             className={`${
               activeTab === 'enseignant'
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
                 : 'bg-white text-gray-600 hover:bg-gray-50'
-            } flex-1 py-5 px-8 font-bold text-base flex items-center justify-center gap-3 transition-all duration-300 relative`}
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
-            <Users className="w-6 h-6" />
+            <Users className="w-5 h-5" />
             <span>Vue par Enseignant</span>
             {activeTab === 'enseignant' && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
             )}
           </button>
         </nav>
@@ -444,7 +390,7 @@ export default function Planning() {
 
                   {/* Filtre Semestre */}
                   <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
-                    <Filter className="w-5 h-5 text-purple-600" />
+                    <Filter className="w-5 h-5 text-blue-600" />
                     <select
                       value={semestreFilter}
                       onChange={(e) => setSemestreFilter(e.target.value)}
@@ -535,7 +481,7 @@ export default function Planning() {
                     .map((seance, index) => (
                       <div key={index} className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-blue-400 transition-all duration-300">
                         {/* Badge coloré en haut */}
-                        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+                        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600"></div>
                         
                         <div className="p-6">
                           {/* En-tête de la carte */}
@@ -572,8 +518,8 @@ export default function Planning() {
                             
                             <div className="flex flex-col gap-3">
                               {/* Badge nombre de salles */}
-                              <div className="text-center bg-gradient-to-br from-purple-50 to-pink-50 p-5 rounded-2xl border-2 border-purple-200 shadow-lg">
-                                <div className="flex items-center gap-2 justify-center text-purple-600 mb-1">
+                              <div className="text-center bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border-2 border-blue-200 shadow-lg">
+                                <div className="flex items-center gap-2 justify-center text-blue-600 mb-1">
                                   <MapPin className="w-7 h-7" />
                                   <span className="text-4xl font-black">{seance.examens?.length || 0}</span>
                                 </div>
@@ -647,8 +593,8 @@ export default function Planning() {
                             </div>
                             
                             <div className="flex items-center gap-4">
-                              <div className="text-center bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-xl border-2 border-purple-200 shadow-md">
-                                <div className="flex items-center gap-2 text-purple-600">
+                              <div className="text-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border-2 border-blue-200 shadow-md">
+                                <div className="flex items-center gap-2 text-blue-600">
                                   <MapPin className="w-6 h-6" />
                                   <span className="text-3xl font-black">{seance.examens?.length || 0}</span>
                                 </div>
@@ -699,13 +645,13 @@ export default function Planning() {
           {activeTab === 'enseignant' && (
             <div className="space-y-6">
               {/* Barre de recherche stylée - Version compacte quand un enseignant est sélectionné */}
-              <div className={`bg-gradient-to-r from-purple-50 via-pink-50 to-indigo-50 rounded-2xl border-2 border-purple-200 shadow-lg transition-all duration-300 ${
-                selectedEnseignant ? 'p-4' : 'p-6'
+              <div className={`bg-gradient-to-r from-green-50 via-emerald-50 to-green-100 rounded-2xl border-2 border-green-200 shadow-lg transition-all duration-300 ${
+                selectedEnseignant ? 'px-4 py-2' : 'p-6'
               }`}>
                 {!selectedEnseignant ? (
                   <>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
                         <Search className="w-6 h-6 text-white" />
                       </div>
                       <div>
@@ -716,19 +662,19 @@ export default function Planning() {
                     
                     <div className="relative mb-4">
                       <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                        <Search className="h-6 w-6 text-purple-400" />
+                        <Search className="h-6 w-6 text-green-400" />
                       </div>
                       <input
                         type="text"
                         placeholder="Rechercher par nom, prénom, code enseignant ou grade..."
                         value={searchFilter}
                         onChange={(e) => setSearchFilter(e.target.value)}
-                        className="w-full pl-14 pr-12 py-4 border-2 border-purple-300 rounded-xl shadow-sm focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all text-base font-semibold bg-white"
+                        className="w-full pl-14 pr-12 py-4 border-2 border-green-300 rounded-xl shadow-sm focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all text-base font-semibold bg-white"
                       />
                       {searchFilter && (
                         <button
                           onClick={() => setSearchFilter('')}
-                          className="absolute inset-y-0 right-0 pr-5 flex items-center text-purple-400 hover:text-purple-600 transition-colors"
+                          className="absolute inset-y-0 right-0 pr-5 flex items-center text-green-400 hover:text-green-600 transition-colors"
                         >
                           <span className="text-2xl font-bold">✕</span>
                         </button>
@@ -736,9 +682,9 @@ export default function Planning() {
                     </div>
 
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between bg-white px-5 py-3 rounded-xl border-2 border-purple-200 shadow-sm">
+                      <div className="flex items-center justify-between bg-white px-5 py-3 rounded-xl border-2 border-green-200 shadow-sm">
                         <span className="font-bold text-gray-700 flex items-center gap-2">
-                          <Users className="w-5 h-5 text-purple-600" />
+                          <Users className="w-5 h-5 text-green-600" />
                           {enseignantsFiltres.length} enseignant{enseignantsFiltres.length > 1 ? 's' : ''} disponible{enseignantsFiltres.length > 1 ? 's' : ''}
                         </span>
                       </div>
@@ -755,23 +701,25 @@ export default function Planning() {
                             <button
                               key={ens.id}
                               onClick={() => setSelectedEnseignant(ens.id)}
-                              className="bg-white text-gray-900 hover:shadow-lg hover:border-purple-300 border-gray-200 text-left p-4 rounded-xl border-2 transition-all duration-200 group"
+                              className="bg-white text-gray-900 hover:shadow-lg hover:border-green-300 border-gray-200 text-left p-4 rounded-xl border-2 transition-all duration-200 group"
                             >
-                              <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <Users className="w-5 h-5 text-purple-600" />
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                  <Users className="w-5 h-5 text-green-600" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-black text-sm truncate">
-                                    {ens.nom} {ens.prenom}
-                                  </p>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="font-black text-sm">
+                                      {ens.nom.charAt(0).toUpperCase() + ens.nom.slice(1).toLowerCase()} {ens.prenom}
+                                    </p>
+                                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-green-100 text-green-800">
+                                      {ens.grade_code}
+                                    </span>
+                                  </div>
                                   <p className="text-xs font-semibold text-gray-500">
                                     {ens.code_smartex || 'N/A'}
                                   </p>
                                 </div>
-                              </div>
-                              <div className="text-xs font-bold px-2 py-1 rounded-md inline-block bg-purple-100 text-purple-800">
-                                {ens.grade_code}
                               </div>
                             </button>
                           ))}
@@ -783,7 +731,7 @@ export default function Planning() {
                   /* Version compacte */
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center shadow-md">
+                      <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center shadow-md">
                         <Search className="w-5 h-5 text-white" />
                       </div>
                       <div>
@@ -796,7 +744,7 @@ export default function Planning() {
                         setSelectedEnseignant(null);
                         setSearchFilter('');
                       }}
-                      className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-bold text-sm hover:shadow-lg transition-all flex items-center gap-2"
+                      className="px-5 py-2.5 bg-transparent text-green-600 border-2 border-green-500 rounded-lg font-bold text-sm hover:bg-green-50 transition-all flex items-center gap-2"
                     >
                       <Search className="w-4 h-4" />
                       Changer d'enseignant
@@ -807,12 +755,12 @@ export default function Planning() {
 
               {/* Display de l'emploi */}
               {selectedEnseignant && (
-                <div className="bg-gradient-to-br from-white via-purple-50 to-pink-50 rounded-2xl shadow-2xl border-2 border-purple-200 overflow-hidden">
+                <div className="bg-gradient-to-br from-white via-green-50 to-emerald-50 rounded-2xl shadow-2xl border-2 border-green-200 overflow-hidden">
                   {loadingEnseignant ? (
                     <div className="text-center py-16">
                       <div className="relative w-20 h-20 mx-auto mb-6">
-                        <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-ping opacity-20"></div>
-                        <div className="relative w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                        <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full animate-ping opacity-20"></div>
+                        <div className="relative w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center">
                           <Users className="w-10 h-10 text-white animate-pulse" />
                         </div>
                       </div>
@@ -821,81 +769,69 @@ export default function Planning() {
                   ) : emploiEnseignant ? (
                     <>
                       {/* En-tête profil enseignant */}
-                      <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 p-8 text-white relative overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+                      <div className="bg-white px-6 py-4 border-b-2 border-gray-200 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-r from-gray-50 to-blue-50 opacity-50"></div>
                         
-                        <div className="relative flex items-center gap-6 mb-6">
-                          <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center shadow-2xl border-2 border-white/30">
-                            <Users className="w-11 h-11 text-white" />
+                        <div className="relative flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                            <Users className="w-6 h-6 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h2 className="text-4xl font-black text-white drop-shadow-lg mb-2">
-                              {emploiEnseignant.enseignant.nom} {emploiEnseignant.enseignant.prenom}
+                            <h2 className="text-xl font-bold text-gray-900 mb-1">
+                              {emploiEnseignant.enseignant.nom.charAt(0).toUpperCase() + emploiEnseignant.enseignant.nom.slice(1).toLowerCase()} {emploiEnseignant.enseignant.prenom}
                             </h2>
-                            <div className="flex items-center gap-4 text-white/90">
-                              <span className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg font-bold text-sm border border-white/30">
+                            <div className="flex items-center gap-3 text-sm text-gray-600">
+                              <span className="px-2 py-1 bg-green-100 rounded-md font-semibold text-xs text-green-700 border border-green-200">
                                 {emploiEnseignant.enseignant.grade}
                               </span>
-                              <span className="font-semibold">
+                              <span className="font-medium">
                                 {emploiEnseignant.enseignant.nb_surveillances_affectees} / {emploiEnseignant.enseignant.quota_max} surveillances
+                              </span>
+                              <span className={`font-bold ${
+                                emploiEnseignant.enseignant.pourcentage_quota >= 100 
+                                  ? 'text-green-600' 
+                                  : emploiEnseignant.enseignant.pourcentage_quota >= 75 
+                                  ? 'text-yellow-600' 
+                                  : 'text-red-600'
+                              }`}>
+                                ({emploiEnseignant.enseignant.pourcentage_quota}%)
                               </span>
                             </div>
                           </div>
                           
-                          {/* Bouton Export pour l'enseignant */}
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleExportConvocationEnseignant(emploiEnseignant.enseignant.id);
-                            }}
-                            className="btn bg-white text-purple-600 hover:bg-purple-50 flex items-center gap-2 text-base font-bold shadow-2xl px-6 py-3 border-2 border-white/30"
-                            title="Exporter le planning de cet enseignant"
-                          >
-                            <Download className="w-5 h-5" />
-                            Exporter Planning
-                          </button>
-                        </div>
-
-                        {/* Jauge de couverture */}
-                        <div className="relative bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-white/20">
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-white font-bold text-sm uppercase tracking-wide">Taux de couverture</span>
-                            <span className={`text-4xl font-black ${
-                              emploiEnseignant.enseignant.pourcentage_quota >= 100 
-                                ? 'text-green-300' 
-                                : emploiEnseignant.enseignant.pourcentage_quota >= 75 
-                                ? 'text-yellow-300' 
-                                : 'text-red-300'
-                            }`}>
-                              {emploiEnseignant.enseignant.pourcentage_quota}%
-                            </span>
-                          </div>
-                          <div className="h-4 bg-white/20 rounded-full overflow-hidden shadow-inner">
-                            <div 
-                              className={`h-full transition-all duration-700 ${
-                                emploiEnseignant.enseignant.pourcentage_quota >= 100 
-                                  ? 'bg-gradient-to-r from-green-400 to-emerald-400' 
-                                  : emploiEnseignant.enseignant.pourcentage_quota >= 75 
-                                  ? 'bg-gradient-to-r from-yellow-400 to-amber-400' 
-                                  : 'bg-gradient-to-r from-red-400 to-pink-400'
-                              } shadow-lg`}
-                              style={{ width: `${Math.min(emploiEnseignant.enseignant.pourcentage_quota, 100)}%` }}
-                            ></div>
+                          {/* Boutons d'action */}
+                          <div className="flex items-center gap-2">
+                            {/* Bouton Ajouter une séance */}
+                            {!showAddSeanceForm && (
+                              <button
+                                onClick={() => setShowAddSeanceForm(true)}
+                                className="btn bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 flex items-center gap-2 text-sm font-semibold shadow-md px-3 py-2"
+                                title="Ajouter une séance de surveillance"
+                              >
+                                <Calendar className="w-4 h-4" />
+                                Ajouter
+                              </button>
+                            )}
+                            
+                            {/* Bouton Export */}
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportConvocationEnseignant(emploiEnseignant.enseignant.id);
+                              }}
+                              className="btn bg-white text-green-600 hover:bg-green-50 flex items-center gap-2 text-sm font-bold shadow-md px-3 py-2 border-2 border-green-300"
+                              title="Exporter le planning de cet enseignant"
+                            >
+                              <Download className="w-4 h-4" />
+                              Exporter
+                            </button>
                           </div>
                         </div>
                       </div>
 
-                      {/* Bouton pour ajouter une séance */}
-                      <div className="px-8 pt-6">
-                        {!showAddSeanceForm ? (
-                          <button
-                            onClick={() => setShowAddSeanceForm(true)}
-                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg hover:shadow-xl font-bold text-lg"
-                          >
-                            <Calendar className="w-6 h-6" />
-                            Ajouter une séance de surveillance
-                          </button>
-                        ) : (
+                      {/* Formulaire pour ajouter une séance */}
+                      {showAddSeanceForm && (
+                        <div className="px-8 pt-6">
                           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 p-6 shadow-lg">
                             <div className="flex items-center justify-between mb-4">
                               <div className="flex items-center gap-3">
@@ -1000,26 +936,28 @@ export default function Planning() {
                               </div>
                             </form>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       {/* Liste des surveillances */}
-                      <div className="p-8">
+                      <div className="p-6">
                         {emploiEnseignant.emplois.length === 0 ? (
-                          <div className="text-center py-20 bg-gradient-to-br from-gray-50 via-purple-50 to-pink-50 rounded-2xl border-2 border-dashed border-gray-300">
-                            <div className="w-24 h-24 bg-gradient-to-br from-gray-200 to-purple-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                              <AlertCircle className="w-14 h-14 text-gray-500" />
+                          <div className="text-center py-12 bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50 rounded-xl border-2 border-dashed border-gray-300">
+                            <div className="w-16 h-16 bg-gradient-to-br from-gray-200 to-green-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                              <AlertCircle className="w-10 h-10 text-gray-500" />
                             </div>
-                            <p className="text-gray-700 text-2xl font-bold mb-2">Aucune surveillance affectée</p>
-                            <p className="text-gray-500">Cet enseignant n'a pas encore de surveillance planifiée</p>
+                            <p className="text-gray-700 text-lg font-bold mb-1">Aucune surveillance affectée</p>
+                            <p className="text-gray-500 text-sm">Cet enseignant n'a pas encore de surveillance planifiée</p>
                           </div>
                         ) : (
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-3 mb-6">
-                              <Calendar className="w-6 h-6 text-purple-600" />
-                              <h3 className="text-2xl font-black text-gray-900">
-                                {emploiEnseignant.emplois.length} surveillance{emploiEnseignant.emplois.length > 1 ? 's' : ''} programmée{emploiEnseignant.emplois.length > 1 ? 's' : ''}
-                              </h3>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-gray-200">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-5 h-5 text-green-600" />
+                                <h3 className="text-lg font-bold text-gray-900">
+                                  {emploiEnseignant.emplois.length} surveillance{emploiEnseignant.emplois.length > 1 ? 's' : ''}
+                                </h3>
+                              </div>
                             </div>
                             
                             {emploiEnseignant.emplois
@@ -1031,94 +969,68 @@ export default function Planning() {
                               .map((emploi, index) => (
                                 <div
                                   key={index}
-                                  className={`group relative bg-white border-2 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 ${
+                                  className={`group relative bg-white border-2 rounded-xl p-4 hover:shadow-lg transition-all duration-200 ${
                                     emploi.est_responsable 
                                       ? 'border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50' 
-                                      : 'border-purple-200 hover:border-purple-400'
+                                      : 'border-gray-200 hover:border-green-300'
                                   }`}
                                 >
                                   {/* Badge responsable */}
                                   {emploi.est_responsable && (
-                                    <div className="absolute -top-3 -right-3 bg-gradient-to-r from-orange-500 to-red-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg animate-pulse">
+                                    <div className="absolute -top-2 -right-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md">
                                       RESPONSABLE
                                     </div>
                                   )}
 
-                                  <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1">
-                                      {/* Date */}
-                                      <div className="flex items-center gap-3 mb-4">
-                                        <div className={`w-12 h-12 ${
-                                          emploi.est_responsable 
-                                            ? 'bg-gradient-to-br from-orange-500 to-red-600' 
-                                            : 'bg-gradient-to-br from-purple-500 to-pink-600'
-                                        } rounded-xl flex items-center justify-center shadow-lg`}>
-                                          <Calendar className="w-6 h-6 text-white" />
-                                        </div>
-                                        <div>
-                                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</p>
-                                          <p className="text-lg font-black text-gray-900">{formatDate(emploi.date)}</p>
+                                  <div className="flex items-center justify-between gap-3">
+                                    {/* Numéro de séance */}
+                                    <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-lg border border-gray-200 flex-shrink-0">
+                                      <span className="text-lg font-black text-gray-700">#{index + 1}</span>
+                                    </div>
+
+                                    {/* Date et heure */}
+                                    <div className="flex items-center gap-3 flex-1">
+                                      <div className={`w-10 h-10 ${
+                                        emploi.est_responsable 
+                                          ? 'bg-gradient-to-br from-orange-500 to-red-600' 
+                                          : 'bg-gradient-to-br from-green-500 to-emerald-600'
+                                      } rounded-lg flex items-center justify-center shadow-md flex-shrink-0`}>
+                                        <Calendar className="w-5 h-5 text-white" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-gray-900">{formatDate(emploi.date)}</p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                          <Clock className="w-3 h-3 text-gray-500" />
+                                          <span className="text-xs text-gray-600 font-semibold">{formatTime(emploi.h_debut)} - {formatTime(emploi.h_fin)}</span>
                                         </div>
                                       </div>
+                                    </div>
 
-                                      {/* Détails */}
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-xl border border-blue-200">
-                                          <Clock className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                          <div>
-                                            <p className="text-xs text-gray-600 font-semibold">Horaires</p>
-                                            <p className="font-black text-gray-900">{formatTime(emploi.h_debut)} - {formatTime(emploi.h_fin)}</p>
-                                          </div>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-3 bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 rounded-xl border border-purple-200">
-                                          <BookOpen className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                                          <div>
-                                            <p className="text-xs text-gray-600 font-semibold">Type</p>
-                                            <p className="font-black text-gray-900">{emploi.type === 'E' ? 'Examen' : 'DS'}</p>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      {/* Badges session/semestre */}
-                                      <div className="flex gap-2 mt-4">
-                                        <span className="px-3 py-1.5 bg-cyan-100 text-cyan-800 rounded-lg font-bold text-xs border border-cyan-200">
-                                          {emploi.session === 'P' ? 'Principale' : 'Rattrapage'}
-                                        </span>
-                                        <span className="px-3 py-1.5 bg-green-100 text-green-800 rounded-lg font-bold text-xs border border-green-200">
-                                          {emploi.semestre}
-                                        </span>
-                                      </div>
-
-                                      {/* Salles */}
+                                    {/* Badges compacts */}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="px-2 py-1 bg-cyan-100 text-cyan-800 rounded-md font-bold text-xs border border-cyan-200">
+                                        {emploi.session === 'P' ? 'P' : 'R'}
+                                      </span>
+                                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-md font-bold text-xs border border-green-200">
+                                        {emploi.semestre.replace('SEMESTRE ', 'S')}
+                                      </span>
                                       {emploi.salles && (
-                                        <div className="mt-4 flex items-center gap-2 text-sm">
-                                          <MapPin className="w-5 h-5 text-indigo-600" />
-                                          <span className="font-semibold text-gray-700">Salles:</span>
-                                          <span className="font-black text-gray-900">{emploi.salles}</span>
+                                        <div className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
+                                          <MapPin className="w-3 h-3" />
+                                          <span className="text-xs font-bold">{emploi.salles}</span>
                                         </div>
                                       )}
                                     </div>
 
-                                    {/* Actions et numéro de séance */}
-                                    <div className="flex flex-col gap-3">
-                                      {/* Numéro de séance */}
-                                      <div className="text-center bg-gray-50 px-4 py-3 rounded-xl border-2 border-gray-200">
-                                        <p className="text-xs text-gray-500 font-bold mb-1">Séance</p>
-                                        <p className="text-3xl font-black text-gray-900">#{index + 1}</p>
-                                      </div>
-
-                                      {/* Bouton supprimer */}
-                                      <button
-                                        onClick={() => handleSupprimerSeance(emploi)}
-                                        disabled={supprimerSeanceMutation.isPending}
-                                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 disabled:bg-gray-200 disabled:text-gray-400 transition-all border-2 border-red-200 hover:border-red-300 group"
-                                        title="Retirer de cette séance"
-                                      >
-                                        <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                        <span className="text-xs font-bold">Retirer</span>
-                                      </button>
-                                    </div>
+                                    {/* Bouton supprimer */}
+                                    <button
+                                      onClick={() => handleSupprimerSeance(emploi)}
+                                      disabled={supprimerSeanceMutation.isPending}
+                                      className="flex items-center justify-center w-8 h-8 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:bg-gray-200 disabled:text-gray-400 transition-all border border-red-200 hover:border-red-300 group flex-shrink-0"
+                                      title="Retirer de cette séance"
+                                    >
+                                      <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                    </button>
                                   </div>
                                 </div>
                               ))}
