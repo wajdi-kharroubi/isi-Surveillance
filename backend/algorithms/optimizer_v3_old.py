@@ -22,12 +22,11 @@ class SurveillanceOptimizerV3:
     - Si une séance a 5 examens et que chaque examen nécessite 2 surveillants,
       alors la séance nécessite 10 enseignants (5 × 2)
 
-    RÈGLES DE BASE (Contraintes fortes - HARD - OBLIGATOIRES):
+    RÈGLES DE BASE (Contraintes fortes - HARD):
     1. Responsable d'examen doit être présent et compte dans les quotas
-    2. ÉGALITÉ STRICTE par grade (tous les enseignants d'un même grade font EXACTEMENT le même nombre de séances)
-    3. Quota maximum strict par grade (pas de dépassement autorisé)
-    4. Non-conflit horaire
-    5. Nombre d'enseignants par séance:
+    2. Quota maximum strict par grade (pas de dépassement autorisé)
+    3. Non-conflit horaire
+    4. Nombre d'enseignants par séance:
        - Mode normal: EXACTEMENT nb_examens × min_surveillants_par_examen
        - Mode adaptatif: MIN = nb_examens (1 par examen), MAX = nb_examens × min_surveillants_par_examen
 
@@ -39,10 +38,9 @@ class SurveillanceOptimizerV3:
     PRIORITÉ DES CONTRAINTES:
     1. Présence du responsable d'examen (peut surveiller d'autres examens)
     2. Nombre d'enseignants par séance (exact en mode normal, flexible en mode adaptatif)
-    3. ÉGALITÉ STRICTE par grade (OBLIGATOIRE - tous les enseignants du même grade font le même nombre)
-    4. Quota maximum strict par grade (ne jamais dépasser)
-    5. PRÉFÉRENCE pour vœux (pas obligatoire, mais bonus dans fonction objectif)
-    6. Équilibre global
+    3. Quota maximum strict par grade (ne jamais dépasser)
+    4. PRÉFÉRENCE pour vœux (pas obligatoire, mais bonus dans fonction objectif)
+    5. Équilibre global
     """
 
     def __init__(self, db: Session):
@@ -211,13 +209,12 @@ class SurveillanceOptimizerV3:
         )
         print(f"      ✓ Contraintes de couverture appliquées")
 
-        # CONTRAINTE 3: ÉGALITÉ STRICTE par grade (PRIORITÉ 3 - OBLIGATOIRE)
-        print("   → Contrainte 3: ÉGALITÉ STRICTE par grade (OBLIGATOIRE)")
-        print("      ⚠️ Tous les enseignants d'un même grade feront EXACTEMENT le même nombre de séances")
+        # CONTRAINTE 3: Quota obligatoire par grade (PRIORITÉ 3)
+        print("   → Contrainte 3: Quotas obligatoires et limites par grade")
         charge_par_enseignant = self._contrainte_quotas_grades(
             enseignants, seances, affectations_vars, responsables_examens
         )
-        print(f"      ✓ Contrainte d'égalité stricte appliquée pour tous les grades")
+        print(f"      ✓ Quotas de grades configurés")
 
         # CONTRAINTE 4: Préférence pour les vœux (PRIORITÉ 4)
         preferences_voeux = {}
@@ -665,19 +662,20 @@ class SurveillanceOptimizerV3:
         responsables_examens: Dict[int, int],
     ) -> Dict:
         """
-        CONTRAINTE 3 (PRIORITÉ 3): Égalité stricte du nombre de séances par grade.
+        CONTRAINTE 3 (PRIORITÉ 3): Quota maximum strict par grade.
 
-        RÈGLE STRICTE: Tous les enseignants d'un même grade doivent faire EXACTEMENT le même nombre de séances.
+        RÈGLE STRICTE: Aucun enseignant ne doit dépasser le quota maximum de son grade.
+        Le quota est défini dans la configuration des grades (nb_surveillances).
 
         IMPORTANT:
-        - Chaque enseignant d'un même grade doit avoir la même charge de surveillance
-        - Le quota maximum du grade reste une limite supérieure stricte
-        - Si un responsable a trop d'examens par rapport à cette égalité, cela créera un INFEASIBLE
+        - Chaque enseignant a un quota maximum fixe selon son grade
+        - Un enseignant responsable d'examens DOIT respecter ce quota maximum
+        - Si un responsable a trop d'examens, cela créera un INFEASIBLE
 
         Exemple:
         - Grade "Professeur": quota maximum = 3 séances
-        - Si 5 profs du même grade participent, ils feront TOUS exactement le même nombre (ex: tous 2 séances)
-        - Impossible d'avoir 2 profs à 3 séances et 3 profs à 1 séance
+        - Un prof peut faire 0, 1, 2 ou 3 séances (pas plus)
+        - Si un prof est responsable de 5 examens → INFEASIBLE
         """
         charge_par_enseignant = {}
 
@@ -688,7 +686,7 @@ class SurveillanceOptimizerV3:
                 enseignants_par_grade[enseignant.grade_code] = []
             enseignants_par_grade[enseignant.grade_code].append(enseignant)
 
-        # Pour chaque grade, imposer l'égalité stricte entre tous les enseignants
+        # Pour chaque grade, imposer le quota fixe strict
         for grade_code, enseignants_grade in enseignants_par_grade.items():
             grade_config = self.grade_configs.get(
                 grade_code,
@@ -700,7 +698,7 @@ class SurveillanceOptimizerV3:
 
             # Message informatif
             self.infos.append(
-                f"   📌 Grade {grade_code}: ÉGALITÉ STRICTE - Tous les enseignants feront le même nombre de séances (max: {quota_fixe})"
+                f"   📌 Grade {grade_code}: Quota MAXIMUM = {quota_fixe} séances par enseignant"
             )
 
             # Calculer les charges pour ce grade
@@ -715,56 +713,43 @@ class SurveillanceOptimizerV3:
                 charge_par_enseignant[enseignant.id] = charge
                 charges.append(charge)
 
-            # Imposer l'égalité stricte et le quota maximum
+            # Imposer le quota maximum strict
             if charges:
-                # ⚠️ CONTRAINTE OBLIGATOIRE 1: Aucun enseignant ne doit dépasser le quota fixe de son grade
+                # ⚠️ CONTRAINTE STRICTE: Aucun enseignant ne doit dépasser le quota fixe de son grade
                 for charge in charges:
                     self.model.Add(charge <= quota_fixe)
 
-                # ⚠️ CONTRAINTE OBLIGATOIRE 2: ÉGALITÉ PARFAITE entre tous les enseignants du même grade
-                # Cette contrainte est STRICTE et NON NÉGOCIABLE
+                # ⚙️ ÉQUILIBRE ENTRE ENSEIGNANTS DE MÊME GRADE
+                # Minimiser la différence entre le nombre de séances des enseignants du même grade
                 if len(charges) > 1:
-                    # Tous les enseignants du même grade doivent avoir EXACTEMENT la même charge
-                    # On force l'égalité entre chaque enseignant et le premier de la liste
-                    charge_reference = charges[0]
-                    for i, charge in enumerate(charges[1:], start=1):
-                        # Contrainte d'égalité stricte (HARD CONSTRAINT)
-                        self.model.Add(charge == charge_reference)
-
-                    self.infos.append(
-                        f"      → ✅ ÉGALITÉ STRICTE OBLIGATOIRE: {len(charges)} enseignants du grade {grade_code} feront EXACTEMENT le même nombre de séances"
+                    # Calculer min et max des charges pour ce grade
+                    charge_min_grade = self.model.NewIntVar(
+                        0, quota_fixe, f"charge_min_{grade_code}"
                     )
-                    
-                    # Vérification: compter les responsables de ce grade pour détecter les conflits potentiels
-                    responsables_grade = [
-                        ens_id for exam_id, ens_id in responsables_examens.items()
-                        if any(ens.id == ens_id for ens in enseignants_grade)
-                    ]
-                    
-                    if responsables_grade:
-                        nb_responsables = len(set(responsables_grade))
-                        self.infos.append(
-                            f"      → ℹ️ {nb_responsables} enseignant(s) de ce grade sont responsables d'examens"
-                        )
-                        
-                        # Avertissement si potentiel conflit
-                        if nb_responsables > 0:
-                            self.infos.append(
-                                f"      → ⚠️ ATTENTION: Les responsables devront aussi respecter l'égalité stricte"
-                            )
-                    
-                    # Plus besoin de calculer la dispersion car elle sera toujours 0
-                    # On la conserve quand même pour compatibilité avec la fonction objectif
+                    charge_max_grade = self.model.NewIntVar(
+                        0, quota_fixe, f"charge_max_{grade_code}"
+                    )
+
+                    self.model.AddMinEquality(charge_min_grade, charges)
+                    self.model.AddMaxEquality(charge_max_grade, charges)
+
+                    # Calculer la dispersion pour ce grade
+                    dispersion_grade = self.model.NewIntVar(
+                        0, quota_fixe, f"dispersion_{grade_code}"
+                    )
+                    self.model.Add(
+                        dispersion_grade == charge_max_grade - charge_min_grade
+                    )
+
+                    # Contrainte souple: Essayer de garder la dispersion faible (≤ 1 idéalement)
+                    # Ceci sera renforcé dans la fonction objectif
+                    # On stocke la dispersion pour l'utiliser dans la fonction objectif
                     if not hasattr(self, "dispersions_par_grade"):
                         self.dispersions_par_grade = {}
-                    # Créer une variable de dispersion qui sera forcément 0
-                    dispersion_grade = self.model.NewIntVar(
-                        0, 0, f"dispersion_{grade_code}"
-                    )
                     self.dispersions_par_grade[grade_code] = dispersion_grade
-                else:
+
                     self.infos.append(
-                        f"      → ℹ️ Un seul enseignant du grade {grade_code} (égalité non applicable)"
+                        f"      → Équilibre activé: minimisation des écarts entre enseignants"
                     )
 
         return charge_par_enseignant

@@ -33,6 +33,8 @@ export default function Planning() {
   const [expandedSeance, setExpandedSeance] = useState(null); // Pour gérer l'expansion des séances en mode liste
   const [showAddSeanceForm, setShowAddSeanceForm] = useState(false); // Pour afficher le formulaire d'ajout
   const [selectedSeanceKey, setSelectedSeanceKey] = useState(''); // Clé de la séance sélectionnée (date|h_debut|h_fin)
+  const [sortBy, setSortBy] = useState('pourcentage'); // 'pourcentage', 'grade', 'nom'
+  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
 
   const { data: enseignants = [] } = useQuery({
     queryKey: ['enseignants'],
@@ -695,7 +697,7 @@ export default function Planning() {
                         </div>
                         <div>
                           <h3 className="text-lg font-bold text-gray-900">Vue d'ensemble des enseignants</h3>
-                          <p className="text-xs text-gray-600 font-medium">Quota de surveillances par enseignant</p>
+                          <p className="text-xs text-gray-600 font-medium">Quota de surveillances par enseignant - Cliquez sur les colonnes pour trier</p>
                         </div>
                       </div>
                       
@@ -726,17 +728,68 @@ export default function Planning() {
                     <table className="w-full">
                       <thead>
                         <tr className="bg-gradient-to-r from-gray-50 to-green-50 border-b-2 border-gray-200">
-                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                            Enseignant
+                          <th className="px-6 py-4 text-left">
+                            <button
+                              onClick={() => {
+                                if (sortBy === 'nom') {
+                                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                                } else {
+                                  setSortBy('nom');
+                                  setSortOrder('asc');
+                                }
+                              }}
+                              className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider hover:text-green-600 transition-colors"
+                            >
+                              Enseignant
+                              {sortBy === 'nom' && (
+                                <span className="text-green-600">
+                                  {sortOrder === 'asc' ? '↑' : '↓'}
+                                </span>
+                              )}
+                            </button>
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                            Grade
+                          <th className="px-6 py-4 text-left">
+                            <button
+                              onClick={() => {
+                                if (sortBy === 'grade') {
+                                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                                } else {
+                                  setSortBy('grade');
+                                  setSortOrder('asc');
+                                }
+                              }}
+                              className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider hover:text-green-600 transition-colors"
+                            >
+                              Grade
+                              {sortBy === 'grade' && (
+                                <span className="text-green-600">
+                                  {sortOrder === 'asc' ? '↑' : '↓'}
+                                </span>
+                              )}
+                            </button>
                           </th>
                           <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Surveillances
                           </th>
-                          <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
-                            Pourcentage
+                          <th className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => {
+                                if (sortBy === 'pourcentage') {
+                                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                                } else {
+                                  setSortBy('pourcentage');
+                                  setSortOrder('desc');
+                                }
+                              }}
+                              className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider hover:text-green-600 transition-colors"
+                            >
+                              Pourcentage
+                              {sortBy === 'pourcentage' && (
+                                <span className="text-green-600">
+                                  {sortOrder === 'asc' ? '↑' : '↓'}
+                                </span>
+                              )}
+                            </button>
                           </th>
                           <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Actions
@@ -746,10 +799,23 @@ export default function Planning() {
                       <tbody className="divide-y divide-gray-200">
                         {enseignantsFiltres
                           .sort((a, b) => {
-                            // Trier par pourcentage décroissant
-                            const pctA = a.quota_max > 0 ? (a.nb_surveillances_affectees / a.quota_max) * 100 : 0;
-                            const pctB = b.quota_max > 0 ? (b.nb_surveillances_affectees / b.quota_max) * 100 : 0;
-                            return pctB - pctA;
+                            let compareValue = 0;
+                            
+                            if (sortBy === 'pourcentage') {
+                              // Trier par pourcentage
+                              const pctA = a.quota_max > 0 ? (a.nb_surveillances_affectees / a.quota_max) * 100 : 0;
+                              const pctB = b.quota_max > 0 ? (b.nb_surveillances_affectees / b.quota_max) * 100 : 0;
+                              compareValue = pctB - pctA;
+                            } else if (sortBy === 'grade') {
+                              // Trier par grade (alphabétique)
+                              compareValue = (a.grade_code || '').localeCompare(b.grade_code || '');
+                            } else if (sortBy === 'nom') {
+                              // Trier par nom
+                              compareValue = (a.nom || '').localeCompare(b.nom || '');
+                            }
+                            
+                            // Appliquer l'ordre (croissant ou décroissant)
+                            return sortOrder === 'asc' ? compareValue : -compareValue;
                           })
                           .map((ens) => {
                             const pourcentage = ens.quota_max > 0 
