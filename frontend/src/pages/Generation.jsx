@@ -431,32 +431,261 @@ export default function Generation() {
               </div>
             )}
             
-            {result.warnings && result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).length > 0 && (
-              <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 rounded-xl p-6 border-2 border-amber-200 shadow-md">
-                <div className="flex items-center gap-3 mb-5 pb-4 border-b-2 border-amber-200">
-                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center shadow-md">
-                    <ExclamationTriangleIcon className="w-6 h-6 text-white" />
+            {result.warnings && (() => {
+              // Filtrer pour ne garder que les avertissements, erreurs critiques et les statistiques des vœux
+              const filteredWarnings = result.warnings.filter(w => {
+                // Garder les avertissements (⚠️) et erreurs critiques (❌)
+                if (w.includes('⚠️')) return true;
+                if (w.includes('❌')) return true;
+                
+                // Garder les statistiques des vœux (headers, résumés, listes)
+                if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                if (w.includes('STATISTIQUES')) return true;
+                if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
+                if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
+                if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                if (w.includes('respectés') || w.includes('respectes')) return true;
+                if (w.includes('violés') || w.includes('violes')) return true;
+                if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
+                if (w.includes('concernant le planning')) return true;
+                if (w.includes('hors planning')) return true;
+                if (w.includes('DIAGNOSTIC DES CONTRAINTES')) return true;
+                if (w.includes('ANALYSE DE LA SITUATION')) return true;
+                if (w.includes('SOLUTIONS POSSIBLES')) return true;
+                if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
+                if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+                
+                // Garder les lignes avec emojis de diagnostic
+                if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
+                if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                if (w.includes('💡') || w.includes('🔧')) return true;
+                if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
+                
+                // Garder les lignes qui font partie des listes de vœux violés (numérotées)
+                if (/^\s*\d+\.\s+/.test(w)) return true;
+                
+                // Garder les bullet points
+                if (/^\s*[•→]\s+/.test(w)) return true;
+                
+                // Garder les séparateurs === et ---
+                if (w.includes('===') || w.includes('---')) return true;
+                
+                return false;
+              });
+              
+              return filteredWarnings.length > 0 ? filteredWarnings : null;
+            })() && result.warnings.filter(w => {
+              // Même filtre répété pour la vérification de longueur
+              if (w.includes('⚠️')) return true;
+              if (w.includes('❌')) return true;
+              if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+              if (w.includes('STATISTIQUES')) return true;
+              if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
+              if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
+              if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+              if (w.includes('respectés') || w.includes('respectes')) return true;
+              if (w.includes('violés') || w.includes('violes')) return true;
+              if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
+              if (w.includes('concernant le planning')) return true;
+              if (w.includes('hors planning')) return true;
+              if (w.includes('DIAGNOSTIC DES CONTRAINTES')) return true;
+              if (w.includes('ANALYSE DE LA SITUATION')) return true;
+              if (w.includes('SOLUTIONS POSSIBLES')) return true;
+              if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
+              if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+              if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
+              if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+              if (w.includes('💡') || w.includes('🔧')) return true;
+              if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
+              if (/^\s*\d+\.\s+/.test(w)) return true;
+              if (/^\s*[•→]\s+/.test(w)) return true;
+              if (w.includes('===') || w.includes('---')) return true;
+              return false;
+            }).length > 0 && (
+              <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-xl p-6 border-2 border-blue-200 shadow-md">
+                <div className="flex items-center gap-3 mb-5 pb-4 border-b-2 border-blue-200">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                    <ChartBarIcon className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <p className="text-lg font-bold text-gray-900">
-                      Statistiques d'Optimisation
+                      Avertissements et Statistiques des Vœux
                     </p>
-                    <p className="text-xs text-amber-700 font-medium">
-                      {result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).length} avertissement{result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).length > 1 ? 's' : ''}
+                    <p className="text-xs text-blue-700 font-medium">
+                      {result.warnings.filter(w => {
+                        if (w.includes('⚠️')) return true;
+                        if (w.includes('❌')) return true;
+                        if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                        if (w.includes('STATISTIQUES')) return true;
+                        if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
+                        if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
+                        if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                        if (w.includes('respectés') || w.includes('respectes')) return true;
+                        if (w.includes('violés') || w.includes('violes')) return true;
+                        if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
+                        if (w.includes('concernant le planning')) return true;
+                        if (w.includes('hors planning')) return true;
+                        if (w.includes('DIAGNOSTIC DES CONTRAINTES')) return true;
+                        if (w.includes('ANALYSE DE LA SITUATION')) return true;
+                        if (w.includes('SOLUTIONS POSSIBLES')) return true;
+                        if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
+                        if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+                        if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
+                        if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                        if (w.includes('💡') || w.includes('🔧')) return true;
+                        if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
+                        if (/^\s*\d+\.\s+/.test(w)) return true;
+                        if (/^\s*[•→]\s+/.test(w)) return true;
+                        if (w.includes('===') || w.includes('---')) return true;
+                        return false;
+                      }).length} message{result.warnings.filter(w => {
+                        if (w.includes('⚠️')) return true;
+                        if (w.includes('❌')) return true;
+                        if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                        if (w.includes('STATISTIQUES')) return true;
+                        if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
+                        if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
+                        if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                        if (w.includes('respectés') || w.includes('respectes')) return true;
+                        if (w.includes('violés') || w.includes('violes')) return true;
+                        if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
+                        if (w.includes('concernant le planning')) return true;
+                        if (w.includes('hors planning')) return true;
+                        if (w.includes('DIAGNOSTIC DES CONTRAINTES')) return true;
+                        if (w.includes('ANALYSE DE LA SITUATION')) return true;
+                        if (w.includes('SOLUTIONS POSSIBLES')) return true;
+                        if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
+                        if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+                        if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
+                        if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                        if (w.includes('💡') || w.includes('🔧')) return true;
+                        if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
+                        if (/^\s*\d+\.\s+/.test(w)) return true;
+                        if (/^\s*[•→]\s+/.test(w)) return true;
+                        if (w.includes('===') || w.includes('---')) return true;
+                        return false;
+                      }).length > 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
-                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                  {result.warnings.filter(w => w.includes('⚠️') && !w.includes('Quotas non respectés:')).map((warning, idx) => (
-                    <div key={idx} className="bg-white p-4 rounded-lg border-l-4 border-amber-400 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-start gap-3">
-                        <span className="text-xl flex-shrink-0 leading-none mt-0.5">⚠️</span>
-                        <p className="text-sm text-gray-800 font-medium leading-relaxed flex-1">
-                          {warning.replace('⚠️ ', '')}
+                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                  {result.warnings.filter(w => {
+                    // Filtrage final pour l'affichage
+                    if (w.includes('⚠️')) return true;
+                    if (w.includes('❌')) return true;
+                    if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                    if (w.includes('STATISTIQUES')) return true;
+                    if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
+                    if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
+                    if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                    if (w.includes('respectés') || w.includes('respectes')) return true;
+                    if (w.includes('violés') || w.includes('violes')) return true;
+                    if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
+                    if (w.includes('concernant le planning')) return true;
+                    if (w.includes('hors planning')) return true;
+                    if (w.includes('DIAGNOSTIC DES CONTRAINTES')) return true;
+                    if (w.includes('ANALYSE DE LA SITUATION')) return true;
+                    if (w.includes('SOLUTIONS POSSIBLES')) return true;
+                    if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
+                    if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+                    // Inclure les lignes avec emojis de diagnostic
+                    if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
+                    if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                    if (w.includes('💡') || w.includes('🔧')) return true;
+                    if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
+                    // Inclure les lignes numérotées et les bullet points
+                    if (/^\s*\d+\.\s+/.test(w)) return true;
+                    if (/^\s*[•→]\s+/.test(w)) return true;
+                    // Inclure les séparateurs pour le contexte
+                    if (w.includes('===') || w.includes('---')) return true;
+                    return false;
+                  }).map((warning, idx) => {
+                    // Déterminer le type de message et le style
+                    const isError = warning.includes('❌');
+                    const isWarning = warning.includes('⚠️');
+                    const isVoeuxHeader = warning.includes('===') || warning.includes('STATISTIQUES') || warning.includes('VŒUX') || warning.includes('VOEUX');
+                    const isVoeuxSummary = warning.includes('RÉSUMÉ GLOBAL') || warning.includes('RÉSULTATS DU PLANNING') || warning.includes('LISTE COMPLÈTE');
+                    const isDiagnostic = warning.includes('DIAGNOSTIC');
+                    const isSolution = warning.includes('💡') || warning.includes('🔧') || warning.includes('SOLUTIONS POSSIBLES');
+                    
+                    // Sauter les lignes de séparation pures (que des =)
+                    if (/^[=\-\s]+$/.test(warning)) {
+                      return null;
+                    }
+                    
+                    // Headers des statistiques des vœux
+                    if (isVoeuxHeader) {
+                      return (
+                        <div key={idx} className="bg-gradient-to-r from-purple-100 to-indigo-100 p-4 rounded-lg border-l-4 border-purple-500 shadow-sm mt-4 mb-2">
+                          <p className="text-base font-bold text-gray-900 leading-relaxed">
+                            {warning.replace(/[=\-]+/g, '').trim()}
+                          </p>
+                        </div>
+                      );
+                    }
+                    
+                    // Sous-headers (résumés, résultats, diagnostic)
+                    if (isVoeuxSummary || isDiagnostic) {
+                      return (
+                        <div key={idx} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border-l-4 border-blue-400 shadow-sm mt-3 mb-2">
+                          <p className="text-sm font-bold text-gray-800 leading-relaxed">
+                            {warning.trim()}
+                          </p>
+                        </div>
+                      );
+                    }
+                    
+                    // Section Solutions (nouveau style distinct)
+                    if (isSolution) {
+                      return (
+                        <div key={idx} className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border-l-4 border-green-500 shadow-md mt-3 mb-2">
+                          <div className="flex items-start gap-3">
+                            <span className="text-2xl flex-shrink-0 leading-none">{warning.includes('💡') ? '💡' : '🔧'}</span>
+                            <p className="text-sm font-bold text-gray-900 leading-relaxed flex-1">
+                              {warning.replace('💡', '').replace('🔧', '').replace(/[=]+/g, '').trim()}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    // Erreurs critiques (❌)
+                    if (isError) {
+                      return (
+                        <div key={idx} className="bg-red-50 p-3 rounded-lg border-l-4 border-red-500 shadow-sm hover:shadow-md transition-shadow">
+                          <div className="flex items-start gap-2">
+                            <span className="text-lg flex-shrink-0 leading-none mt-0.5">❌</span>
+                            <p className="text-sm text-red-800 font-bold leading-relaxed flex-1">
+                              {warning.replace('❌ ', '').replace('❌', '').trim()}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    // Avertissements (⚠️)
+                    if (isWarning) {
+                      return (
+                        <div key={idx} className="bg-amber-50 p-3 rounded-lg border-l-4 border-amber-400 shadow-sm hover:shadow-md transition-shadow">
+                          <div className="flex items-start gap-2">
+                            <span className="text-lg flex-shrink-0 leading-none mt-0.5">⚠️</span>
+                            <p className="text-sm text-amber-800 font-medium leading-relaxed flex-1">
+                              {warning.replace('⚠️ ', '').replace('⚠️', '').trim()}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    // Messages standards (statistiques des vœux, listes)
+                    return (
+                      <div key={idx} className="bg-white p-3 rounded-lg border-l-4 border-gray-300 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-sm text-gray-700 font-medium leading-relaxed whitespace-pre-wrap">
+                          {warning.trim()}
                         </p>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

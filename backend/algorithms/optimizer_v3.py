@@ -32,7 +32,7 @@ class SurveillanceOptimizerV3:
        - Mode adaptatif: MIN = nb_examens (1 par examen), MAX = nb_examens × min_surveillants_par_examen
 
     RÈGLES DE PRÉFÉRENCE (Contraintes souples - SOFT):
-    1. Préférence pour vœux de surveillance (vœux = créneaux où l'enseignant VEUT surveiller)
+    1. Respect des vœux de NON-disponibilité (vœux = créneaux où l'enseignant NE VEUT PAS surveiller)
     2. Équilibre temporel (éviter toujours premiers/derniers créneaux)
     3. Équilibre global entre enseignants
 
@@ -41,7 +41,7 @@ class SurveillanceOptimizerV3:
     2. Nombre d'enseignants par séance (exact en mode normal, flexible en mode adaptatif)
     3. ÉGALITÉ STRICTE par grade (OBLIGATOIRE - tous les enseignants du même grade font le même nombre)
     4. Quota maximum strict par grade (ne jamais dépasser)
-    5. PRÉFÉRENCE pour vœux (pas obligatoire, mais bonus dans fonction objectif)
+    5. ÉVITER les vœux de NON-disponibilité (pénalité si affectation sur un créneau non-souhaité)
     6. Équilibre global
     """
 
@@ -219,19 +219,19 @@ class SurveillanceOptimizerV3:
         )
         print(f"      ✓ Contrainte d'égalité stricte appliquée pour tous les grades")
 
-        # CONTRAINTE 4: Préférence pour les vœux (PRIORITÉ 4)
+        # CONTRAINTE 4: Éviter les vœux de NON-disponibilité (PRIORITÉ 4)
         preferences_voeux = {}
         if respecter_voeux and list_voeux:
             print(
-                "   → Contrainte 4: Préférence pour les enseignants avec vœux de disponibilité"
+                "   → Contrainte 4: Prise en compte des vœux de NON-disponibilité"
             )
             preferences_voeux = self._contrainte_voeux(
                 list_voeux, seances, enseignants, affectations_vars
             )
             nb_avec_voeu = len(preferences_voeux.get("avec_voeu", []))
             nb_sans_voeu = len(preferences_voeux.get("sans_voeu", []))
-            print(f"      ✓ {nb_avec_voeu} combinaisons avec vœu (prioritaires)")
-            print(f"      ✓ {nb_sans_voeu} combinaisons sans vœu (secondaires)")
+            print(f"      ✓ {nb_avec_voeu} combinaisons à ÉVITER (vœux de non-disponibilité)")
+            print(f"      ✓ {nb_sans_voeu} combinaisons sans contrainte de vœu")
         else:
             print("   → Contrainte 4: Vœux désactivés")
 
@@ -298,7 +298,7 @@ class SurveillanceOptimizerV3:
                 f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
             )
             print(f"         • Favoriser les séances regroupées (10% - optimisé)")
-            print(f"         • Favoriser les vœux de surveillance (10%)")
+            print(f"         • ÉVITER les vœux de non-disponibilité (10% - pénalité)")
         else:
             print(f"      ✓ Fonction objectif configurée:")
             print(f"         • Maximiser l'utilisation des quotas (40%)")
@@ -306,7 +306,7 @@ class SurveillanceOptimizerV3:
             print(
                 f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
             )
-            print(f"         • Favoriser les vœux de surveillance (10%)")
+            print(f"         • ÉVITER les vœux de non-disponibilité (10% - pénalité)")
 
         # ===== PHASE 8: RÉSOLUTION =====
         print("\n⚡ Phase 8: Résolution du problème...")
@@ -356,28 +356,19 @@ class SurveillanceOptimizerV3:
             status_text = "RÉALISABLE"
         else:
             print("   ❌ Aucune solution trouvée")
-            print(
-                "\n🔍 Démarrage du diagnostic pour identifier la contrainte problématique..."
-            )
-
-            # Lancer le diagnostic progressif
-            diagnostic_result = self._diagnostiquer_echec(
-                enseignants,
-                examens,
-                seances,
-                responsables_examens,
-                min_surveillants_par_examen,
-                allow_fallback,
-                list_voeux,
-                respecter_voeux,
-            )
-
+            
             self.warnings.append(
                 "❌ Impossible de trouver une solution avec TOUTES les contraintes"
             )
-            self.warnings.append("\n📊 DIAGNOSTIC DES CONTRAINTES:")
-            self.warnings.extend(diagnostic_result)
-
+            self.warnings.append("=== 💡 SOLUTIONS POSSIBLES ===")
+            self.warnings.append("� Suggestions pour résoudre le problème:")
+            self.warnings.append("   • Vérifier la configuration des grades (quotas, nombre d'enseignants disponibles)")
+            self.warnings.append(f"   • Augmenter le temps de résolution (actuellement: {max_time_in_seconds}s)")
+            self.warnings.append(f"   • Réduire le nombre de surveillants par examen (actuellement: {min_surveillants_par_examen})")
+            self.warnings.append("   • Augmenter le taux de tolérance pour l'équilibre entre séances")
+            self.warnings.append(f"   • Activer le mode fallback (actuellement: {'activé' if allow_fallback else 'désactivé'})")
+            self.warnings.append("   • Vérifier que tous les enseignants participants sont bien configurés (participe_surveillance=True)")
+            self.warnings.append("===================================")
             return (
                 False,
                 0,
@@ -398,6 +389,15 @@ class SurveillanceOptimizerV3:
         # Vérifications finales
         self._verifier_couverture_seances(seances, besoins_par_seance)
         self._generer_statistiques(enseignants, seances, affectations_vars)
+        
+        # Statistiques sur les vœux de non-disponibilité
+        if respecter_voeux and preferences_voeux and preferences_voeux.get("avec_voeu"):
+            self._generer_statistiques_voeux(
+                affectations_vars, 
+                preferences_voeux, 
+                enseignants,
+                len(list_voeux)
+            )
 
         print("\n" + "=" * 80)
         print(
@@ -474,10 +474,6 @@ class SurveillanceOptimizerV3:
                                 if hasattr(responsable_obj, "prenom")
                                 else responsable_obj.nom
                             )
-                            self.warnings.append(
-                                f"❌ Responsable {nom_complet} ({code_smartex}) non trouvable pour la séance "
-                                f"du {date_exam_str} à {heure_exam_str} - Salle: {salle_exam} (examen ID: {examen.id})"
-                            )
                     else:
                         # Si l'enseignant n'est pas dans la liste des disponibles, chercher dans la BDD
                         code_smartex = (
@@ -507,20 +503,10 @@ class SurveillanceOptimizerV3:
                                     if responsable_bdd.code_smartex
                                     else code_smartex
                                 )
-                                self.warnings.append(
-                                    f"❌ Responsable {nom_complet} ({code_smartex}) non disponible (participe_surveillance=False) "
-                                    f"pour l'examen du {date_exam_str} à {heure_exam_str} - Salle: {salle_exam} (examen ID: {examen.id})"
-                                )
                             else:
-                                self.warnings.append(
-                                    f"❌ Responsable {code_smartex} (ID: {responsable_id}) introuvable dans la base de données "
-                                    f"pour l'examen du {date_exam_str} à {heure_exam_str} - Salle: {salle_exam} (examen ID: {examen.id})"
-                                )
+                                pass
                         except Exception as e:
-                            self.warnings.append(
-                                f"❌ Responsable {code_smartex} non disponible parmi les enseignants "
-                                f"pour l'examen du {date_exam_str} à {heure_exam_str} - Salle: {salle_exam} (examen ID: {examen.id})"
-                            )
+                            pass
 
         return nb_responsables_contraints
 
@@ -573,21 +559,6 @@ class SurveillanceOptimizerV3:
         # ⚠️ MODE ADAPTATIF SEULEMENT SI allow_fallback=True
         mode_adaptatif = allow_fallback and (quotas_totaux < besoin_ideal)
 
-        # Si quotas insuffisants mais allow_fallback=False, avertissement critique
-        if not allow_fallback and quotas_totaux < besoin_ideal:
-            self.warnings.append(
-                f"❌ AVERTISSEMENT CRITIQUE: Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})"
-            )
-            self.warnings.append(
-                f"   → Mode adaptatif DÉSACTIVÉ (allow_single_surveillant=False)"
-            )
-            self.warnings.append(
-                f"   → Le solveur tentera de respecter {min_surveillants_par_examen} surveillants par examen"
-            )
-            self.warnings.append(
-                f"   → Si impossible, la génération échouera (INFEASIBLE)"
-            )
-
         if mode_adaptatif:
             # Calculer combien d'examens peuvent avoir min_surveillants_par_examen
             # et combien devront se contenter de 1 seul
@@ -597,7 +568,7 @@ class SurveillanceOptimizerV3:
             nb_examens_min_reduit = nb_total_examens - nb_examens_min_complet
 
             self.warnings.append(
-                f"⚠️ MODE ADAPTATIF ACTIVÉ (allow_single_surveillant=True): Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})"
+                f"⚠️ MODE ADAPTATIF ACTIVÉ: Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})"
             )
             self.warnings.append(
                 f"   → Adaptation: ~{nb_examens_min_complet} examens avec {min_surveillants_par_examen} surveillants, "
@@ -622,11 +593,7 @@ class SurveillanceOptimizerV3:
             if nb_requis_minimal > len(enseignants):
                 # Pas assez d'enseignants pour garantir 1 par examen
                 self.model.Add(sum(surveillants_pour_seance) >= len(enseignants))
-                self.warnings.append(
-                    f"❌ Séance {seance_key[1]} du {seance_key[0].strftime('%d/%m')}: "
-                    f"CRITIQUE - Besoin d'au moins {nb_requis_minimal} enseignants (1 par examen) "
-                    f"mais seulement {len(enseignants)} disponibles!"
-                )
+
             elif mode_adaptatif:
                 # MODE ADAPTATIF: Nombre flexible mais NE JAMAIS DÉPASSER l'idéal
                 # RÈGLE 1: Minimum strict (exactement 1 enseignant par examen)
@@ -635,25 +602,12 @@ class SurveillanceOptimizerV3:
                 # RÈGLE 2: MAXIMUM ABSOLU = nb_examens × min_surveillants_par_examen
                 # ⚠️ NE JAMAIS DÉPASSER CE MAXIMUM, même en mode adaptatif
                 self.model.Add(sum(surveillants_pour_seance) <= nb_requis_ideal)
-
-                self.infos.append(
-                    f"   • Séance {seance_key[1]} du {seance_key[0].strftime('%d/%m')}: "
-                    f"{nb_examens} examens → Min: {nb_requis_minimal} (1 par examen), "
-                    f"Max: {nb_requis_ideal} (⚠️ NE PAS DÉPASSER)"
-                )
             else:
                 # MODE NORMAL: EXACTEMENT nb_examens × min_surveillants_par_examen
                 # Pour 15 examens avec min=2 → EXACTEMENT 30 enseignants (pas plus, pas moins)
 
                 # CONTRAINTE STRICTE: EXACTEMENT nb_requis_ideal surveillants
                 self.model.Add(sum(surveillants_pour_seance) == nb_requis_ideal)
-
-                # Log pour traçabilité
-                self.infos.append(
-                    f"   • Séance {seance_key[1]} du {seance_key[0].strftime('%d/%m')}: "
-                    f"{nb_examens} examens → EXACTEMENT {nb_requis_ideal} enseignants "
-                    f"({min_surveillants_par_examen} par examen)"
-                )
 
         return besoins_par_seance
 
@@ -698,11 +652,6 @@ class SurveillanceOptimizerV3:
             )
             quota_fixe = grade_config.get("nb_surveillances", 2)
 
-            # Message informatif
-            self.infos.append(
-                f"   📌 Grade {grade_code}: ÉGALITÉ STRICTE - Tous les enseignants feront le même nombre de séances (max: {quota_fixe})"
-            )
-
             # Calculer les charges pour ce grade
             charges = []
             for enseignant in enseignants_grade:
@@ -730,28 +679,6 @@ class SurveillanceOptimizerV3:
                     for i, charge in enumerate(charges[1:], start=1):
                         # Contrainte d'égalité stricte (HARD CONSTRAINT)
                         self.model.Add(charge == charge_reference)
-
-                    self.infos.append(
-                        f"      → ✅ ÉGALITÉ STRICTE OBLIGATOIRE: {len(charges)} enseignants du grade {grade_code} feront EXACTEMENT le même nombre de séances"
-                    )
-                    
-                    # Vérification: compter les responsables de ce grade pour détecter les conflits potentiels
-                    responsables_grade = [
-                        ens_id for exam_id, ens_id in responsables_examens.items()
-                        if any(ens.id == ens_id for ens in enseignants_grade)
-                    ]
-                    
-                    if responsables_grade:
-                        nb_responsables = len(set(responsables_grade))
-                        self.infos.append(
-                            f"      → ℹ️ {nb_responsables} enseignant(s) de ce grade sont responsables d'examens"
-                        )
-                        
-                        # Avertissement si potentiel conflit
-                        if nb_responsables > 0:
-                            self.infos.append(
-                                f"      → ⚠️ ATTENTION: Les responsables devront aussi respecter l'égalité stricte"
-                            )
                     
                     # Plus besoin de calculer la dispersion car elle sera toujours 0
                     # On la conserve quand même pour compatibilité avec la fonction objectif
@@ -762,10 +689,6 @@ class SurveillanceOptimizerV3:
                         0, 0, f"dispersion_{grade_code}"
                     )
                     self.dispersions_par_grade[grade_code] = dispersion_grade
-                else:
-                    self.infos.append(
-                        f"      → ℹ️ Un seul enseignant du grade {grade_code} (égalité non applicable)"
-                    )
 
         return charge_par_enseignant
 
@@ -777,12 +700,12 @@ class SurveillanceOptimizerV3:
         affectations_vars: Dict,
     ) -> Dict:
         """
-        CONTRAINTE 4 (PRIORITÉ 4): Préférence pour les vœux de disponibilité.
+        CONTRAINTE 4 (PRIORITÉ 4): Éviter les vœux de NON-disponibilité.
 
-        IMPORTANT: Les vœux sont des PRÉFÉRENCES de surveillance (créneaux préférés).
-        - Un vœu signifie "Je VEUX surveiller à ce créneau"
-        - Les enseignants avec vœux pour un créneau sont PRIORITAIRES
-        - Les enseignants sans vœux PEUVENT quand même être affectés si nécessaire
+        IMPORTANT: Les vœux sont des créneaux où l'enseignant NE SOUHAITE PAS surveiller.
+        - Un vœu signifie "Je NE VEUX PAS surveiller à ce créneau"
+        - Les enseignants avec vœux pour un créneau doivent être ÉVITÉS pour ce créneau
+        - Si impossible d'éviter (manque d'enseignants), l'affectation reste possible mais pénalisée
 
         Args:
             list_voeux: Liste de dictionnaires avec les attributs:
@@ -792,10 +715,10 @@ class SurveillanceOptimizerV3:
                 - seance: Code séance (S1, S2, S3, S4)
                 - heure: Heure de la séance
 
-        Retourne un dictionnaire pour calculer les bonus dans la fonction objectif.
+        Retourne un dictionnaire pour calculer les pénalités dans la fonction objectif.
         """
         preferences = {
-            "avec_voeu": [],  # (seance_key, enseignant_id) avec vœu → BONUS
+            "avec_voeu": [],  # (seance_key, enseignant_id) avec vœu de NON-disponibilité → PÉNALITÉ
             "sans_voeu": [],  # (seance_key, enseignant_id) sans vœu → NEUTRE
         }
 
@@ -803,24 +726,6 @@ class SurveillanceOptimizerV3:
         code_to_id = {
             ens.code_smartex: ens.id for ens in enseignants if ens.code_smartex
         }
-
-        # DEBUG: Afficher les vœux AVANT traitement
-        self.infos.append(f"\n🔍 DEBUG VOEUX (AVANT TRAITEMENT):")
-        self.infos.append(f"   • Nombre total de vœux: {len(list_voeux)}")
-        self.infos.append(
-            f"   • Nombre d'enseignants avec code_smartex: {len(code_to_id)}"
-        )
-        
-        if list_voeux:
-            self.infos.append(f"   • Exemple vœux (5 premiers):")
-            for i, voeu_dict in enumerate(list_voeux[:5]):
-                code_smartex = voeu_dict.get("id")
-                date_voeu = voeu_dict.get("date_voeu")
-                seance_val = voeu_dict.get("seance")
-                ens_id = code_to_id.get(code_smartex, "NON TROUVÉ")
-                self.infos.append(
-                    f"      - code={code_smartex}, nom={voeu_dict.get('nom')}, date={date_voeu}, seance={seance_val}, ens_id={ens_id}"
-                )
 
         # Construire un set de tuples (enseignant_id, date_voeu, seance) pour recherche rapide
         voeux_set = set()
@@ -851,19 +756,6 @@ class SurveillanceOptimizerV3:
             else:
                 voeux_rejetes.append((voeu_dict, raison_rejet))
 
-        # DEBUG: Afficher les vœux APRÈS traitement
-        self.infos.append(f"\n🔍 DEBUG VOEUX (APRÈS TRAITEMENT):")
-        self.infos.append(f"   • Voeux_set créé: {len(voeux_set)} entrées")
-        self.infos.append(f"   • Voeux_set (5 premiers): {list(voeux_set)[:5]}")
-        self.infos.append(f"   • Voeux rejetés: {len(voeux_rejetes)}")
-        
-        if voeux_rejetes:
-            self.infos.append(f"   • Exemples de rejets (5 premiers):")
-            for voeu_dict, raisons in voeux_rejetes[:5]:
-                self.infos.append(
-                    f"      - {voeu_dict.get('id')} / date={voeu_dict.get('date_voeu')} / seance={voeu_dict.get('seance')} → Raisons: {', '.join(raisons)}"
-                )
-
         # Pour chaque combinaison (séance, enseignant), vérifier si un vœu existe
         for seance_key in seances.keys():
             date_exam, seance_code, semestre, session, jour_index = seance_key
@@ -871,14 +763,15 @@ class SurveillanceOptimizerV3:
             seance_normalized = seance_code.upper().strip()
             
             for enseignant in enseignants:
-                # Vérifier si l'enseignant a un vœu pour cette date et cette séance
+                # Vérifier si l'enseignant a un vœu de NON-disponibilité pour cette date et cette séance
                 lookup_key = (enseignant.id, date_exam, seance_normalized)
                 
                 if lookup_key in voeux_set:
-                    # BONUS: Enseignant a exprimé un vœu pour ce créneau
+                    # PÉNALITÉ: Enseignant a exprimé un vœu de NON-disponibilité pour ce créneau
+                    # Il faut ÉVITER de l'affecter ici (mais c'est possible si nécessaire)
                     preferences["avec_voeu"].append((seance_key, enseignant.id))
                 else:
-                    # NEUTRE: Pas de vœu pour ce créneau (mais peut être affecté)
+                    # NEUTRE: Pas de vœu de non-disponibilité pour ce créneau (affectation sans pénalité)
                     preferences["sans_voeu"].append((seance_key, enseignant.id))
 
         return preferences
@@ -1058,9 +951,6 @@ class SurveillanceOptimizerV3:
                 self.model.Add(a_premiere + a_derniere <= 1 + sum(a_intermediaire))
                 nb_contraintes_ajoutees += 1
 
-        self.infos.append(
-            f"      → {nb_contraintes_ajoutees} contraintes d'interdiction 1ère+dernière isolées appliquées"
-        )
 
     def _contrainte_seances_consecutives(
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
@@ -1173,423 +1063,10 @@ class SurveillanceOptimizerV3:
             )
             self.model.Add(score_regroupement == sum(bonus_total))
 
-            self.infos.append(
-                f"   📊 Regroupement par jour: {len(bonus_total)} contributions calculées "
-                f"({nb_enseignants} enseignants × {nb_jours} jours)"
-            )
-
         return score_regroupement
 
-    # ========== DIAGNOSTIC D'ÉCHEC ==========
 
-    def _diagnostiquer_echec(
-        self,
-        enseignants: List[Enseignant],
-        examens: List[Examen],
-        seances: Dict,
-        responsables_examens: Dict,
-        min_surveillants_par_examen: int,
-        allow_fallback: bool,
-        list_voeux: List[Dict],
-        respecter_voeux: bool,
-    ) -> List[str]:
-        """
-        Diagnostic progressif pour identifier quelle contrainte empêche de trouver une solution.
-        Teste les contraintes une par une en ordre de priorité.
 
-        Returns:
-            Liste de messages de diagnostic avec recommandations
-        """
-        messages = []
-
-        print("\n" + "=" * 80)
-        print("🔍 DIAGNOSTIC PROGRESSIF DES CONTRAINTES")
-        print("=" * 80)
-
-        # Test 1: Modèle vide (toujours faisable)
-        print("\n[TEST 1/5] Modèle vide (sans contraintes)...")
-        test_model_1 = cp_model.CpModel()
-        test_solver_1 = cp_model.CpSolver()
-        test_solver_1.parameters.max_time_in_seconds = 10.0
-
-        affectations_test = {}
-        for seance_key in seances.keys():
-            for enseignant in enseignants:
-                var_name = f"test1_{seance_key}_{enseignant.id}"
-                affectations_test[(seance_key, enseignant.id)] = (
-                    test_model_1.NewBoolVar(var_name)
-                )
-
-        status_1 = test_solver_1.Solve(test_model_1)
-        if status_1 in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            print("   ✅ Modèle de base OK (variables créées correctement)")
-            messages.append("✅ [TEST 1/5] Modèle de base: OK")
-        else:
-            print("   ❌ Problème avec le modèle de base")
-            messages.append(
-                "❌ [TEST 1/5] Modèle de base: ÉCHEC (problème de configuration)"
-            )
-            return messages
-
-        # Test 2: Avec contrainte des responsables uniquement
-        print("\n[TEST 2/5] Contrainte 1: Responsables d'examens...")
-        test_model_2 = cp_model.CpModel()
-        test_solver_2 = cp_model.CpSolver()
-        test_solver_2.parameters.max_time_in_seconds = 10.0
-
-        affectations_test_2 = {}
-        for seance_key in seances.keys():
-            for enseignant in enseignants:
-                var_name = f"test2_{seance_key}_{enseignant.id}"
-                affectations_test_2[(seance_key, enseignant.id)] = (
-                    test_model_2.NewBoolVar(var_name)
-                )
-
-        # Appliquer contrainte responsables
-        nb_resp = 0
-        for seance_key, examens_seance in seances.items():
-            for examen in examens_seance:
-                if examen.id in responsables_examens:
-                    responsable_id = responsables_examens[examen.id]
-                    if any(ens.id == responsable_id for ens in enseignants):
-                        var = affectations_test_2.get((seance_key, responsable_id))
-                        if var is not None:
-                            test_model_2.Add(var == 1)
-                            nb_resp += 1
-
-        status_2 = test_solver_2.Solve(test_model_2)
-        if status_2 in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            print(f"   ✅ Contrainte responsables OK ({nb_resp} responsables)")
-            messages.append(
-                f"✅ [TEST 2/5] Contrainte responsables: OK ({nb_resp} responsables)"
-            )
-        else:
-            print(f"   ❌ PROBLÈME avec la contrainte responsables")
-            messages.append(f"❌ [TEST 2/5] Contrainte responsables: ÉCHEC")
-            messages.append(
-                f"   🔧 CAUSE: Un ou plusieurs responsables ne peuvent pas être affectés"
-            )
-            messages.append(f"   💡 SOLUTION:")
-            messages.append(
-                f"      • Vérifiez que tous les responsables sont disponibles (participe_surveillance=True)"
-            )
-            messages.append(
-                f"      • Vérifiez que les codes smartex des responsables sont corrects"
-            )
-            return messages
-
-        # Test 3: Avec contrainte responsables + nombre minimal
-        print("\n[TEST 3/5] Contrainte 2: Nombre minimal d'enseignants par séance...")
-        test_model_3 = cp_model.CpModel()
-        test_solver_3 = cp_model.CpSolver()
-        test_solver_3.parameters.max_time_in_seconds = 10.0
-
-        affectations_test_3 = {}
-        for seance_key in seances.keys():
-            for enseignant in enseignants:
-                var_name = f"test3_{seance_key}_{enseignant.id}"
-                affectations_test_3[(seance_key, enseignant.id)] = (
-                    test_model_3.NewBoolVar(var_name)
-                )
-
-        # Responsables
-        for seance_key, examens_seance in seances.items():
-            for examen in examens_seance:
-                if examen.id in responsables_examens:
-                    responsable_id = responsables_examens[examen.id]
-                    if any(ens.id == responsable_id for ens in enseignants):
-                        var = affectations_test_3.get((seance_key, responsable_id))
-                        if var is not None:
-                            test_model_3.Add(var == 1)
-
-        # Nombre minimal
-        capacite_insuffisante = []
-        for seance_key, examens_seance in seances.items():
-            nb_examens = len(examens_seance)
-            nb_requis = nb_examens * min_surveillants_par_examen
-
-            surveillants_pour_seance = [
-                affectations_test_3[(seance_key, ens.id)] for ens in enseignants
-            ]
-
-            if nb_requis > len(enseignants):
-                capacite_insuffisante.append((seance_key, nb_requis, len(enseignants)))
-                if allow_fallback:
-                    test_model_3.Add(
-                        sum(surveillants_pour_seance)
-                        >= min(nb_examens, len(enseignants))
-                    )
-                else:
-                    test_model_3.Add(sum(surveillants_pour_seance) >= len(enseignants))
-            else:
-                test_model_3.Add(sum(surveillants_pour_seance) >= nb_requis)
-
-        status_3 = test_solver_3.Solve(test_model_3)
-        if status_3 in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            print(f"   ✅ Contrainte nombre minimal OK")
-            messages.append(f"✅ [TEST 3/5] Contrainte nombre minimal: OK")
-            if capacite_insuffisante:
-                messages.append(
-                    f"   ⚠️ Attention: {len(capacite_insuffisante)} séance(s) avec capacité limite"
-                )
-                for seance_key, requis, dispo in capacite_insuffisante[:3]:
-                    date_str = seance_key[0].strftime("%d/%m/%Y")
-                    messages.append(
-                        f"      • {date_str} {seance_key[1]}: besoin {requis}, dispo {dispo}"
-                    )
-        else:
-            print(f"   ❌ PROBLÈME avec la contrainte nombre minimal")
-            messages.append(f"❌ [TEST 3/5] Contrainte nombre minimal: ÉCHEC")
-            messages.append(
-                f"   🔧 CAUSE: Pas assez d'enseignants pour couvrir toutes les séances"
-            )
-            messages.append(f"   💡 SOLUTION:")
-            messages.append(f"      • Ajouter plus d'enseignants disponibles")
-            messages.append(
-                f"      • Réduire min_surveillants_par_examen (actuellement: {min_surveillants_par_examen})"
-            )
-            if capacite_insuffisante:
-                messages.append(f"   📊 Séances problématiques:")
-                for seance_key, requis, dispo in capacite_insuffisante[:5]:
-                    date_str = seance_key[0].strftime("%d/%m/%Y")
-                    messages.append(
-                        f"      • {date_str} {seance_key[1]}: besoin {requis} enseignants, seulement {dispo} disponibles"
-                    )
-            return messages
-
-        # Test 4: Avec responsables + nombre minimal + quotas par grade
-        print("\n[TEST 4/5] Contrainte 3: Quotas fixes par grade...")
-        test_model_4 = cp_model.CpModel()
-        test_solver_4 = cp_model.CpSolver()
-        test_solver_4.parameters.max_time_in_seconds = 15.0
-
-        affectations_test_4 = {}
-        for seance_key in seances.keys():
-            for enseignant in enseignants:
-                var_name = f"test4_{seance_key}_{enseignant.id}"
-                affectations_test_4[(seance_key, enseignant.id)] = (
-                    test_model_4.NewBoolVar(var_name)
-                )
-
-        # Responsables
-        for seance_key, examens_seance in seances.items():
-            for examen in examens_seance:
-                if examen.id in responsables_examens:
-                    responsable_id = responsables_examens[examen.id]
-                    if any(ens.id == responsable_id for ens in enseignants):
-                        var = affectations_test_4.get((seance_key, responsable_id))
-                        if var is not None:
-                            test_model_4.Add(var == 1)
-
-        # Nombre minimal
-        for seance_key, examens_seance in seances.items():
-            nb_examens = len(examens_seance)
-            nb_requis = nb_examens * min_surveillants_par_examen
-
-            surveillants_pour_seance = [
-                affectations_test_4[(seance_key, ens.id)] for ens in enseignants
-            ]
-
-            if nb_requis > len(enseignants):
-                if allow_fallback:
-                    test_model_4.Add(
-                        sum(surveillants_pour_seance)
-                        >= min(nb_examens, len(enseignants))
-                    )
-            else:
-                test_model_4.Add(sum(surveillants_pour_seance) >= nb_requis)
-
-        # Quotas par grade (AVEC TOLÉRANCE ADAPTATIVE comme dans le vrai algorithme)
-        enseignants_par_grade = {}
-        for enseignant in enseignants:
-            if enseignant.grade_code not in enseignants_par_grade:
-                enseignants_par_grade[enseignant.grade_code] = []
-            enseignants_par_grade[enseignant.grade_code].append(enseignant)
-
-        # Calculer les responsabilités pour ajuster la tolérance (comme dans le vrai algo)
-        responsabilites_par_enseignant_test = {ens.id: 0 for ens in enseignants}
-        seances_responsabilites_test = {}
-
-        for examen_id, enseignant_id in responsables_examens.items():
-            if enseignant_id not in responsabilites_par_enseignant_test:
-                continue
-            for seance_key, examens_seance in seances.items():
-                if any(examen.id == examen_id for examen in examens_seance):
-                    if enseignant_id not in seances_responsabilites_test:
-                        seances_responsabilites_test[enseignant_id] = set()
-                    if seance_key not in seances_responsabilites_test[enseignant_id]:
-                        seances_responsabilites_test[enseignant_id].add(seance_key)
-                        responsabilites_par_enseignant_test[enseignant_id] += 1
-                    break
-
-        quotas_impossibles = []
-        demande_totale = 0
-        capacite_totale = len(seances) * len(enseignants)  # Capacité théorique maximale
-
-        for grade_code, enseignants_grade in enseignants_par_grade.items():
-            grade_config = self.grade_configs.get(grade_code, {"nb_surveillances": 2})
-            quota_fixe = grade_config.get("nb_surveillances", 2)
-
-            demande_grade = len(enseignants_grade) * quota_fixe
-            demande_totale += demande_grade
-
-            # Calculer le max de responsabilités dans ce grade (comme dans le vrai algo)
-            max_responsabilites = max(
-                [
-                    responsabilites_par_enseignant_test.get(ens.id, 0)
-                    for ens in enseignants_grade
-                ]
-            )
-
-            # Calculer la tolérance ajustée (comme dans le vrai algo)
-            if max_responsabilites > quota_fixe:
-                tolerance_ajustee = max_responsabilites - quota_fixe + 1
-            else:
-                tolerance_ajustee = 1
-
-            # Calculer les charges
-            charges = []
-            for enseignant in enseignants_grade:
-                charge = sum(
-                    [
-                        affectations_test_4[(seance_key, enseignant.id)]
-                        for seance_key in seances.keys()
-                    ]
-                )
-                charges.append(charge)
-
-            # Appliquer la contrainte d'équité avec tolérance ajustée (comme dans le vrai algo)
-            if charges:
-                max_charge = test_model_4.NewIntVar(
-                    0, len(seances), f"max_charge_test_{grade_code}"
-                )
-                min_charge = test_model_4.NewIntVar(
-                    0, len(seances), f"min_charge_test_{grade_code}"
-                )
-                test_model_4.AddMaxEquality(max_charge, charges)
-                test_model_4.AddMinEquality(min_charge, charges)
-                test_model_4.Add(max_charge - min_charge <= tolerance_ajustee)
-
-            # Vérifier si ce grade a un quota réalisable
-            if demande_grade > len(seances) * len(enseignants_grade):
-                quotas_impossibles.append(
-                    (grade_code, quota_fixe, len(enseignants_grade), demande_grade)
-                )
-
-        status_4 = test_solver_4.Solve(test_model_4)
-        if status_4 in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            print(f"   ✅ Contrainte quotas par grade OK")
-            messages.append(f"✅ [TEST 4/5] Contrainte quotas par grade: OK")
-            messages.append(
-                f"   ℹ️ Utilisation de la tolérance adaptative basée sur les responsabilités"
-            )
-        else:
-            print(f"   ❌ PROBLÈME avec les quotas par grade")
-            messages.append(f"❌ [TEST 4/5] Contrainte quotas par grade: ÉCHEC")
-            messages.append(
-                f"   🔧 CAUSE: Les quotas par grade sont incompatibles même avec tolérance adaptative"
-            )
-            messages.append(f"   💡 SOLUTION:")
-
-            # Analyser les quotas par grade
-            messages.append(f"\n   📊 Analyse des quotas:")
-            total_places_requises = 0
-            for grade_code, enseignants_grade in enseignants_par_grade.items():
-                grade_config = self.grade_configs.get(
-                    grade_code, {"nb_surveillances": 2}
-                )
-                quota_fixe = grade_config.get("nb_surveillances", 2)
-                nb_ens = len(enseignants_grade)
-                places_requises = nb_ens * quota_fixe
-                total_places_requises += places_requises
-                max_resp = max(
-                    [
-                        responsabilites_par_enseignant_test.get(ens.id, 0)
-                        for ens in enseignants_grade
-                    ]
-                )
-                tolerance = max_resp - quota_fixe + 1 if max_resp > quota_fixe else 1
-                messages.append(
-                    f"      • Grade {grade_code}: {nb_ens} ens × ~{quota_fixe} séances = ~{places_requises} (tolérance: {tolerance})"
-                )
-
-            # Calculer la demande totale vs capacité
-            capacite_seances = sum(
-                [
-                    len(examens) * min_surveillants_par_examen
-                    for examens in seances.values()
-                ]
-            )
-            messages.append(f"\n   📊 Bilan global:")
-            messages.append(
-                f"      • Demande totale: {total_places_requises} affectations (quotas des enseignants)"
-            )
-            messages.append(
-                f"      • Capacité minimale requise: {capacite_seances} affectations (couverture des examens)"
-            )
-            messages.append(f"      • Nombre de séances: {len(seances)}")
-
-            if total_places_requises < capacite_seances:
-                messages.append(
-                    f"   ❌ DÉSÉQUILIBRE: Les quotas totaux ({total_places_requises}) < capacité requise ({capacite_seances})"
-                )
-                messages.append(f"   💡 SOLUTIONS POSSIBLES:")
-                messages.append(f"      • Augmenter les quotas dans GradeConfig")
-                messages.append(f"      • Ajouter plus d'enseignants")
-                messages.append(f"      • Réduire min_surveillants_par_examen")
-            elif total_places_requises > capacite_totale:
-                messages.append(
-                    f"   ❌ SURCHARGE: Les quotas totaux ({total_places_requises}) > capacité maximale ({capacite_totale})"
-                )
-                messages.append(f"   💡 SOLUTIONS POSSIBLES:")
-                messages.append(f"      • Réduire les quotas dans GradeConfig")
-                messages.append(f"      • Ajouter plus de séances d'examens")
-            else:
-                messages.append(
-                    f"   ⚠️ Les quotas sont théoriquement compatibles mais incompatibles avec les autres contraintes"
-                )
-                messages.append(f"   💡 SOLUTIONS POSSIBLES:")
-                messages.append(
-                    f"      • Assouplir les quotas (permettre une petite variation)"
-                )
-                messages.append(
-                    f"      • Vérifier la répartition des responsables d'examens"
-                )
-                messages.append(
-                    f"      • Redistribuer les enseignants entre les grades"
-                )
-
-            return messages
-
-        # Test 5: Toutes les contraintes (pour confirmer que les vœux ne posent pas problème)
-        print("\n[TEST 5/5] Vérification finale avec toutes les contraintes...")
-        messages.append(
-            f"✅ [TEST 5/5] Toutes les contraintes de base sont compatibles"
-        )
-        messages.append(f"\n💡 CONCLUSION:")
-        messages.append(
-            f"   Les contraintes principales (responsables, couverture, quotas) sont OK."
-        )
-        if respecter_voeux and list_voeux:
-            messages.append(f"   Le problème peut venir de:")
-            messages.append(
-                f"      • La combinaison des vœux avec les autres contraintes"
-            )
-            messages.append(
-                f"      • L'optimisation de la fonction objectif (équilibre + vœux)"
-            )
-            messages.append(f"   💡 Essayez:")
-            messages.append(
-                f"      • Désactiver temporairement les vœux (respecter_voeux=False)"
-            )
-            messages.append(
-                f"      • Augmenter le temps de résolution (max_time_in_seconds)"
-            )
-        else:
-            messages.append(f"   Le problème vient de l'optimisation multi-objectif.")
-            messages.append(f"   💡 Essayez d'augmenter le temps de résolution.")
-
-        return messages
 
     # ========== FONCTION OBJECTIF ==========
 
@@ -1612,13 +1089,13 @@ class SurveillanceOptimizerV3:
         2. Équilibre global de charge (minimiser dispersion) - POIDS: 25%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
         4. Bonus regroupement (favoriser séances regroupées) - POIDS: 10%
-        5. Préférence pour enseignants avec vœux - POIDS: 10%
+        5. Pénalité pour vœux de non-disponibilité (éviter d'affecter sur créneaux non-souhaités) - POIDS: 10%
 
         Composantes du score (sans regroupement temporel):
         1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 40%
         2. Équilibre global de charge (minimiser dispersion) - POIDS: 30%
         3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
-        4. Préférence pour enseignants avec vœux - POIDS: 10%
+        4. Pénalité pour vœux de non-disponibilité (éviter d'affecter sur créneaux non-souhaités) - POIDS: 10%
         """
 
         # COMPOSANTE 1: Maximisation de l'utilisation des quotas (NOUVEAU - PRIORITAIRE)
@@ -1666,10 +1143,11 @@ class SurveillanceOptimizerV3:
                 dispersion_grades == sum(self.dispersions_par_grade.values())
             )
 
-        # COMPOSANTE 3: Bonus pour enseignants avec vœux (SECONDAIRE)
-        bonus_voeux = None
+        # COMPOSANTE 3: Pénalité pour vœux de NON-disponibilité (SECONDAIRE)
+        # On veut MINIMISER le nombre d'affectations sur des créneaux non-souhaités
+        penalite_voeux = None
         if preferences_voeux and preferences_voeux.get("avec_voeu"):
-            # Compter le nombre d'affectations avec vœu
+            # Compter le nombre d'affectations sur créneaux avec vœu de non-disponibilité
             affectations_avec_voeu = [
                 affectations_vars[(seance_key, ens_id)]
                 for seance_key, ens_id in preferences_voeux["avec_voeu"]
@@ -1677,30 +1155,30 @@ class SurveillanceOptimizerV3:
             ]
 
             if affectations_avec_voeu:
-                bonus_voeux = self.model.NewIntVar(
-                    0, len(affectations_avec_voeu), "bonus_voeux"
+                penalite_voeux = self.model.NewIntVar(
+                    0, len(affectations_avec_voeu), "penalite_voeux"
                 )
-                self.model.Add(bonus_voeux == sum(affectations_avec_voeu))
+                self.model.Add(penalite_voeux == sum(affectations_avec_voeu))
 
         # COMPOSANTE 4: Équilibre temporel (si activé)
         if equilibrer_temporel:
             self._ajouter_equilibre_temporel(affectations_vars, seances, enseignants)
 
         # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade,
-        # maximiser bonus_consecutivite (optionnel), maximiser bonus_voeux
+        # maximiser bonus_consecutivite (optionnel), MINIMISER penalite_voeux
         #
         # Avec regroupement temporel:
-        # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite + 10*bonus_voeux
+        # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite - 10*penalite_voeux
         #
         # Sans regroupement temporel:
-        # Score = 40*total_affectations - 30*dispersion - 20*dispersion_grades + 10*bonus_voeux
+        # Score = 40*total_affectations - 30*dispersion - 20*dispersion_grades - 10*penalite_voeux
         #
         # Le solveur maximise, donc on veut:
         # - Maximiser total_affectations (positif) - PRIORITÉ 1
         # - Minimiser dispersion globale (négatif) - PRIORITÉ 2
         # - Minimiser dispersion par grade (négatif) - PRIORITÉ 3
         # - Maximiser bonus regroupement (positif) - Bonus léger (si activé)
-        # - Maximiser bonus_voeux (positif) - Bonus léger
+        # - Minimiser penalite_voeux (négatif) - Pénaliser les affectations sur créneaux non-souhaités
 
         # Construction de la fonction objectif selon les composantes disponibles
         composantes = []
@@ -1724,9 +1202,9 @@ class SurveillanceOptimizerV3:
             composantes.append(bonus_consecutivite)
             poids.append(10)  # Poids 10% - Bonus secondaire (seulement si activé)
 
-        if bonus_voeux is not None:
-            composantes.append(bonus_voeux)
-            poids.append(10)  # Poids 10% - Bonus secondaire
+        if penalite_voeux is not None:
+            composantes.append(penalite_voeux)
+            poids.append(-10)  # Poids -10% - PÉNALITÉ pour vœux de non-disponibilité (minimiser)
 
         if composantes:
             # Calculer les bornes du score combiné
@@ -2096,68 +1574,122 @@ class SurveillanceOptimizerV3:
         self, enseignants: List[Enseignant], seances: Dict, affectations_vars: Dict
     ):
         """Génère des statistiques sur la solution trouvée"""
+        # Cette méthode est conservée pour compatibilité mais n'affiche plus de messages
+        # Les statistiques importantes (vœux) sont gérées par _generer_statistiques_voeux
+        pass
 
-        self.infos.append("\n📊 === STATISTIQUES DE LA SOLUTION ===")
 
-        # Charge par enseignant
-        charges = {}
-        for enseignant in enseignants:
-            charge = sum(
-                [
-                    self.solver.Value(affectations_vars[(seance_key, enseignant.id)])
-                    for seance_key in seances.keys()
-                ]
-            )
-            charges[enseignant.id] = charge
 
-        charge_min = min(charges.values()) if charges else 0
-        charge_max = max(charges.values()) if charges else 0
-        charge_moy = sum(charges.values()) / len(charges) if charges else 0
+    def _generer_statistiques_voeux(
+        self, 
+        affectations_vars: Dict, 
+        preferences_voeux: Dict,
+        enseignants: List[Enseignant],
+        nb_list_voeux: int
+    ):
+        """
+        Génère des statistiques détaillées sur le respect des vœux de non-disponibilité.
+        
+        Args:
+            affectations_vars: Variables d'affectation du modèle
+            preferences_voeux: Dictionnaire avec 'avec_voeu' (à éviter) et 'sans_voeu'
+            enseignants: Liste des enseignants
+            nb_list_voeux: Nombre total de vœux exprimés dans la base
+        """
+        print("\n🎯 Statistiques sur les vœux de non-disponibilité:")
+        
+        # Récupérer les affectations sur créneaux avec vœux de non-disponibilité
+        affectations_avec_voeu = preferences_voeux.get("avec_voeu", [])
+        
+        if not affectations_avec_voeu:
+            print("   ✅ Aucun vœu de non-disponibilité à gérer dans le planning")
+            self.infos.append("\n" + "=" * 80)
+            self.infos.append("🎯 STATISTIQUES DES VŒUX DE NON-DISPONIBILITÉ")
+            self.infos.append("=" * 80)
+            self.infos.append("")
+            self.infos.append("✅ Aucun vœu de non-disponibilité à gérer dans le planning actuel")
+            if nb_list_voeux > 0:
+                self.infos.append(f"ℹ️  Total de vœux exprimés dans la base: {nb_list_voeux}")
+                self.infos.append("ℹ️  Ces vœux concernent probablement des créneaux hors du planning actuel")
+            self.infos.append("")
+            self.infos.append("=" * 80)
+            return
+        
+        # Compter le nombre total de vœux concernant le planning
+        nb_total_voeux_planning = len(affectations_avec_voeu)
+        
+        # Compter combien de vœux ont été violés (enseignant affecté sur créneau non-souhaité)
+        nb_voeux_violes = 0
+        nb_voeux_respectes = 0
+        
+        voeux_violes_details = []
+        
+        for seance_key, enseignant_id in affectations_avec_voeu:
+            var = affectations_vars.get((seance_key, enseignant_id))
+            if var is not None:
+                if self.solver.Value(var) == 1:
+                    # L'enseignant a été affecté sur un créneau qu'il ne souhaitait pas
+                    nb_voeux_violes += 1
+                    
+                    # Trouver les infos de l'enseignant
+                    enseignant = next((e for e in enseignants if e.id == enseignant_id), None)
+                    if enseignant:
+                        date_exam, seance_code, semestre, session, jour_index = seance_key
+                        voeux_violes_details.append({
+                            'enseignant': f"{enseignant.nom} {enseignant.prenom}",
+                            'code': enseignant.code_smartex,
+                            'date': date_exam.strftime('%d/%m/%Y'),
+                            'seance': seance_code,
+                            'semestre': semestre,
+                            'session': session,
+                            'jour': jour_index
+                        })
+                else:
+                    # Le vœu a été respecté (enseignant non affecté sur ce créneau)
+                    nb_voeux_respectes += 1
+        
+        # Calcul des vœux hors planning : total des vœux exprimés - vœux matchés dans le planning
+        nb_voeux_hors_planning = nb_list_voeux - nb_total_voeux_planning
 
-        self.infos.append(f"   • Charge minimale: {charge_min} séances")
-        self.infos.append(f"   • Charge maximale: {charge_max} séances")
-        self.infos.append(f"   • Charge moyenne: {charge_moy:.2f} séances")
-        self.infos.append(f"   • Dispersion: {charge_max - charge_min} séances")
-
-        # Répartition par grade
-        self.infos.append("\n   📋 Répartition par grade:")
-        grades_stats = {}
-
-        for enseignant in enseignants:
-            grade = enseignant.grade_code
-            charge = charges[enseignant.id]
-
-            if grade not in grades_stats:
-                grades_stats[grade] = []
-            grades_stats[grade].append(charge)
-
-        for grade, charges_grade in sorted(grades_stats.items()):
-            moy_grade = sum(charges_grade) / len(charges_grade)
-            config = self.grade_configs.get(grade, {})
-            quota_fixe = config.get("nb_surveillances", "N/A")
-
-            self.infos.append(
-                f"      • {grade}: {len(charges_grade)} enseignants, "
-                f"moyenne {moy_grade:.1f} séances (quota fixe: {quota_fixe})"
-            )
-
-        # Vérification du respect du quota fixe
-        self.infos.append("\n   ⚖️ Vérification des quotas:")
-        quotas_non_respectes = []
-
-        for enseignant in enseignants:
-            charge = charges[enseignant.id]
-            config = self.grade_configs.get(enseignant.grade_code, {})
-            quota_fixe = config.get("nb_surveillances", 0)
-
-            if charge != quota_fixe:
-                quotas_non_respectes.append(
-                    f"❌ {enseignant.nom}: {charge} séances (quota fixe={quota_fixe})"
+        nb_voeux_respectes=nb_voeux_respectes+nb_voeux_hors_planning
+        # Calculer les pourcentages
+        pourcentage_respectes = (nb_voeux_respectes / nb_list_voeux * 100) if nb_list_voeux > 0 else 100
+        pourcentage_violes = (nb_voeux_violes / nb_list_voeux * 100) if nb_list_voeux > 0 else 0
+        
+        # Affichage console simplifié
+        print(f"   ✅ Vœux respectés: {nb_voeux_respectes} ({pourcentage_respectes:.1f}%)")
+        print(f"   ⚠️ Vœux violés: {nb_voeux_violes} ({pourcentage_violes:.1f}%)")
+        
+        # Affichage détaillé pour l'interface (self.infos)
+        self.infos.append("\n" + "=" * 80)
+        self.infos.append("🎯 STATISTIQUES DES VŒUX DE NON-DISPONIBILITÉ")
+        self.infos.append("=" * 80)
+        self.infos.append("")
+        
+     
+        
+        # Résultats avec emoji et couleurs
+        self.infos.append("📈 RÉSULTATS:")
+        self.infos.append(f"   ✅ Vœux respectés: {nb_voeux_respectes} ({pourcentage_respectes:.1f}%)")
+        self.infos.append(f"   ⚠️ Vœux violés: {nb_voeux_violes} ({pourcentage_violes:.1f}%)")
+        self.infos.append("")
+        
+        # Si des vœux ont été violés, afficher TOUS les détails
+        if nb_voeux_violes > 0:
+            self.infos.append("-" * 80)
+            self.infos.append(f"⚠️ LISTE COMPLÈTE DES {nb_voeux_violes} VŒUX NON RESPECTÉS:")
+            self.infos.append("-" * 80)
+            self.infos.append("")
+            self.infos.append("Ces enseignants ont été affectés sur des créneaux qu'ils ne souhaitaient pas:")
+            self.infos.append("")
+            
+            # Trier par date, puis par séance, puis par nom
+            voeux_violes_details.sort(key=lambda x: (x['date'], x['seance'], x['enseignant']))
+            
+            for i, detail in enumerate(voeux_violes_details, 1):
+                self.infos.append(
+                    f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
+                    f"Date: {detail['date']:10s} | Séance: {detail['seance']:3s} | "
+                    f"{detail['semestre']} - {detail['session']}"
                 )
-
-        if not quotas_non_respectes:
-            self.infos.append("      ✅ Tous les quotas fixes sont respectés")
-        else:
-            self.infos.append("      ⚠️ Quotas non respectés:")
-            for msg in quotas_non_respectes:
-                self.infos.append(f"         {msg}")
+            

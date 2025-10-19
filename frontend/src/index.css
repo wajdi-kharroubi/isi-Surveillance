@@ -47,6 +47,24 @@
   .table-container {
     @apply overflow-x-auto bg-white rounded-xl shadow-lg border border-gray-100;
   }
+
+  /* Custom scrollbar for messages */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-blue-400 rounded-full hover:bg-blue-500;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-blue-600;
+  }
   
   .table {
     @apply min-w-full divide-y divide-gray-200;
