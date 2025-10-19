@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
-from models import ExamenCreate, ExamenUpdate, ExamenResponse, Examen, Affectation, Enseignant
+from models import ExamenResponse, Examen, Affectation, Enseignant
 
 router = APIRouter(prefix="/examens", tags=["Examens"])
 
@@ -58,53 +58,6 @@ def lister_examens(
     return result
 
 
-@router.get("/{examen_id}", response_model=ExamenResponse)
-def obtenir_examen(examen_id: int, db: Session = Depends(get_db)):
-    """Obtient un examen par son ID"""
-    examen = db.query(Examen).filter(Examen.id == examen_id).first()
-
-    if not examen:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Examen avec l'ID {examen_id} introuvable",
-        )
-
-    # Chercher l'enseignant responsable par code_smartex
-    responsable = db.query(Enseignant).filter(
-        Enseignant.code_smartex == examen.enseignant
-    ).first()
-
-    examen_dict = {
-        "id": examen.id,
-        "dateExam": examen.dateExam,
-        "h_debut": examen.h_debut,
-        "h_fin": examen.h_fin,
-        "session": examen.session,
-        "type_ex": examen.type_ex,
-        "semestre": examen.semestre,
-        "enseignant": examen.enseignant,
-        "cod_salle": examen.cod_salle,
-        "created_at": examen.created_at,
-        "updated_at": examen.updated_at,
-        "responsable_nom": responsable.nom if responsable else None,
-        "responsable_prenom": responsable.prenom if responsable else None,
-    }
-
-    return examen_dict
-
-
-@router.post("/", response_model=ExamenResponse, status_code=status.HTTP_201_CREATED)
-def creer_examen(examen_data: ExamenCreate, db: Session = Depends(get_db)):
-    """Crée un nouvel examen"""
-
-    examen = Examen(**examen_data.model_dump())
-    db.add(examen)
-    db.commit()
-    db.refresh(examen)
-
-    return examen
-
-
 @router.delete("/vider", status_code=status.HTTP_200_OK)
 def vider_examens(db: Session = Depends(get_db)):
     """Vide complètement la table examens et les affectations associées"""
@@ -126,95 +79,4 @@ def vider_examens(db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression : {str(e)}"
         )
-
-
-@router.put("/{examen_id}", response_model=ExamenResponse)
-def modifier_examen(
-    examen_id: int, examen_data: ExamenUpdate, db: Session = Depends(get_db)
-):
-    """Modifie un examen existant"""
-    examen = db.query(Examen).filter(Examen.id == examen_id).first()
-
-    if not examen:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Examen avec l'ID {examen_id} introuvable",
-        )
-
-    # Mise à jour des champs
-    update_data = examen_data.model_dump(exclude_unset=True)
-
-    for field, value in update_data.items():
-        setattr(examen, field, value)
-
-    db.commit()
-    db.refresh(examen)
-
-    return examen
-
-
-@router.delete("/{examen_id}", status_code=status.HTTP_204_NO_CONTENT)
-def supprimer_examen(examen_id: int, db: Session = Depends(get_db)):
-    """Supprime un examen"""
-    examen = db.query(Examen).filter(Examen.id == examen_id).first()
-
-    if not examen:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Examen avec l'ID {examen_id} introuvable",
-        )
-
-    db.delete(examen)
-    db.commit()
-
-    return None
-
-
-@router.get("/search/", response_model=List[ExamenResponse])
-def rechercher_examens(
-    enseignant: str = None,
-    cod_salle: str = None,
-    type_ex: str = None,
-    db: Session = Depends(get_db),
-):
-    """Recherche des examens par critères"""
-    query = db.query(Examen)
-
-    if enseignant:
-        query = query.filter(Examen.enseignant == enseignant)
-
-    if cod_salle:
-        query = query.filter(Examen.cod_salle.ilike(f"%{cod_salle}%"))
-
-    if type_ex:
-        query = query.filter(Examen.type_ex == type_ex)
-
-    examens = query.all()
-
-    # Enrichir chaque examen avec le nom et prénom du responsable
-    result = []
-    for examen in examens:
-        # Chercher l'enseignant responsable par code_smartex
-        responsable = db.query(Enseignant).filter(
-            Enseignant.code_smartex == examen.enseignant
-        ).first()
-        
-        examen_dict = {
-            "id": examen.id,
-            "dateExam": examen.dateExam,
-            "h_debut": examen.h_debut,
-            "h_fin": examen.h_fin,
-            "session": examen.session,
-            "type_ex": examen.type_ex,
-            "semestre": examen.semestre,
-            "enseignant": examen.enseignant,
-            "cod_salle": examen.cod_salle,
-            "created_at": examen.created_at,
-            "updated_at": examen.updated_at,
-            "responsable_nom": responsable.nom if responsable else None,
-            "responsable_prenom": responsable.prenom if responsable else None,
-        }
-        result.append(examen_dict)
-
-    return result
 

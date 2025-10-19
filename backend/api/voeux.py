@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from database import get_db
 from models import (
-    VoeuCreate, VoeuUpdate, VoeuResponse,
+    VoeuResponse,
     Voeu, Affectation
 )
 
@@ -68,42 +68,6 @@ def lister_voeux(
     return result
 
 
-@router.get("/{voeu_id}", response_model=VoeuResponse)
-def obtenir_voeu(voeu_id: int, db: Session = Depends(get_db)):
-    """Obtient un vœu par son ID"""
-    voeu = db.query(Voeu).filter(Voeu.id == voeu_id).first()
-    
-    if not voeu:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Vœu avec l'ID {voeu_id} introuvable"
-        )
-    
-    return voeu
-
-
-@router.post("/", response_model=VoeuResponse, status_code=status.HTTP_201_CREATED)
-def creer_voeu(voeu_data: VoeuCreate, db: Session = Depends(get_db)):
-    """Crée un nouveau vœu"""
-    
-    # Si code_smartex_ens n'est pas fourni, le récupérer depuis l'enseignant
-    data_dict = voeu_data.model_dump()
-    
-    if not data_dict.get('code_smartex_ens'):
-        from models.models import Enseignant
-        enseignant = db.query(Enseignant).filter(Enseignant.id == voeu_data.enseignant_id).first()
-        
-        if enseignant:
-            data_dict['code_smartex_ens'] = enseignant.code_smartex
-    
-    voeu = Voeu(**data_dict)
-    db.add(voeu)
-    db.commit()
-    db.refresh(voeu)
-    
-    return voeu
-
-
 @router.delete("/vider", status_code=status.HTTP_200_OK)
 def vider_voeux(db: Session = Depends(get_db)):
     """Vide complètement la table voeux et les affectations"""
@@ -125,66 +89,4 @@ def vider_voeux(db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression : {str(e)}"
         )
-
-
-@router.put("/{voeu_id}", response_model=VoeuResponse)
-def modifier_voeu(
-    voeu_id: int,
-    voeu_data: VoeuUpdate,
-    db: Session = Depends(get_db)
-):
-    """Modifie un vœu existant"""
-    voeu = db.query(Voeu).filter(Voeu.id == voeu_id).first()
-    
-    if not voeu:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Vœu avec l'ID {voeu_id} introuvable"
-        )
-    
-    # Mise à jour des champs
-    update_data = voeu_data.model_dump(exclude_unset=True)
-    
-    for field, value in update_data.items():
-        setattr(voeu, field, value)
-    
-    db.commit()
-    db.refresh(voeu)
-    
-    return voeu
-
-
-@router.delete("/{voeu_id}", status_code=status.HTTP_204_NO_CONTENT)
-def supprimer_voeu(voeu_id: int, db: Session = Depends(get_db)):
-    """Supprime un vœu"""
-    voeu = db.query(Voeu).filter(Voeu.id == voeu_id).first()
-    
-    if not voeu:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Vœu avec l'ID {voeu_id} introuvable"
-        )
-    
-    db.delete(voeu)
-    db.commit()
-    
-    return None
-
-
-@router.get("/search/", response_model=List[VoeuResponse])
-def rechercher_voeux(
-    jour: int = None,
-    seance: str = None,
-    db: Session = Depends(get_db)
-):
-    """Recherche des vœux par critères"""
-    query = db.query(Voeu)
-    
-    if jour:
-        query = query.filter(Voeu.jour == jour)
-    
-    if seance:
-        query = query.filter(Voeu.seance == seance)
-    
-    return query.all()
 

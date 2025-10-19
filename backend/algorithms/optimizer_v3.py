@@ -54,14 +54,6 @@ class SurveillanceOptimizerV3:
         # Charger la configuration des grades depuis la BDD
         self.grade_configs = self._load_grade_configs()
 
-        # Scores pour l'optimisation
-        self.score_components = {
-            "respect_voeux": 0,
-            "equilibre_global": 0,
-            "equilibre_temporel": 0,
-            "quota_respecte": 0,
-        }
-
     def _load_grade_configs(self) -> Dict[str, Dict]:
         """
         Charge les configurations de grades avec quotas MAXIMUM stricts.
@@ -106,12 +98,12 @@ class SurveillanceOptimizerV3:
             relative_gap_limit: Gap relatif accepté pour arrêter l'optimisation (défaut: 0.01 = 1%)
 
         Returns:
-            (success, nb_affectations, temps_execution, messages, scores)
+            (success, nb_affectations, temps_execution, messages)
         """
         start_time = time.time()
 
         print("=" * 80)
-        print("🚀 DÉMARRAGE DE L'ALGORITHME D'OPTIMISATION V2.0")
+        print("🚀 DÉMARRAGE DE L'ALGORITHME D'OPTIMISATION V3.0")
         print("=" * 80)
 
         # ===== PHASE 1: RÉCUPÉRATION DES DONNÉES =====
@@ -127,27 +119,14 @@ class SurveillanceOptimizerV3:
 
         voeux = self.db.query(Voeu).all() if respecter_voeux else []
         list_voeux = []
-        # Trier et afficher les vœux (délégué à une méthode privée)
+        # Trier les vœux (délégué à une méthode privée)
         if respecter_voeux and voeux:
             try:
                 list_voeux = self._trier_et_afficher_voeux(voeux)
-                # Afficher un aperçu structuré des vœux (limité aux 10 premiers)
-                try:
-                    print(f"   ✓ Vœux structurés: {len(list_voeux)} entrées")
-                    for i, v in enumerate(list_voeux[:15], 1):
-                        date_str = v.get('date_voeu').strftime('%d/%m/%Y') if v.get('date_voeu') else 'N/A'
-                        print(
-                            f"      {i:2d}. id={v.get('id')} | nom={v.get('nom')} | date={date_str} | seance={v.get('seance')} | heure={v.get('heure')}"
-                        )
-                    if len(list_voeux) > 15:
-                        print(f"      ... (+{len(list_voeux) - 15} autres)")
-                except Exception:
-                    # Ne pas planter l'algorithme si l'affichage échoue
-                    pass
             except Exception:
-                # Ne pas échouer l'algorithme si l'affichage des vœux plante
+                # Ne pas échouer l'algorithme si le traitement des vœux plante
                 self.warnings.append(
-                    "⚠️ Impossible d'afficher les vœux triés (format inattendu)"
+                    "⚠️ Impossible de traiter les vœux (format inattendu)"
                 )
 
         print(f"   ✓ {len(enseignants)} enseignants disponibles")
@@ -157,11 +136,11 @@ class SurveillanceOptimizerV3:
         # Vérifications préliminaires
         if not enseignants:
             self.warnings.append("⚠️ Aucun enseignant disponible pour la surveillance")
-            return False, 0, 0.0, self.warnings, self.score_components
+            return False, 0, 0.0, self.warnings
 
         if not examens:
             self.warnings.append("⚠️ Aucun examen à planifier")
-            return False, 0, 0.0, self.warnings, self.score_components
+            return False, 0, 0.0, self.warnings
 
         # ===== PHASE 2: NETTOYAGE =====
         print("\n🗑️  Phase 2: Nettoyage des anciennes affectations...")
@@ -176,7 +155,7 @@ class SurveillanceOptimizerV3:
 
         if not seances:
             self.warnings.append("⚠️ Aucune séance d'examen trouvée")
-            return False, 0, 0.0, self.warnings, self.score_components
+            return False, 0, 0.0, self.warnings
 
         # Afficher les séances
         for idx, (seance_key, examens_seance) in enumerate(seances.items(), 1):
@@ -190,24 +169,6 @@ class SurveillanceOptimizerV3:
         responsables_examens = self._identifier_responsables(examens)
         print(f"   ✓ {len(responsables_examens)} examens avec responsable identifié")
 
-        # Afficher les responsables identifiés avec leurs codes smartex
-        if responsables_examens:
-            print("   📋 Détail des responsables:")
-            for examen_id, enseignant_id in list(responsables_examens.items())[
-                :20
-            ]:  # Afficher les 5 premiers
-                examen = next((ex for ex in examens if ex.id == examen_id), None)
-                enseignant = next(
-                    (ens for ens in enseignants if ens.id == enseignant_id), None
-                )
-                if examen and enseignant:
-                    print(
-                        f"      • Examen {examen_id} (Salle: {examen.cod_salle}) → Responsable: {enseignant.nom} ({enseignant.code_smartex})"
-                    )
-            if len(responsables_examens) > 20:
-                print(
-                    f"      ... et {len(responsables_examens) - 20} autre(s) responsable(s)"
-                )
 
         # ===== PHASE 5: CRÉATION DES VARIABLES DE DÉCISION =====
         print("\n🔢 Phase 5: Création des variables de décision...")
@@ -419,7 +380,6 @@ class SurveillanceOptimizerV3:
                 0,
                 time.time() - start_time,
                 self.warnings,
-                self.score_components,
             )
 
         # Sauvegarder les affectations
@@ -431,11 +391,6 @@ class SurveillanceOptimizerV3:
 
         # ===== PHASE 10: VÉRIFICATIONS ET STATISTIQUES =====
         print("\n📊 Phase 10: Vérifications et statistiques...")
-
-        # Calculer les scores
-        self._calculer_scores_solution(
-            affectations_vars, seances, enseignants, list_voeux, charge_par_enseignant
-        )
 
         # Vérifications finales
         self._verifier_couverture_seances(seances, besoins_par_seance)
@@ -453,7 +408,6 @@ class SurveillanceOptimizerV3:
             nb_affectations,
             execution_time,
             self.warnings + self.infos,
-            self.score_components,
         )
 
     # ========== CONTRAINTES ==========
@@ -1917,15 +1871,6 @@ class SurveillanceOptimizerV3:
             else:
                 return "S3"
 
-    def _extract_voeu_jour(self, voeu: Voeu):
-        """Extrait le numéro du jour depuis un objet Voeu (plusieurs attributs possibles)."""
-        if hasattr(voeu, "date_indisponible") and voeu.date_indisponible:
-            try:
-                return voeu.date_indisponible.day
-            except Exception:
-                pass
-        return getattr(voeu, "jour", None)
-
     def _seance_to_index(self, seance_val) -> int:
         """Mappe une valeur de séance (S1,S2,.., 'Matin', 'Après-midi'...) en indice pour trier."""
         if seance_val is None:
@@ -2041,10 +1986,6 @@ class SurveillanceOptimizerV3:
                 }
             )
         return result
-
-    def _get_jour_from_date(self, date_exam: date) -> int:
-        """Extrait le numéro du jour"""
-        return date_exam.day
 
     def _grouper_examens_par_seance(
         self, examens: List[Examen]
@@ -2205,219 +2146,3 @@ class SurveillanceOptimizerV3:
             self.infos.append("      ⚠️ Quotas non respectés:")
             for msg in quotas_non_respectes:
                 self.infos.append(f"         {msg}")
-
-    def _calculer_scores_solution(
-        self,
-        affectations_vars: Dict,
-        seances: Dict,
-        enseignants: List[Enseignant],
-        list_voeux: List[Dict],
-        charge_par_enseignant: Dict,
-    ):
-        """Calcule les scores de qualité de la solution"""
-
-        # Score 1: Respect des vœux (100 = tous respectés)
-        voeux_respectes = 0
-        voeux_violes = 0
-        total_voeux = 0
-        voeux_non_matches = 0
-        
-        if list_voeux:
-            # Construire un mapping code_smartex -> enseignant_id
-            code_to_id = {
-                ens.code_smartex: ens.id for ens in enseignants if ens.code_smartex
-            }
-
-            # Créer un set des dates de séances disponibles pour diagnostic
-            dates_seances_disponibles = set()
-            for seance_key in seances.keys():
-                date_exam, seance_code, semestre, session, jour_index = seance_key
-                dates_seances_disponibles.add((date_exam, seance_code.upper().strip()))
-
-            # Créer un set pour une recherche rapide O(1) avec (enseignant_id, date_voeu, seance)
-            voeux_set = set()
-            voeux_rejetes_details = []
-            
-            for voeu_dict in list_voeux:
-                code_smartex = voeu_dict.get("id")
-                date_voeu = voeu_dict.get("date_voeu")
-                seance_val = voeu_dict.get("seance")
-
-                if code_smartex and code_smartex in code_to_id and date_voeu and seance_val:
-                    enseignant_id = code_to_id[code_smartex]
-                    seance = str(seance_val).upper().strip()
-                    voeux_set.add((enseignant_id, date_voeu, seance))
-                    
-                    # Vérifier si ce vœu correspond à une séance existante
-                    if (date_voeu, seance) not in dates_seances_disponibles:
-                        voeux_rejetes_details.append({
-                            'code': code_smartex,
-                            'date': date_voeu,
-                            'seance': seance,
-                            'raison': 'Aucune séance planifiée pour cette date/séance'
-                        })
-                        voeux_non_matches += 1
-                else:
-                    raisons = []
-                    if not code_smartex:
-                        raisons.append("code_smartex vide")
-                    elif code_smartex not in code_to_id:
-                        raisons.append("code_smartex non trouvé")
-                    if not date_voeu:
-                        raisons.append("date_voeu vide")
-                    if not seance_val:
-                        raisons.append("seance vide")
-                    
-                    voeux_rejetes_details.append({
-                        'code': code_smartex or 'N/A',
-                        'date': date_voeu or 'N/A',
-                        'seance': seance_val or 'N/A',
-                        'raison': ', '.join(raisons)
-                    })
-                    voeux_non_matches += 1
-
-            for seance_key in seances.keys():
-                date_exam, seance_code, semestre, session, jour_index = seance_key
-                seance_normalized = seance_code.upper().strip()
-
-                for enseignant in enseignants:
-                    # Vérifier si cet enseignant a un vœu pour cette date et cette séance
-                    if (enseignant.id, date_exam, seance_normalized) in voeux_set:
-                        # Si affecté (value=1), c'est respecté, sinon violé
-                        if (
-                            self.solver.Value(
-                                affectations_vars[(seance_key, enseignant.id)]
-                            )
-                            == 1
-                        ):
-                            voeux_respectes += 1
-                        else:
-                            voeux_violes += 1
-
-            total_voeux = voeux_respectes + voeux_violes
-            
-            # Stocker les détails pour l'affichage
-            self.voeux_rejetes_details = voeux_rejetes_details
-            self.voeux_non_matches = voeux_non_matches
-            self.voeux_total_db = len(list_voeux)
-            
-            self.score_components["respect_voeux"] = (
-                (voeux_respectes / total_voeux * 100) if total_voeux > 0 else 100
-            )
-        else:
-            self.voeux_non_matches = 0
-            self.voeux_total_db = 0
-            self.score_components["respect_voeux"] = 100
-
-        # Score 2: Équilibre global (100 = dispersion minimale)
-        charges = list(charge_par_enseignant.values())
-        if charges:
-            charge_min_val = min([self.solver.Value(c) for c in charges])
-            charge_max_val = max([self.solver.Value(c) for c in charges])
-            dispersion = charge_max_val - charge_min_val
-            max_dispersion = len(seances)
-
-            self.score_components["equilibre_global"] = max(
-                0, 100 - (dispersion / max_dispersion * 100)
-            )
-        else:
-            self.score_components["equilibre_global"] = 100
-
-        # Score 3: Quota fixe respecté (100 = tous les quotas égaux respectés)
-        quotas_ok = 0
-        quotas_total = 0
-
-        for enseignant in enseignants:
-            config = self.grade_configs.get(enseignant.grade_code, {})
-            quota_fixe = config.get("nb_surveillances", 0)
-            charge = self.solver.Value(charge_par_enseignant[enseignant.id])
-
-            quotas_total += 1
-            if charge == quota_fixe:
-                quotas_ok += 1
-
-        self.score_components["quota_respecte"] = (
-            (quotas_ok / quotas_total * 100) if quotas_total > 0 else 100
-        )
-
-        # Score global
-        score_global = (
-            self.score_components["respect_voeux"] * 0.3
-            + self.score_components["equilibre_global"] * 0.4
-            + self.score_components["quota_respecte"] * 0.3
-        )
-
-        self.score_components["score_global"] = score_global
-
-        # Affichage console
-        print("\n" + "=" * 80)
-        print("🎯 RÉSULTATS DE L'OPTIMISATION")
-        print("=" * 80)
-        
-        if list_voeux:
-            print(f"\n📊 ANALYSE DES VŒUX:")
-            print(f"   • Total vœux en base de données: {self.voeux_total_db}")
-            print(f"   • Vœux matchant des séances planifiées: {total_voeux}")
-            print(f"   • Vœux sans séance correspondante: {self.voeux_non_matches}")
-            print(f"\n   📈 PARMI LES VŒUX VALIDES ({total_voeux}):")
-            print(f"      • Vœux respectés (enseignant affecté): {voeux_respectes}")
-            print(f"      • Vœux non respectés (enseignant non affecté): {voeux_violes}")
-            print(f"      • Pourcentage de respect: {self.score_components['respect_voeux']:.1f}%")
-            
-            if self.voeux_non_matches > 0:
-                print(f"\n   ⚠️ VŒUX NON MATCHÉS ({self.voeux_non_matches}):")
-                # Grouper par raison
-                raisons_count = {}
-                dates_non_planifiees_dict = {}  # {(date, seance): [codes enseignants]}
-                voeux_autres_raisons = []
-                
-                for detail in self.voeux_rejetes_details:
-                    raison = detail['raison']
-                    raisons_count[raison] = raisons_count.get(raison, 0) + 1
-                    
-                    if 'Aucune séance planifiée' in raison:
-                        date_str = detail['date'].strftime('%d/%m/%Y') if hasattr(detail['date'], 'strftime') else str(detail['date'])
-                        key = (date_str, detail['seance'])
-                        if key not in dates_non_planifiees_dict:
-                            dates_non_planifiees_dict[key] = []
-                        dates_non_planifiees_dict[key].append(detail['code'])
-                    else:
-                        voeux_autres_raisons.append(detail)
-                
-                print(f"      • Répartition par type:")
-                for raison, count in sorted(raisons_count.items(), key=lambda x: x[1], reverse=True):
-                    print(f"         - {raison}: {count} vœux")
-                
-                if dates_non_planifiees_dict:
-                    print(f"\n      • Liste complète des vœux sans séance correspondante ({len(dates_non_planifiees_dict)} dates/séances différentes):")
-                    for (date_str, seance), codes in sorted(dates_non_planifiees_dict.items()):
-                        print(f"         - {date_str} {seance}: {len(codes)} enseignant(s) ({', '.join(codes[:5])}{', ...' if len(codes) > 5 else ''})")
-                
-                if voeux_autres_raisons:
-                    print(f"\n      • Autres vœux rejetés ({len(voeux_autres_raisons)}):")
-                    for detail in voeux_autres_raisons[:20]:  # Limiter à 20 pour éviter un affichage trop long
-                        print(f"         - Code: {detail['code']}, Date: {detail['date']}, Séance: {detail['seance']} → {detail['raison']}")
-                    if len(voeux_autres_raisons) > 20:
-                        print(f"         ... et {len(voeux_autres_raisons) - 20} autres vœux rejetés")
-        else:
-            print(f"\n📊 RESPECT DES VŒUX:")
-            print(f"   • Aucun vœu fourni")
-        
-        print(f"\n🎯 SCORES:")
-        print(f"   • Respect des vœux: {self.score_components['respect_voeux']:.1f}%")
-        print(f"   • Équilibre global: {self.score_components['equilibre_global']:.1f}%")
-        print(f"   • Quotas respectés: {self.score_components['quota_respecte']:.1f}%")
-        print(f"\n   ⭐ SCORE GLOBAL: {score_global:.1f}%")
-        print("=" * 80 + "\n")
-
-        self.infos.append("\n🎯 === SCORES D'OPTIMISATION ===")
-        self.infos.append(
-            f"   • Respect des vœux: {self.score_components['respect_voeux']:.1f}%"
-        )
-        self.infos.append(
-            f"   • Équilibre global: {self.score_components['equilibre_global']:.1f}%"
-        )
-        self.infos.append(
-            f"   • Quotas respectés: {self.score_components['quota_respecte']:.1f}%"
-        )
-        self.infos.append(f"   • SCORE GLOBAL: {score_global:.1f}%")

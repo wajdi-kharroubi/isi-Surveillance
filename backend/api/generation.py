@@ -3,215 +3,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import GenerationRequest, GenerationResponse
 from models.models import Affectation, Examen
-from algorithms.optimizer_v1 import SurveillanceOptimizer
-from algorithms.optimizer_v2 import SurveillanceOptimizerV2
 from algorithms.optimizer_v3 import SurveillanceOptimizerV3
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/generation", tags=["Génération"])
-
-
-@router.post("/generer-v1", response_model=GenerationResponse)
-def generer_planning_v1(request: GenerationRequest, db: Session = Depends(get_db)):
-    """
-    Génère automatiquement le planning avec l'algorithme V1 (Charge égale par grade).
-
-    ALGORITHME V1 - QUOTA FIXE PAR GRADE:
-    ====================================
-
-    Caractéristiques:
-    - Quotas FIXES par grade (tous les enseignants d'un grade font le même nombre de séances)
-    - Groupe les examens par séance (date + créneau horaire + semestre + session)
-    - Les enseignants affectés couvrent TOUS les examens de la séance
-
-    Prend en compte:
-    - Les contraintes de disponibilité (vœux)
-    - Le nombre minimum de surveillants par séance
-    - L'équité stricte selon les grades (quota fixe)
-    - Équilibrage de la charge entre enseignants
-
-    Paramètres:
-        - min_surveillants_par_salle: Nombre minimum de surveillants par examen (défaut: 2)
-        - allow_single_surveillant: Autoriser le fallback à 1 surveillant si nécessaire
-    """
-    try:
-        optimizer = SurveillanceOptimizer(db)
-
-        success, nb_affectations, temps_exec, messages, scores = (
-            optimizer.generer_planning_optimise(
-                min_surveillants_par_examen=request.min_surveillants_par_salle,
-                allow_fallback=request.allow_single_surveillant,
-                respecter_voeux=True,
-                equilibrer_temporel=True,
-            )
-        )
-
-        if success:
-            # Calculer le nombre de surveillances uniques (comme dans le dashboard)
-            from sqlalchemy import func, distinct
-
-            nb_surveillances_uniques = (
-                db.query(
-                    func.count(
-                        distinct(
-                            func.concat(
-                                Affectation.enseignant_id,
-                                "-",
-                                func.date(Examen.dateExam),
-                                "-",
-                                Examen.h_debut,
-                            )
-                        )
-                    )
-                )
-                .join(Examen, Affectation.examen_id == Examen.id)
-                .scalar()
-                or 0
-            )
-
-            # Ajouter les scores aux messages
-            messages_avec_scores = messages + [
-                "\n📊 === SCORES V1 (Quota Fixe) ===",
-                f"   • Score global: {scores.get('score_global', 0):.1f}%",
-                f"   • Respect des vœux: {scores.get('respect_voeux', 0):.1f}%",
-                f"   • Équilibre global: {scores.get('equilibre_global', 0):.1f}%",
-                f"   • Quotas respectés: {scores.get('quota_respecte', 0):.1f}%",
-            ]
-
-            return GenerationResponse(
-                success=True,
-                message=f"✅ Planning V1 généré avec succès en {temps_exec:.2f}s - {nb_surveillances_uniques} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
-                nb_affectations=nb_surveillances_uniques,
-                temps_generation=temps_exec,
-                warnings=messages_avec_scores,
-            )
-        else:
-            return GenerationResponse(
-                success=False,
-                message="❌ Échec de la génération du planning V1",
-                nb_affectations=0,
-                temps_generation=temps_exec,
-                warnings=messages,
-            )
-
-    except Exception as e:
-        logger.error(f"Erreur lors de la génération V1: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
-
-
-@router.post("/generer-v2", response_model=GenerationResponse)
-def generer_planning_v2(request: GenerationRequest, db: Session = Depends(get_db)):
-    """
-    Génère automatiquement le planning avec l'algorithme d'optimisation V2.0 avancé.
-
-    NOUVELLES FONCTIONNALITÉS V2:
-    =============================
-
-    1. RÈGLES DE BASE (Contraintes fortes):
-       • Charge obligatoire par grade (quota minimal)
-       • Responsable d'examen DOIT être présent
-       • Non-conflit horaire garanti
-       • Nombre minimal d'enseignants par créneau
-       • Fallback: Au moins 1 enseignant par examen
-
-    2. RÈGLES DE PRÉFÉRENCE (Flexibles):
-       • Vœux et disponibilités des enseignants
-       • Équilibre temporel (éviter toujours mêmes créneaux)
-       • Équilibre global de charge
-
-    3. PRIORITÉ DES CONTRAINTES:
-       1. Présence du responsable d'examen
-       2. Nombre minimal par examen
-       3. Quota obligatoire par grade
-       4. Disponibilités et vœux
-       5. Équilibre global
-
-    4. SCORE D'OPTIMISATION:
-       • Évaluation multi-critères de la solution
-       • Maximisation de la satisfaction globale
-       • Rapport détaillé des scores
-
-    Paramètres:
-        - min_surveillants_par_salle: Nombre minimum de surveillants par examen (défaut: 2)
-        - allow_single_surveillant: Autoriser le fallback à 1 surveillant si nécessaire
-
-    Retour:
-        - success: Statut de la génération
-        - nb_affectations: Nombre total d'affectations créées
-        - temps_generation: Temps d'exécution en secondes
-        - warnings: Liste des avertissements et informations
-        - scores: Scores d'optimisation de la solution
-    """
-    try:
-        optimizer = SurveillanceOptimizerV2(db)
-
-        success, nb_affectations, temps_exec, messages, scores = (
-            optimizer.generer_planning_optimise(
-                min_surveillants_par_examen=request.min_surveillants_par_salle,
-                allow_fallback=request.allow_single_surveillant,
-                respecter_voeux=True,
-                equilibrer_temporel=True,
-            )
-        )
-
-        if success:
-            # Calculer le nombre de surveillances uniques (comme dans le dashboard)
-            from sqlalchemy import func, distinct
-
-            nb_surveillances_uniques = (
-                db.query(
-                    func.count(
-                        distinct(
-                            func.concat(
-                                Affectation.enseignant_id,
-                                "-",
-                                func.date(Examen.dateExam),
-                                "-",
-                                Examen.h_debut,
-                            )
-                        )
-                    )
-                )
-                .join(Examen, Affectation.examen_id == Examen.id)
-                .scalar()
-                or 0
-            )
-
-            # Ajouter les scores aux messages
-            messages_avec_scores = messages + [
-                "\n🎯 === SCORES D'OPTIMISATION ===",
-                f"   • Score global: {scores.get('score_global', 0):.1f}%",
-                f"   • Respect des vœux: {scores.get('respect_voeux', 0):.1f}%",
-                f"   • Équilibre global: {scores.get('equilibre_global', 0):.1f}%",
-                f"   • Quotas respectés: {scores.get('quota_respecte', 0):.1f}%",
-            ]
-
-            return GenerationResponse(
-                success=True,
-                message=f"✅ Planning V2 généré avec succès en {temps_exec:.2f}s - {nb_surveillances_uniques} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
-                nb_affectations=nb_surveillances_uniques,
-                temps_generation=temps_exec,
-                warnings=messages_avec_scores,
-            )
-        else:
-            return GenerationResponse(
-                success=False,
-                message="❌ Échec de la génération du planning V2",
-                nb_affectations=0,
-                temps_generation=temps_exec,
-                warnings=messages,
-            )
-
-    except Exception as e:
-        logger.error(f"Erreur lors de la génération V2: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 
 @router.post("/generer-v3", response_model=GenerationResponse)
@@ -241,11 +37,6 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
        4. Disponibilités et vœux (préférence)
        5. Équilibre global
 
-    4. SCORE D'OPTIMISATION:
-       • Évaluation multi-critères de la solution
-       • Maximisation de la satisfaction globale
-       • Rapport détaillé des scores
-
     Paramètres:
         - min_surveillants_par_salle: Nombre minimum de surveillants par examen (défaut: 2)
         - allow_single_surveillant: Autoriser le fallback à 1 surveillant si nécessaire
@@ -257,12 +48,11 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
         - nb_affectations: Nombre total d'affectations créées
         - temps_generation: Temps d'exécution en secondes
         - warnings: Liste des avertissements et informations
-        - scores: Scores d'optimisation de la solution
     """
     try:
         optimizer = SurveillanceOptimizerV3(db)
 
-        success, nb_affectations, temps_exec, messages, scores = (
+        success, nb_affectations, temps_exec, messages = (
             optimizer.generer_planning_optimise(
                 min_surveillants_par_examen=request.min_surveillants_par_salle,
                 allow_fallback=request.allow_single_surveillant,
@@ -297,21 +87,12 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                 or 0
             )
 
-            # Ajouter les scores aux messages
-            messages_avec_scores = messages + [
-                "\n🎯 === SCORES D'OPTIMISATION V3 ===",
-                f"   • Score global: {scores.get('score_global', 0):.1f}%",
-                f"   • Respect des vœux: {scores.get('respect_voeux', 0):.1f}%",
-                f"   • Équilibre global: {scores.get('equilibre_global', 0):.1f}%",
-                f"   • Quotas respectés: {scores.get('quota_respecte', 0):.1f}%",
-            ]
-
             return GenerationResponse(
                 success=True,
-                message=f"✅ Planning V3 généré avec succès en {temps_exec:.2f}s - {nb_surveillances_uniques} affectations créées - Score: {scores.get('score_global', 0):.1f}%",
+                message=f"✅ Planning V3 généré avec succès en {temps_exec:.2f}s - {nb_surveillances_uniques} affectations créées",
                 nb_affectations=nb_surveillances_uniques,
                 temps_generation=temps_exec,
-                warnings=messages_avec_scores,
+                warnings=messages,
             )
         else:
             return GenerationResponse(
