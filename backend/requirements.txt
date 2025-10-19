@@ -22,6 +22,10 @@ PyPDF2==3.0.1
 # Word Document Generation
 python-docx==1.1.0
 
+# Word to PDF Conversion
+docx2pdf==0.1.8
+
+
 # Optimization Algorithm - Version précompilée pour Windows
 ortools>=9.14
 numpy>=2.3

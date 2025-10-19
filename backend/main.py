@@ -75,23 +75,39 @@ def health_check():
 @app.on_event("startup")
 async def startup_event():
     """Actions au démarrage de l'application"""
-    logger.info("🚀 Démarrage de l'application...")
+    logger.info("Demarrage de l'application...")
 
     # Initialiser la base de données
     init_db()
-    logger.info("✅ Base de données initialisée")
+    logger.info("Base de donnees initialisee")
 
-    logger.info(f"📡 API disponible sur http://{HOST}:{PORT}")
-    logger.info(f"📚 Documentation sur http://{HOST}:{PORT}/api/docs")
+    logger.info(f"API disponible sur http://{HOST}:{PORT}")
+    logger.info(f"Documentation sur http://{HOST}:{PORT}/api/docs")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Actions à l'arrêt de l'application"""
-    logger.info("🛑 Arrêt de l'application...")
+    logger.info("Arret de l'application...")
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app", host=HOST, port=PORT, reload=RELOAD, log_level=LOG_LEVEL.lower()
-    )
+    import sys
+
+    # Detect if running as PyInstaller executable
+    is_frozen = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+
+    if is_frozen:
+        # Running as executable - disable Uvicorn's logging to avoid isatty() error
+        uvicorn.run(
+            app,  # Pass app directly instead of string
+            host=HOST,
+            port=PORT,
+            log_config=None,  # Disable default logging config
+            access_log=False,  # Disable access logs
+        )
+    else:
+        # Running in development - use normal logging
+        uvicorn.run(
+            "main:app", host=HOST, port=PORT, reload=RELOAD, log_level=LOG_LEVEL.lower()
+        )

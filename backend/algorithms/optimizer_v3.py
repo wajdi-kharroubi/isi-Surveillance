@@ -207,7 +207,7 @@ class SurveillanceOptimizerV3:
 
         # CONTRAINTE 2: Nombre d'enseignants par séance (PRIORITÉ 2 - OBLIGATOIRE)
         print("   → Contrainte 2: Nombre d'enseignants par séance (PRIORITÉ 2 - OBLIGATOIRE)")
-        besoins_par_seance = self._contrainte_nombre_minimal(
+        besoins_par_seance, mode_adaptatif = self._contrainte_nombre_minimal(
             seances,
             enseignants,
             affectations_vars,
@@ -294,20 +294,36 @@ class SurveillanceOptimizerV3:
             preferences_voeux,
             bonus_consecutivite,
             activer_regroupement_temporel,
+            mode_adaptatif,
         )
 
         if activer_regroupement_temporel:
             print(f"      ✓ Fonction objectif configurée (ordre de priorité):")
-            print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 40% - PÉNALITÉ")
-            print(f"         2. Minimiser la dispersion globale entre enseignants - 30%")
-            print(f"         3. Maximiser l'utilisation des quotas - 20%")
-            print(f"         4. Favoriser les séances regroupées (PRIORITÉ 7) - 10%")
+            if mode_adaptatif:
+                print(f"         MODE ADAPTATIF (quotas insuffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 40% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 20%")
+                print(f"         3. Maximiser l'utilisation des quotas - 20%")
+                print(f"         4. Favoriser les séances regroupées (PRIORITÉ 7) - 20%")
+            else:
+                print(f"         MODE NORMAL (quotas suffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 50% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 30%")
+                print(f"         3. Favoriser les séances regroupées (PRIORITÉ 7) - 20%")
+                print(f"         Note: Quotas déjà maximisés par CONTRAINTE 1 (pas d'optimisation)")
             print(f"         Note: Égalité par grade garantie par CONTRAINTE 1 (dispersion = 0)")
         else:
             print(f"      ✓ Fonction objectif configurée (ordre de priorité):")
-            print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 50% - PÉNALITÉ")
-            print(f"         2. Minimiser la dispersion globale entre enseignants - 35%")
-            print(f"         3. Maximiser l'utilisation des quotas - 15%")
+            if mode_adaptatif:
+                print(f"         MODE ADAPTATIF (quotas insuffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 50% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 30%")
+                print(f"         3. Maximiser l'utilisation des quotas - 20%")
+            else:
+                print(f"         MODE NORMAL (quotas suffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 60% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 40%")
+                print(f"         Note: Quotas déjà maximisés par CONTRAINTE 1 (pas d'optimisation)")
             print(f"         Note: Égalité par grade garantie par CONTRAINTE 1 (dispersion = 0)")
 
         # ===== PHASE 8: RÉSOLUTION =====
@@ -662,7 +678,7 @@ class SurveillanceOptimizerV3:
                 # CONTRAINTE STRICTE: EXACTEMENT nb_requis_ideal surveillants
                 self.model.Add(sum(surveillants_pour_seance) == nb_requis_ideal)
 
-        return besoins_par_seance
+        return besoins_par_seance, mode_adaptatif
 
     def _contrainte_quotas_grades(
         self,
@@ -1133,28 +1149,32 @@ class SurveillanceOptimizerV3:
         preferences_voeux: Dict = None,
         bonus_consecutivite=None,
         activer_regroupement_temporel: bool = False,
+        mode_adaptatif: bool = False,
     ) -> cp_model.IntVar:
         """
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
         
         ORDRE DES PRIORITÉS (selon les contraintes définies):
         - PRIORITÉ 1-2: ÉGALITÉ par grade + Quota maximum + Nombre d'enseignants (CONTRAINTES FORTES - garanties)
-        - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ - 50% ou 40%)
+        - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ)
         - PRIORITÉ 4: Responsables (CONTRAINTE FORTE - garantie)
         - PRIORITÉ 5: Équilibre entre séances (CONTRAINTE FORTE - garantie)
         - PRIORITÉ 6: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
-        - PRIORITÉ 7: Regroupement des séances (POIDS SECONDAIRE - 10%)
+        - PRIORITÉ 7: Regroupement des séances (POIDS SECONDAIRE)
 
-        Composantes du score (avec regroupement temporel activé):
-        1. ÉVITER vœux de non-disponibilité (PRIORITÉ 3) - POIDS: -40% (MAXIMISER le respect)
-        2. Équilibre global de charge (minimiser dispersion globale) - POIDS: -30%
-        3. Maximisation des quotas (utiliser le maximum de séances) - POIDS: +20%
-        4. Bonus regroupement (favoriser séances groupées - PRIORITÉ 7) - POIDS: +10%
-
-        Composantes du score (sans regroupement temporel):
-        1. ÉVITER vœux de non-disponibilité (PRIORITÉ 3) - POIDS: -50% (MAXIMISER le respect)
-        2. Équilibre global de charge (minimiser dispersion globale) - POIDS: -35%
-        3. Maximisation des quotas (utiliser le maximum de séances) - POIDS: +15%
+        ADAPTATION SELON LE MODE:
+        
+        MODE NORMAL (quotas suffisants):
+        - Les quotas sont DÉJÀ maximisés par la CONTRAINTE 1 (égalité stricte)
+        - Pas besoin d'optimiser l'utilisation des quotas (redondant)
+        - Avec regroupement: Vœux (50%) + Dispersion (30%) + Regroupement (20%)
+        - Sans regroupement: Vœux (60%) + Dispersion (40%)
+        
+        MODE ADAPTATIF (quotas insuffisants):
+        - Les enseignants peuvent avoir MOINS que leur quota maximum
+        - Important d'optimiser l'utilisation des quotas disponibles
+        - Avec regroupement: Vœux (40%) + Dispersion (20%) + Quotas (20%) + Regroupement (20%)
+        - Sans regroupement: Vœux (50%) + Dispersion (30%) + Quotas (20%)
         
         NOTE: L'équilibre par grade (dispersion intra-grade) est déjà garanti par la CONTRAINTE 1
               (Égalité stricte par grade) qui impose dispersion_grades = 0. Pas besoin de l'optimiser.
@@ -1256,27 +1276,37 @@ class SurveillanceOptimizerV3:
         # PRIORITÉ 3: ÉVITER les vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ)
         if penalite_voeux is not None:
             composantes.append(penalite_voeux)
-            # Poids ajusté selon si regroupement temporel activé
-            poids.append(-50 if not activer_regroupement_temporel else -40)
+            # MODE ADAPTATIF: Poids ajusté selon si regroupement temporel activé
+            # MODE NORMAL: Poids plus élevé car pas besoin d'optimiser les quotas
+            if mode_adaptatif:
+                poids.append(-50 if not activer_regroupement_temporel else -40)
+            else:
+                poids.append(-60 if not activer_regroupement_temporel else -50)
 
         # Équilibre global de charge (minimiser dispersion globale entre TOUS les enseignants)
         if dispersion is not None:
             composantes.append(dispersion)
-            poids.append(-35 if not activer_regroupement_temporel else -30)
+            # MODE ADAPTATIF: Poids réduit pour laisser place au regroupement
+            # MODE NORMAL: Poids modéré (égalité par grade déjà garantie)
+            if mode_adaptatif:
+                poids.append(-30 if not activer_regroupement_temporel else -20)
+            else:
+                poids.append(-40 if not activer_regroupement_temporel else -30)
 
         # NOTE: dispersion_grades est DÉSACTIVÉE car redondante avec CONTRAINTE 1
         # La CONTRAINTE 1 (Égalité stricte par grade) impose déjà dispersion_grades = 0
 
-        # Maximisation des quotas (utiliser le maximum de séances)
-        if total_affectations is not None:
+        # Maximisation des quotas (SEULEMENT EN MODE ADAPTATIF)
+        # En mode NORMAL, les quotas sont déjà maximisés par la CONTRAINTE 1 (redondant)
+        if mode_adaptatif and total_affectations is not None:
             composantes.append(total_affectations)
             # Poids ajusté selon si regroupement temporel activé
-            poids.append(20 if activer_regroupement_temporel else 15)
+            poids.append(20 if activer_regroupement_temporel else 20)
 
-        # PRIORITÉ 7: Bonus regroupement (POIDS LE PLUS BAS - optionnel)
+        # PRIORITÉ 7: Bonus regroupement (POIDS AUGMENTÉ pour meilleur confort enseignants)
         if activer_regroupement_temporel and bonus_consecutivite is not None:
             composantes.append(bonus_consecutivite)
-            poids.append(10)  # Poids 10% - Bonus secondaire (PRIORITÉ 7)
+            poids.append(20)  # Poids augmenté à 20% pour favoriser le confort (PRIORITÉ 7)
 
         if composantes:
             # Calculer les bornes du score combiné

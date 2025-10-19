@@ -80,16 +80,33 @@ export const exportAPI = {
     api.post('/export/convocations', null, { 
       responseType: 'blob' 
     }),
+  convocationsPDF: () => 
+    api.post('/export/convocationsPDF', null, { 
+      responseType: 'blob' 
+    }),
   convocationEnseignant: (enseignantId) =>
     api.post(`/export/convocation/${enseignantId}`, null, {
+      responseType: 'blob'
+    }),
+  convocationEnseignantPDF: (enseignantId) =>
+    api.post(`/export/convocationPDF/${enseignantId}`, null, {
       responseType: 'blob'
     }),
   listesCreneaux: () => 
     api.post('/export/listes-creneaux', null, { 
       responseType: 'blob' 
     }),
+  listesCreneauxPDF: () => 
+    api.post('/export/listes-creneauxPDF', null, { 
+      responseType: 'blob' 
+    }),
   listeCreneau: (params) =>
     api.post('/export/liste-creneau', null, {
+      params,
+      responseType: 'blob'
+    }),
+  listeCreneauPDF: (params) =>
+    api.post('/export/liste-creneauPDF', null, {
       params,
       responseType: 'blob'
     }),

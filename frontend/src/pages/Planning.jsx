@@ -1177,10 +1177,10 @@ export default function Planning() {
                                     {/* Badges compacts */}
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="px-2 py-1 bg-cyan-100 text-cyan-800 rounded-md font-bold text-xs border border-cyan-200">
-                                        {emploi.session === 'P' ? 'P' : 'R'}
+                                        {emploi.session === 'P' ? 'Principale' : 'Rattrapage'}
                                       </span>
                                       <span className="px-2 py-1 bg-green-100 text-green-800 rounded-md font-bold text-xs border border-green-200">
-                                        {emploi.semestre.replace('SEMESTRE ', 'S')}
+                                        {emploi.semestre.replace('SEMESTRE ', 'Semestre ')}
                                       </span>
                                       {emploi.salles && (
                                         <div className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">

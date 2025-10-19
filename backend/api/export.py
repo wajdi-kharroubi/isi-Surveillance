@@ -167,3 +167,158 @@ def exporter_liste_creneau(
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 
+# ===== NOUVEAUX ENDPOINTS POUR EXPORT PDF =====
+
+@router.post("/convocationsPDF")
+def exporter_convocations_pdf(db: Session = Depends(get_db)):
+    """Génère les convocations individuelles en PDF pour tous les enseignants et retourne un fichier ZIP"""
+    try:
+        export_service = ExportService(db)
+        filepaths = export_service.generer_convocations_individuelles_pdf()
+        
+        if not filepaths:
+            raise HTTPException(status_code=404, detail="Aucune convocation à générer")
+        
+        # Créer un fichier ZIP temporaire
+        zip_filename = f"convocations_PDF_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for filepath in filepaths:
+                if os.path.exists(filepath):
+                    zipf.write(filepath, os.path.basename(filepath))
+        
+        # Supprimer les fichiers individuels après création du ZIP
+        for filepath in filepaths:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+        
+        return FileResponse(
+            path=zip_path,
+            media_type='application/zip',
+            filename=zip_filename,
+            background=None
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/listes-creneauxPDF")
+def exporter_listes_creneaux_pdf(db: Session = Depends(get_db)):
+    """Génère les listes de surveillants par créneau en PDF et retourne un fichier ZIP"""
+    try:
+        export_service = ExportService(db)
+        filepaths = export_service.generer_listes_par_creneau_pdf()
+        
+        if not filepaths:
+            raise HTTPException(status_code=404, detail="Aucune liste à générer")
+        
+        # Créer un fichier ZIP temporaire
+        zip_filename = f"listes_creneaux_PDF_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for filepath in filepaths:
+                if os.path.exists(filepath):
+                    zipf.write(filepath, os.path.basename(filepath))
+        
+        # Supprimer les fichiers individuels après création du ZIP
+        for filepath in filepaths:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {filepath}: {str(e)}")
+        
+        return FileResponse(
+            path=zip_path,
+            media_type='application/zip',
+            filename=zip_filename,
+            background=None
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/convocationPDF/{enseignant_id}")
+def exporter_convocation_enseignant_pdf(
+    enseignant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Exporte la convocation PDF d'un enseignant spécifique"""
+    try:
+        export_service = ExportService(db)
+        filepath = export_service.generer_convocation_enseignant_pdf(enseignant_id)
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=500, detail="Erreur lors de la génération de la convocation PDF")
+        
+        # Fonction pour supprimer le fichier après l'envoi
+        def cleanup(path: str):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {path}: {str(e)}")
+        
+        return FileResponse(
+            path=filepath,
+            media_type='application/pdf',
+            filename=os.path.basename(filepath),
+            background=BackgroundTask(cleanup, filepath)
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/liste-creneauPDF")
+def exporter_liste_creneau_pdf(
+    date_exam: date = Query(..., description="Date de l'examen"),
+    seance: str = Query(..., description="Numéro de séance (S1, S2, S3, S4)"),
+    db: Session = Depends(get_db)
+):
+    """Exporte la liste PDF des surveillants pour un créneau spécifique"""
+    try:
+        # Valider le format de la séance
+        seance_upper = seance.upper()
+        if seance_upper not in ['S1', 'S2', 'S3', 'S4']:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Séance invalide '{seance}'. Doit être S1, S2, S3 ou S4"
+            )
+        
+        export_service = ExportService(db)
+        filepath = export_service.generer_liste_creneau_specifique_pdf(date_exam, seance_upper)
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=500, detail="Erreur lors de la génération de la liste PDF")
+        
+        # Fonction pour supprimer le fichier après l'envoi
+        def cleanup(path: str):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {path}: {str(e)}")
+        
+        return FileResponse(
+            path=filepath,
+            media_type='application/pdf',
+            filename=os.path.basename(filepath),
+            background=BackgroundTask(cleanup, filepath)
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+

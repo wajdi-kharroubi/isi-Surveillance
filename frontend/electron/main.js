@@ -17,25 +17,30 @@ function startPythonBackend() {
       console.log('🐍 Démarrage du backend Python (mode développement)...');
       const backendDir = path.join(__dirname, '..', '..', 'backend');
       pythonProcess = spawn('python', ['main.py'], {
-        cwd: backendDir
+        cwd: backendDir,
+        env: { ...process.env }
       });
     } else {
-      // En production: lancer Python directement depuis les ressources
+      // En production: lancer l'exécutable PyInstaller
+      const backendExe = path.join(process.resourcesPath, 'backend', 'surveillance_backend.exe');
       const backendDir = path.join(process.resourcesPath, 'backend');
-      const mainPy = path.join(backendDir, 'main.py');
-      console.log('🐍 Démarrage du backend Python (mode production)...');
-      console.log('Backend dir:', backendDir);
-      console.log('Main.py:', mainPy);
       
-      // Vérifier que main.py existe
-      if (!fs.existsSync(mainPy)) {
-        console.error('❌ main.py not found:', mainPy);
-        reject(new Error('main.py not found'));
+      console.log('🐍 Démarrage du backend (mode production)...');
+      console.log('Backend exe:', backendExe);
+      console.log('Backend dir:', backendDir);
+      
+      // Vérifier que l'exécutable existe
+      if (!fs.existsSync(backendExe)) {
+        console.error('❌ surveillance_backend.exe not found:', backendExe);
+        reject(new Error('Backend executable not found'));
         return;
       }
       
-      pythonProcess = spawn('python', ['main.py'], {
-        cwd: backendDir
+      // Lancer l'exécutable PyInstaller
+      pythonProcess = spawn(backendExe, [], {
+        cwd: backendDir,
+        env: { ...process.env },
+        windowsHide: true // Hide console window on Windows
       });
     }
     
@@ -44,14 +49,21 @@ function startPythonBackend() {
       console.log(`Backend: ${output}`);
       
       // Détecter quand le serveur est prêt
-      if (output.includes('Uvicorn running') || output.includes('Application startup complete')) {
+      if (output.includes('Uvicorn running') || output.includes('Application startup complete') || output.includes('📡 API disponible')) {
         backendReady = true;
         resolve();
       }
     });
     
     pythonProcess.stderr.on('data', (data) => {
-      console.error(`Backend Error: ${data}`);
+      const output = data.toString();
+      console.error(`Backend Error: ${output}`);
+      
+      // Uvicorn logs to stderr even for normal messages
+      if (output.includes('Uvicorn running') || output.includes('Application startup complete') || output.includes('📡 API disponible')) {
+        backendReady = true;
+        resolve();
+      }
     });
     
     pythonProcess.on('close', (code) => {
@@ -64,13 +76,13 @@ function startPythonBackend() {
       reject(err);
     });
     
-    // Timeout de sécurité
+    // Timeout de sécurité - give more time for backend startup
     setTimeout(() => {
       if (!backendReady) {
         console.log('⚠️  Backend started but not responding yet, continuing anyway...');
         resolve();
       }
-    }, 5000);
+    }, 8000);
   });
 }
 
@@ -124,7 +136,14 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    // In production, files are inside app.asar
+    const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
+    console.log('Loading index.html from:', indexPath);
+    console.log('File exists:', fs.existsSync(indexPath));
+    
+    mainWindow.loadFile(indexPath).catch(err => {
+      console.error('Failed to load index.html:', err);
+    });
   }
 
   mainWindow.once('ready-to-show', () => {

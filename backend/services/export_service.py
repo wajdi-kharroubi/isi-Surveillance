@@ -9,6 +9,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx2pdf import convert
 import pandas as pd
 from sqlalchemy.orm import Session, joinedload
 from models.models import Enseignant, Examen, Affectation
@@ -1027,3 +1028,98 @@ class ExportService:
         
         logger.info(f"✅ Liste générée pour la séance {seance.upper()} du {date_exam}: {filepath}")
         return filepath
+
+    # ===== NOUVELLES MÉTHODES POUR EXPORT PDF =====
+    
+    def _convertir_docx_vers_pdf(self, docx_path: str) -> str:
+        """Convertit un fichier DOCX en PDF
+        
+        Args:
+            docx_path: Chemin du fichier DOCX
+            
+        Returns:
+            Chemin du fichier PDF généré
+        """
+        pdf_path = docx_path.replace('.docx', '.pdf')
+        try:
+            convert(docx_path, pdf_path)
+            # Supprimer le fichier DOCX temporaire
+            if os.path.exists(docx_path):
+                os.remove(docx_path)
+            return pdf_path
+        except Exception as e:
+            logger.error(f"Erreur lors de la conversion DOCX -> PDF: {str(e)}")
+            raise
+    
+    def generer_convocations_individuelles_pdf(self) -> List[str]:
+        """Génère les convocations individuelles en PDF pour chaque enseignant"""
+        filepaths = []
+        
+        enseignants = self.db.query(Enseignant).all()
+        
+        for enseignant in enseignants:
+            # Récupérer les affectations
+            affectations = self.db.query(Affectation).options(
+                joinedload(Affectation.examen)
+            ).filter(
+                Affectation.enseignant_id == enseignant.id
+            ).join(Examen).order_by(Examen.dateExam, Examen.h_debut).all()
+            
+            if not affectations:
+                continue
+            
+            # Générer DOCX d'abord
+            filename_docx = f"convocation_{enseignant.nom}_{enseignant.prenom}_{datetime.now().strftime('%Y%m%d')}.docx"
+            filepath_docx = os.path.join(self.export_dir, filename_docx)
+            self._generer_convocation_word(enseignant, affectations, filepath_docx)
+            
+            # Convertir en PDF
+            filepath_pdf = self._convertir_docx_vers_pdf(filepath_docx)
+            filepaths.append(filepath_pdf)
+        
+        logger.info(f"✅ {len(filepaths)} convocations PDF générées")
+        return filepaths
+    
+
+    
+    def generer_listes_par_creneau_pdf(self) -> List[str]:
+        """Génère les listes de surveillants par créneau en PDF - Un fichier par jour"""
+        filepaths_pdf = []
+        
+        # Générer d'abord les fichiers DOCX
+        filepaths_docx = self.generer_listes_par_creneau()
+        
+        # Convertir chaque DOCX en PDF
+        for docx_path in filepaths_docx:
+            try:
+                pdf_path = self._convertir_docx_vers_pdf(docx_path)
+                filepaths_pdf.append(pdf_path)
+            except Exception as e:
+                logger.error(f"Erreur lors de la conversion de {docx_path}: {str(e)}")
+        
+        logger.info(f"✅ {len(filepaths_pdf)} fichiers PDF générés (un par jour)")
+        return filepaths_pdf
+    
+
+    
+    def generer_convocation_enseignant_pdf(self, enseignant_id: int) -> str:
+        """Génère la convocation PDF pour un enseignant spécifique"""
+        # Générer d'abord le DOCX
+        filepath_docx = self.generer_convocation_enseignant(enseignant_id)
+        
+        # Convertir en PDF
+        filepath_pdf = self._convertir_docx_vers_pdf(filepath_docx)
+        
+        logger.info(f"✅ Convocation PDF générée: {filepath_pdf}")
+        return filepath_pdf
+    
+    def generer_liste_creneau_specifique_pdf(self, date_exam: date, seance: str) -> str:
+        """Génère la liste PDF des surveillants pour un créneau spécifique"""
+        # Générer d'abord le DOCX
+        filepath_docx = self.generer_liste_creneau_specifique(date_exam, seance)
+        
+        # Convertir en PDF
+        filepath_pdf = self._convertir_docx_vers_pdf(filepath_docx)
+        
+        logger.info(f"✅ Liste PDF générée pour la séance {seance.upper()} du {date_exam}: {filepath_pdf}")
+        return filepath_pdf
