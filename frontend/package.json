@@ -21,24 +21,42 @@
   "license": "Propriétaire",
   "build": {
     "appId": "com.surveillance.app",
-    "productName": "Gestion Surveillances",
+    "productName": "GestionSurveillances",
     "directories": {
       "output": "dist-electron"
     },
     "win": {
-      "target": "nsis",
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
       "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gestion Surveillances",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "deleteAppDataOnUninstall": false
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "public/icon.png"
     ],
     "extraResources": [
       {
-        "from": "../backend/dist",
-        "to": "backend"
+        "from": "../backend",
+        "to": "backend",
+        "filter": ["**/*", "!__pycache__", "!*.pyc", "!build", "!dist", "!*.spec", "!venv", "!venv/**/*", "!.venv", "!.venv/**/*"]
       }
-    ]
+    ],
+    "compression": "normal"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",

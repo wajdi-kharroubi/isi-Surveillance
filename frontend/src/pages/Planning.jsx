@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { planningAPI, enseignantsAPI, exportAPI } from '../services/api';
+import { planningAPI, enseignantsAPI, exportAPI, statistiquesAPI, gradesAPI } from '../services/api';
 import { 
   Calendar, 
   Users, 
@@ -38,6 +38,43 @@ export default function Planning() {
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
   });
+
+  // Récupérer les configurations de grades avec leurs quotas
+  const { data: gradesConfig = [] } = useQuery({
+    queryKey: ['grades'],
+    queryFn: () => gradesAPI.getAll().then(res => res.data),
+  });
+
+  // Récupérer les statistiques de charge des enseignants
+  const { data: chargeEnseignantsData } = useQuery({
+    queryKey: ['charge-enseignants'],
+    queryFn: () => statistiquesAPI.getChargeEnseignants().then(res => res.data),
+  });
+
+  // S'assurer que chargeEnseignants est un tableau (l'API retourne {charges: [...]})
+  const chargeEnseignants = Array.isArray(chargeEnseignantsData?.charges) 
+    ? chargeEnseignantsData.charges 
+    : [];
+
+  // Fusionner les données des enseignants avec leurs statistiques de charge
+  const enseignantsAvecCharge = useMemo(() => {
+    return enseignants.map(ens => {
+      const charge = chargeEnseignants.find(c => c.enseignant_id === ens.id);
+      const gradeInfo = gradesConfig.find(g => g.grade_code === ens.grade_code);
+      const quota_max = gradeInfo?.nb_surveillances || 0;
+      const nb_surveillances_affectees = charge?.nb_surveillances || 0;
+      const pourcentage_quota = quota_max > 0 
+        ? Math.round((nb_surveillances_affectees / quota_max) * 100)
+        : 0;
+      
+      return {
+        ...ens,
+        nb_surveillances_affectees,
+        quota_max,
+        pourcentage_quota,
+      };
+    });
+  }, [enseignants, chargeEnseignants, gradesConfig]);
 
   const { data: emploiSeances = [], isLoading: loadingSeances } = useQuery({
     queryKey: ['emploi-seances'],
@@ -106,11 +143,11 @@ export default function Planning() {
 
   const enseignantsFiltres = useMemo(() => {
     if (!searchFilter.trim()) {
-      return enseignants.filter(e => e.participe_surveillance);
+      return enseignantsAvecCharge.filter(e => e.participe_surveillance);
     }
     
     const filterLower = searchFilter.toLowerCase().trim();
-    return enseignants
+    return enseignantsAvecCharge
       .filter(e => e.participe_surveillance)
       .filter(ens => {
         const nom = (ens.nom || '').toLowerCase();
@@ -123,7 +160,7 @@ export default function Planning() {
                codeSmartex.includes(filterLower) ||
                gradeCode.includes(filterLower);
       });
-  }, [enseignants, searchFilter]);
+  }, [enseignantsAvecCharge, searchFilter]);
 
   const seancesFiltrees = useMemo(() => {
     return emploiSeances.filter(seance => {
@@ -644,6 +681,211 @@ export default function Planning() {
           {/* Content - Emploi par Enseignant */}
           {activeTab === 'enseignant' && (
             <div className="space-y-6">
+              {/* Tableau récapitulatif des enseignants */}
+              {!selectedEnseignant && (
+                <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 overflow-hidden">
+                  {/* Barre de recherche dans le tableau */}
+                  <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-green-100 px-6 py-4 border-b-2 border-green-200">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center shadow-lg">
+                          <Users className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">Vue d'ensemble des enseignants</h3>
+                          <p className="text-xs text-gray-600 font-medium">Quota de surveillances par enseignant</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1 relative max-w-md ml-auto">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Search className="h-5 w-5 text-green-400" />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Rechercher par enseignant, grade ou code..."
+                          value={searchFilter}
+                          onChange={(e) => setSearchFilter(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2.5 border-2 border-green-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all text-sm font-semibold bg-white"
+                        />
+                        {searchFilter && (
+                          <button
+                            onClick={() => setSearchFilter('')}
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-green-400 hover:text-green-600 transition-colors"
+                          >
+                            <span className="text-xl font-bold">✕</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-gray-50 to-green-50 border-b-2 border-gray-200">
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Enseignant
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Grade
+                          </th>
+                          <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Surveillances
+                          </th>
+                          <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Pourcentage
+                          </th>
+                          <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {enseignantsFiltres
+                          .sort((a, b) => {
+                            // Trier par pourcentage décroissant
+                            const pctA = a.quota_max > 0 ? (a.nb_surveillances_affectees / a.quota_max) * 100 : 0;
+                            const pctB = b.quota_max > 0 ? (b.nb_surveillances_affectees / b.quota_max) * 100 : 0;
+                            return pctB - pctA;
+                          })
+                          .map((ens) => {
+                            const pourcentage = ens.quota_max > 0 
+                              ? Math.round((ens.nb_surveillances_affectees / ens.quota_max) * 100)
+                              : 0;
+                            
+                            return (
+                              <tr 
+                                key={ens.id}
+                                className="hover:bg-green-50 transition-colors cursor-pointer group"
+                                onClick={() => setSelectedEnseignant(ens.id)}
+                              >
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <Users className="w-5 h-5 text-green-600" />
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-gray-900 text-sm">
+                                        {ens.nom.charAt(0).toUpperCase() + ens.nom.slice(1).toLowerCase()} {ens.prenom}
+                                      </p>
+                                      <p className="text-xs text-gray-500 font-medium">
+                                        {ens.code_smartex || 'N/A'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-green-100 text-green-800 border border-green-200">
+                                    {ens.grade_code}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span className="text-2xl font-black text-gray-900">
+                                      {ens.nb_surveillances_affectees}
+                                    </span>
+                                    <span className="text-sm text-gray-500 font-medium">
+                                      / {ens.quota_max}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col items-center gap-2">
+                                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                                      <div 
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                          pourcentage >= 100 
+                                            ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
+                                            : pourcentage >= 75 
+                                            ? 'bg-gradient-to-r from-yellow-400 to-orange-400' 
+                                            : 'bg-gradient-to-r from-red-400 to-pink-400'
+                                        }`}
+                                        style={{ width: `${Math.min(pourcentage, 100)}%` }}
+                                      ></div>
+                                    </div>
+                                    <span className={`text-sm font-bold ${
+                                      pourcentage >= 100 
+                                        ? 'text-green-600' 
+                                        : pourcentage >= 75 
+                                        ? 'text-yellow-600' 
+                                        : 'text-red-600'
+                                    }`}>
+                                      {pourcentage}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedEnseignant(ens.id);
+                                    }}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all shadow-md hover:shadow-lg font-semibold text-sm group-hover:scale-105"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    Voir
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Statistiques en bas du tableau */}
+                  <div className="bg-gradient-to-r from-gray-50 to-green-50 px-6 py-4 border-t-2 border-gray-200">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                            <Users className="w-4 h-4 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 font-medium">Total enseignants</p>
+                            <p className="text-lg font-black text-gray-900">{enseignantsFiltres.length}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 font-medium">Total surveillances</p>
+                            <p className="text-lg font-black text-gray-900">
+                              {enseignantsFiltres.reduce((sum, ens) => sum + ens.nb_surveillances_affectees, 0)}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <Star className="w-4 h-4 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 font-medium">Quota moyen</p>
+                            <p className="text-lg font-black text-gray-900">
+                              {enseignantsFiltres.length > 0
+                                ? Math.round(
+                                    enseignantsFiltres.reduce((sum, ens) => {
+                                      const pct = ens.quota_max > 0 
+                                        ? (ens.nb_surveillances_affectees / ens.quota_max) * 100 
+                                        : 0;
+                                      return sum + pct;
+                                    }, 0) / enseignantsFiltres.length
+                                  )
+                                : 0}%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Barre de recherche stylée - Version compacte quand un enseignant est sélectionné */}
               <div className={`bg-gradient-to-r from-green-50 via-emerald-50 to-green-100 rounded-2xl border-2 border-green-200 shadow-lg transition-all duration-300 ${
                 selectedEnseignant ? 'px-4 py-2' : 'p-6'
