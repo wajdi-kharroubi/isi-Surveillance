@@ -15,8 +15,10 @@ import {
 
 export default function Export() {
   const [isExporting, setIsExporting] = useState(false);
+  const [convocationsFormat, setConvocationsFormat] = useState('docx');
+  const [listesFormat, setListesFormat] = useState('docx');
 
-  const handleExport = async (type) => {
+  const handleExport = async (type, format) => {
     setIsExporting(true);
     try {
       let response;
@@ -35,13 +37,23 @@ export default function Export() {
           contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
           break;
         case 'convocations':
-          response = await exportAPI.convocations();
-          filename = `convocations_${new Date().toISOString().split('T')[0]}.zip`;
+          if (format === 'pdf') {
+            response = await exportAPI.convocationsPDF();
+            filename = `convocations_PDF_${new Date().toISOString().split('T')[0]}.zip`;
+          } else {
+            response = await exportAPI.convocations();
+            filename = `convocations_${new Date().toISOString().split('T')[0]}.zip`;
+          }
           contentType = 'application/zip';
           break;
         case 'listes':
-          response = await exportAPI.listesCreneaux();
-          filename = `listes_creneaux_${new Date().toISOString().split('T')[0]}.zip`;
+          if (format === 'pdf') {
+            response = await exportAPI.listesCreneauxPDF();
+            filename = `listes_creneaux_PDF_${new Date().toISOString().split('T')[0]}.zip`;
+          } else {
+            response = await exportAPI.listesCreneaux();
+            filename = `listes_creneaux_${new Date().toISOString().split('T')[0]}.zip`;
+          }
           contentType = 'application/zip';
           break;
         default:
@@ -70,26 +82,30 @@ export default function Export() {
 
   const exportOptions = [
     {
+      id: 'convocations',
       title: 'Convocations individuelles',
-      description: 'Exporter toutes les convocations individuelles en format Word',
+      description: 'Exporter toutes les convocations individuelles',
       icon: FileText,
-      format: 'DOCX',
       gradient: 'from-blue-600 to-blue-700',
       bgGradient: 'from-blue-50 to-blue-100',
       borderColor: 'border-blue-300 hover:border-blue-500',
       iconBg: 'bg-blue-600',
-      action: () => handleExport('convocations'),
+      formatState: convocationsFormat,
+      setFormatState: setConvocationsFormat,
+      action: (format) => handleExport('convocations', format),
     },
     {
+      id: 'listes',
       title: 'Liste des enseignants par créneaux',
-      description: 'Exporter la liste des enseignants par créneau horaire en Word',
+      description: 'Exporter la liste des enseignants par créneau horaire',
       icon: FileType,
-      format: 'DOCX',
       gradient: 'from-red-600 to-red-700',
       bgGradient: 'from-red-50 to-red-100',
       borderColor: 'border-red-300 hover:border-red-500',
       iconBg: 'bg-red-600',
-      action: () => handleExport('listes'),
+      formatState: listesFormat,
+      setFormatState: setListesFormat,
+      action: (format) => handleExport('listes', format),
     },
   ];
 
@@ -116,7 +132,7 @@ export default function Export() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl">
           {exportOptions.map((option) => (
             <div
-              key={option.title}
+              key={option.id}
               className={`relative overflow-hidden rounded-2xl border-2 ${option.borderColor} bg-white shadow-lg hover:shadow-2xl transition-all duration-300 group`}
             >
               {/* Background gradient overlay */}
@@ -124,13 +140,38 @@ export default function Export() {
               
               {/* Content */}
               <div className="relative p-6 space-y-4">
-                {/* Icon and Format Badge */}
+                {/* Icon and Format Selector */}
                 <div className="flex items-start justify-between">
-                  <div className={`w-20 h-20 ${option.iconBg} rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                  <div className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 ${
+                    option.formatState === 'docx' 
+                      ? 'bg-blue-600' 
+                      : 'bg-red-600'
+                  }`}>
                     <option.icon className="w-12 h-12 text-white" strokeWidth={1.5} />
                   </div>
-                  <div className={`px-4 py-2 bg-gradient-to-r ${option.gradient} text-white font-bold text-sm rounded-full shadow-md`}>
-                    {option.format}
+                  
+                  {/* Format Toggle */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => option.setFormatState('docx')}
+                      className={`px-4 py-2 font-bold text-sm rounded-full shadow-md transition-all duration-300 ${
+                        option.formatState === 'docx'
+                          ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white scale-105'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      DOCX
+                    </button>
+                    <button
+                      onClick={() => option.setFormatState('pdf')}
+                      className={`px-4 py-2 font-bold text-sm rounded-full shadow-md transition-all duration-300 ${
+                        option.formatState === 'pdf'
+                          ? 'bg-gradient-to-r from-red-600 to-red-700 text-white scale-105'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      PDF
+                    </button>
                   </div>
                 </div>
 
@@ -146,9 +187,13 @@ export default function Export() {
 
                 {/* Export Button */}
                 <button
-                  onClick={option.action}
+                  onClick={() => option.action(option.formatState)}
                   disabled={isExporting}
-                  className={`w-full bg-gradient-to-r ${option.gradient} hover:opacity-90 text-white font-semibold text-lg py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group-hover:scale-[1.02]`}
+                  className={`w-full hover:opacity-90 text-white font-semibold text-lg py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group-hover:scale-[1.02] ${
+                    option.formatState === 'docx'
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700'
+                      : 'bg-gradient-to-r from-red-600 to-red-700'
+                  }`}
                 >
                   {isExporting ? (
                     <>
@@ -158,7 +203,7 @@ export default function Export() {
                   ) : (
                     <>
                       <Download className="w-6 h-6" />
-                      <span>Exporter maintenant</span>
+                      <span>Exporter en {option.formatState.toUpperCase()}</span>
                     </>
                   )}
                 </button>

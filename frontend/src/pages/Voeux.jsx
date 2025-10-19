@@ -216,7 +216,7 @@ export default function Voeux() {
               <HeartIcon className="w-10 h-10 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold drop-shadow-lg">Souhaits de surveillance</h1>
+              <h1 className="text-4xl font-bold drop-shadow-lg">Souhaits de non surveillance</h1>
               <p className="text-red-100 text-lg mt-1">
                 {filteredVoeux?.length || 0} {filteredVoeux?.length === 1 ? 'souhait' : 'souhaits'}
                 {searchTerm || filterSeance !== 'all' || filterSemestre !== 'all' || filterEnseignant !== 'all' || filterJour !== 'all' ? ' (filtrés)' : ''}

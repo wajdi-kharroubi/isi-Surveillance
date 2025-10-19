@@ -5,9 +5,7 @@ from config import DATABASE_URL
 
 # Create database engine
 engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False},
-    echo=False
+    DATABASE_URL, connect_args={"check_same_thread": False}, echo=False
 )
 
 # Create session factory
@@ -15,6 +13,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base class for models
 Base = declarative_base()
+
 
 # Dependency to get database session
 def get_db():
@@ -24,14 +23,16 @@ def get_db():
     finally:
         db.close()
 
+
 # Initialize database
 def init_db():
     """Create all tables in the database"""
     Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized successfully")
+    print("Database initialized successfully")
+
 
 # Drop all tables (useful for development)
 def drop_db():
     """Drop all tables in the database"""
     Base.metadata.drop_all(bind=engine)
-    print("⚠️ All tables dropped")
+    print("All tables dropped")

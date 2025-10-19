@@ -105,7 +105,7 @@ export default function Layout({ children }) {
             {/* Logo Image - Replace src with your actual logo path */}
             <div className="w-80 h-40 flex items-center justify-center">
               <img 
-                src="/logo.png" 
+                src="./logo.png" 
                 alt="Logo" 
                 className="w-80 h-40 object-contain"
                 onError={(e) => {

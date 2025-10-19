@@ -17,46 +17,66 @@
     "planning",
     "electron"
   ],
-  "author": "Votre Établissement",
+  "author": "Marwen Benammou - Wajdi Kharroubi",
   "license": "Propriétaire",
   "build": {
     "appId": "com.surveillance.app",
-    "productName": "GestionSurveillances",
+    "productName": "Gestion Surveillances",
     "directories": {
-      "output": "dist-electron"
+      "output": "dist-electron",
+      "buildResources": "build-resources"
     },
     "win": {
       "target": [
         {
-          "target": "zip",
+          "target": "nsis",
           "arch": ["x64"]
         }
       ],
-      "icon": "public/icon.ico"
+      "icon": "public/icon.ico",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Gestion Surveillances",
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
-      "deleteAppDataOnUninstall": false
+      "installerHeader": "public/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "perMachine": true,
+      "runAfterFinish": true,
+      "license": "LICENSE.txt"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "public/icon.png"
+      "public/icon.png",
+      "public/icon.ico"
     ],
     "extraResources": [
       {
-        "from": "../backend",
-        "to": "backend",
-        "filter": ["**/*", "!__pycache__", "!*.pyc", "!build", "!dist", "!*.spec", "!venv", "!venv/**/*", "!.venv", "!.venv/**/*"]
+        "from": "../backend/dist/surveillance_backend.exe",
+        "to": "backend/surveillance_backend.exe"
+      },
+      {
+        "from": "../database",
+        "to": "backend/database",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/config.py",
+        "to": "backend/config.py"
       }
     ],
-    "compression": "normal"
+    "compression": "maximum",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ]
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",
