@@ -82,9 +82,9 @@ export default function Export() {
     },
     {
       title: 'Liste des enseignants par créneaux',
-      description: 'Exporter la liste des enseignants par créneau horaire en PDF',
+      description: 'Exporter la liste des enseignants par créneau horaire en Word',
       icon: FileType,
-      format: 'PDF',
+      format: 'DOCX',
       gradient: 'from-red-600 to-red-700',
       bgGradient: 'from-red-50 to-red-100',
       borderColor: 'border-red-300 hover:border-red-500',

@@ -141,7 +141,7 @@ export default function Dashboard() {
       number: 2,
       title: 'Configurer les paramètres',
       description: 'Vérifiez les grades et quotas',
-      completed: isGradesConfigured,
+      completed: false,
     },
     {
       number: 3,
