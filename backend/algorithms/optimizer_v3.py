@@ -23,29 +23,32 @@ class SurveillanceOptimizerV3:
       alors la séance nécessite 10 enseignants (5 × 2)
 
     RÈGLES DE BASE (Contraintes fortes - HARD - OBLIGATOIRES):
-    1. Responsable d'examen doit être présent et compte dans les quotas
-    2. ÉGALITÉ STRICTE par grade (tous les enseignants d'un même grade font EXACTEMENT le même nombre de séances)
-    3. Quota maximum strict par grade (pas de dépassement autorisé)
-    4. Non-conflit horaire
-    5. Nombre d'enseignants par séance:
+    1. ÉGALITÉ STRICTE par grade (tous les enseignants d'un même grade font EXACTEMENT le même nombre de séances)
+    2. Quota maximum strict par grade (pas de dépassement autorisé)
+    3. Nombre d'enseignants par séance:
        - Mode normal: EXACTEMENT nb_examens × min_surveillants_par_examen
        - Mode adaptatif (si min_surveillants_par_examen > 2): 
          MIN = nb_examens × (quotas_totaux // besoin_ideal), MAX = nb_examens × min_surveillants_par_examen
        - Mode adaptatif (si min_surveillants_par_examen <= 2):
          MIN = nb_examens (1 par examen), MAX = nb_examens × min_surveillants_par_examen
+    4. Non-conflit horaire
 
     RÈGLES DE PRÉFÉRENCE (Contraintes souples - SOFT):
     1. Respect des vœux de NON-disponibilité (vœux = créneaux où l'enseignant NE VEUT PAS surveiller)
-    2. Équilibre temporel (éviter toujours premiers/derniers créneaux)
-    3. Équilibre global entre enseignants
+    2. Présence obligatoire des responsables d'examen
+    3. Équilibre entre séances de taille similaire
+    4. Interdiction première + dernière séance isolées
+    5. Regroupement des séances
 
-    PRIORITÉ DES CONTRAINTES:
-    1. Présence du responsable d'examen (peut surveiller d'autres examens)
-    2. Nombre d'enseignants par séance (exact en mode normal, flexible en mode adaptatif)
-    3. ÉGALITÉ STRICTE par grade (OBLIGATOIRE - tous les enseignants du même grade font le même nombre)
-    4. Quota maximum strict par grade (ne jamais dépasser)
-    5. ÉVITER les vœux de NON-disponibilité (pénalité si affectation sur un créneau non-souhaité)
-    6. Équilibre global
+    PRIORITÉ DES CONTRAINTES (ordre d'importance):
+    1. ÉGALITÉ STRICTE par Grade (PRIORITÉ 1 - OBLIGATOIRE)
+    2. Quota Maximum Strict par Grade (PRIORITÉ 1 - OBLIGATOIRE)
+    3. Nombre d'Enseignants par Séance (PRIORITÉ 2 - OBLIGATOIRE)
+    4. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3)
+    5. Présence Obligatoire des Responsables (PRIORITÉ 4)
+    6. Équilibre entre Séances de Taille Similaire (PRIORITÉ 5)
+    7. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 6)
+    8. Regroupement des Séances (PRIORITÉ 7)
     """
 
     def __init__(self, db: Session):
@@ -194,17 +197,16 @@ class SurveillanceOptimizerV3:
         # ===== PHASE 6: APPLICATION DES CONTRAINTES =====
         print("\n🔒 Phase 6: Application des contraintes...")
 
-        # CONTRAINTE 1: Présence obligatoire des responsables (PRIORITÉ 1)
-        print("   → Contrainte 1: Présence obligatoire des responsables d'examens")
-        nb_contraintes_responsables = self._contrainte_responsables(
-            responsables_examens, seances, affectations_vars, enseignants
+        # CONTRAINTE 1: ÉGALITÉ STRICTE par grade (PRIORITÉ 1 - OBLIGATOIRE)
+        print("   → Contrainte 1: ÉGALITÉ STRICTE par grade (PRIORITÉ 1 - OBLIGATOIRE)")
+        print("      ⚠️ Tous les enseignants d'un même grade feront EXACTEMENT le même nombre de séances")
+        charge_par_enseignant = self._contrainte_quotas_grades(
+            enseignants, seances, affectations_vars, responsables_examens
         )
-        print(
-            f"      ✓ {nb_contraintes_responsables} responsables ajoutés obligatoirement (peuvent surveiller d'autres examens)"
-        )
+        print(f"      ✓ Contrainte d'égalité stricte appliquée pour tous les grades")
 
-        # CONTRAINTE 2: Nombre minimal d'enseignants par séance (PRIORITÉ 2)
-        print("   → Contrainte 2: Nombre minimal d'enseignants par séance")
+        # CONTRAINTE 2: Nombre d'enseignants par séance (PRIORITÉ 2 - OBLIGATOIRE)
+        print("   → Contrainte 2: Nombre d'enseignants par séance (PRIORITÉ 2 - OBLIGATOIRE)")
         besoins_par_seance = self._contrainte_nombre_minimal(
             seances,
             enseignants,
@@ -214,19 +216,11 @@ class SurveillanceOptimizerV3:
         )
         print(f"      ✓ Contraintes de couverture appliquées")
 
-        # CONTRAINTE 3: ÉGALITÉ STRICTE par grade (PRIORITÉ 3 - OBLIGATOIRE)
-        print("   → Contrainte 3: ÉGALITÉ STRICTE par grade (OBLIGATOIRE)")
-        print("      ⚠️ Tous les enseignants d'un même grade feront EXACTEMENT le même nombre de séances")
-        charge_par_enseignant = self._contrainte_quotas_grades(
-            enseignants, seances, affectations_vars, responsables_examens
-        )
-        print(f"      ✓ Contrainte d'égalité stricte appliquée pour tous les grades")
-
-        # CONTRAINTE 4: Éviter les vœux de NON-disponibilité (PRIORITÉ 4)
+        # CONTRAINTE 3: Respect des vœux de NON-disponibilité (PRIORITÉ 3)
         preferences_voeux = {}
         if respecter_voeux and list_voeux:
             print(
-                "   → Contrainte 4: Prise en compte des vœux de NON-disponibilité"
+                "   → Contrainte 3: Respect des vœux de NON-disponibilité (PRIORITÉ 3)"
             )
             preferences_voeux = self._contrainte_voeux(
                 list_voeux, seances, enseignants, affectations_vars
@@ -236,14 +230,23 @@ class SurveillanceOptimizerV3:
             print(f"      ✓ {nb_avec_voeu} combinaisons à ÉVITER (vœux de non-disponibilité)")
             print(f"      ✓ {nb_sans_voeu} combinaisons sans contrainte de vœu")
         else:
-            print("   → Contrainte 4: Vœux désactivés")
+            print("   → Contrainte 3: Vœux désactivés")
+
+        # CONTRAINTE 4: Présence obligatoire des responsables (PRIORITÉ 4)
+        print("   → Contrainte 4: Présence obligatoire des responsables d'examens (PRIORITÉ 4)")
+        nb_contraintes_responsables = self._contrainte_responsables(
+            responsables_examens, seances, affectations_vars, enseignants
+        )
+        print(
+            f"      ✓ {nb_contraintes_responsables} responsables ajoutés obligatoirement (peuvent surveiller d'autres examens)"
+        )
 
         # CONTRAINTE 5: Non-conflit horaire (automatique avec séances)
         print("   → Contrainte 5: Non-conflit horaire (automatique)")
         print(f"      ✓ Garanti par le système de séances")
 
-        # CONTRAINTE 6: Équilibre entre séances (PRIORITÉ 6)
-        print("   → Contrainte 6: Équilibre entre séances de taille similaire")
+        # CONTRAINTE 6: Équilibre entre séances (PRIORITÉ 5)
+        print("   → Contrainte 6: Équilibre entre séances de taille similaire (PRIORITÉ 5)")
         self._contrainte_equilibre_entre_seances(
             seances,
             enseignants,
@@ -253,9 +256,9 @@ class SurveillanceOptimizerV3:
         )
         print(f"      ✓ Contraintes d'équilibre appliquées")
 
-        # CONTRAINTE 7: Interdire première+dernière séance isolées (PRIORITÉ 7 - CONTRAINTE FORTE)
+        # CONTRAINTE 7: Interdire première+dernière séance isolées (PRIORITÉ 6)
         print(
-            "   → Contrainte 7: Interdiction première+dernière séance sans autres séances"
+            "   → Contrainte 7: Interdiction première+dernière séance sans autres séances (PRIORITÉ 6)"
         )
         self._contrainte_interdire_premiere_derniere_isolees(
             seances, enseignants, affectations_vars
@@ -264,11 +267,11 @@ class SurveillanceOptimizerV3:
             f"      ✓ Contrainte appliquée: impossible d'avoir SEULEMENT 1ère ET dernière séance d'un jour"
         )
 
-        # CONTRAINTE 8 (OPTIONNELLE): Favoriser séances consécutives
+        # CONTRAINTE 8: Favoriser séances consécutives (PRIORITÉ 7 - OPTIONNEL)
         bonus_consecutivite = None
         if activer_regroupement_temporel:
             print(
-                "   → Contrainte 8: Optimisation du regroupement des séances (OPTIONNEL - ACTIVÉ)"
+                "   → Contrainte 8: Regroupement des séances (PRIORITÉ 7 - OPTIONNEL - ACTIVÉ)"
             )
             bonus_consecutivite = self._contrainte_seances_consecutives(
                 seances, enseignants, affectations_vars
@@ -277,7 +280,7 @@ class SurveillanceOptimizerV3:
                 f"      ✓ Bonus de regroupement calculé (favorise les séances groupées)"
             )
         else:
-            print("   → Contrainte 8: Regroupement temporel (OPTIONNEL - DÉSACTIVÉ)")
+            print("   → Contrainte 8: Regroupement temporel (PRIORITÉ 7 - OPTIONNEL - DÉSACTIVÉ)")
 
         # ===== PHASE 7: FONCTION OBJECTIF =====
         print("\n🎯 Phase 7: Configuration de la fonction objectif...")
@@ -294,22 +297,18 @@ class SurveillanceOptimizerV3:
         )
 
         if activer_regroupement_temporel:
-            print(f"      ✓ Fonction objectif configurée:")
-            print(f"         • Maximiser l'utilisation des quotas (35%)")
-            print(f"         • Minimiser la dispersion globale entre enseignants (25%)")
-            print(
-                f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
-            )
-            print(f"         • Favoriser les séances regroupées (10% - optimisé)")
-            print(f"         • ÉVITER les vœux de non-disponibilité (10% - pénalité)")
+            print(f"      ✓ Fonction objectif configurée (ordre de priorité):")
+            print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 40% - PÉNALITÉ")
+            print(f"         2. Minimiser la dispersion globale entre enseignants - 30%")
+            print(f"         3. Maximiser l'utilisation des quotas - 20%")
+            print(f"         4. Favoriser les séances regroupées (PRIORITÉ 7) - 10%")
+            print(f"         Note: Égalité par grade garantie par CONTRAINTE 1 (dispersion = 0)")
         else:
-            print(f"      ✓ Fonction objectif configurée:")
-            print(f"         • Maximiser l'utilisation des quotas (40%)")
-            print(f"         • Minimiser la dispersion globale entre enseignants (30%)")
-            print(
-                f"         • Minimiser la dispersion par grade (équité intra-grade) (20%)"
-            )
-            print(f"         • ÉVITER les vœux de non-disponibilité (10% - pénalité)")
+            print(f"      ✓ Fonction objectif configurée (ordre de priorité):")
+            print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 50% - PÉNALITÉ")
+            print(f"         2. Minimiser la dispersion globale entre enseignants - 35%")
+            print(f"         3. Maximiser l'utilisation des quotas - 15%")
+            print(f"         Note: Égalité par grade garantie par CONTRAINTE 1 (dispersion = 0)")
 
         # ===== PHASE 8: RÉSOLUTION =====
         print("\n⚡ Phase 8: Résolution du problème...")
@@ -426,7 +425,7 @@ class SurveillanceOptimizerV3:
         enseignants: List[Enseignant],
     ) -> int:
         """
-        CONTRAINTE 1 (PRIORITÉ 1): Le responsable d'un examen doit être présent.
+        CONTRAINTE 4 (PRIORITÉ 4): Le responsable d'un examen doit être présent.
         Le responsable PEUT surveiller d'autres examens pendant le même créneau.
         Il COMPTE dans les quotas de surveillance.
         """
@@ -522,7 +521,7 @@ class SurveillanceOptimizerV3:
         allow_fallback: bool,
     ) -> Dict:
         """
-        CONTRAINTE 2 (PRIORITÉ 2): Nombre exact d'enseignants par séance.
+        CONTRAINTE 2 (PRIORITÉ 2 - OBLIGATOIRE): Nombre exact d'enseignants par séance.
 
         IMPORTANT: Les enseignants affectés à une séance surveillent TOUS les examens de cette séance.
         Le nombre total de surveillants requis pour une séance est EXACTEMENT:
@@ -673,7 +672,7 @@ class SurveillanceOptimizerV3:
         responsables_examens: Dict[int, int],
     ) -> Dict:
         """
-        CONTRAINTE 3 (PRIORITÉ 3): Égalité stricte du nombre de séances par grade.
+        CONTRAINTE 1 (PRIORITÉ 1 - OBLIGATOIRE): Égalité stricte du nombre de séances par grade.
 
         RÈGLE STRICTE: Tous les enseignants d'un même grade doivent faire EXACTEMENT le même nombre de séances.
 
@@ -754,7 +753,7 @@ class SurveillanceOptimizerV3:
         affectations_vars: Dict,
     ) -> Dict:
         """
-        CONTRAINTE 4 (PRIORITÉ 4): Éviter les vœux de NON-disponibilité.
+        CONTRAINTE 3 (PRIORITÉ 3): Éviter les vœux de NON-disponibilité.
 
         IMPORTANT: Les vœux sont des créneaux où l'enseignant NE SOUHAITE PAS surveiller.
         - Un vœu signifie "Je NE VEUX PAS surveiller à ce créneau"
@@ -839,7 +838,7 @@ class SurveillanceOptimizerV3:
         min_surveillants_par_examen: int,
     ):
         """
-        CONTRAINTE 6 (PRIORITÉ 6): Équilibre adaptatif entre séances de taille similaire.
+        CONTRAINTE 5 (PRIORITÉ 5): Équilibre adaptatif entre séances de taille similaire.
 
         Les séances ayant le même nombre d'examens doivent avoir approximativement
         le même nombre d'enseignants affectés, avec une tolérance adaptée au contexte.
@@ -942,7 +941,7 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 7 (FORTE): Interdire d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
+        CONTRAINTE 6 (PRIORITÉ 6): Interdire d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
 
         Règle stricte:
         - Si un enseignant a la 1ère séance ET la dernière séance d'un jour
@@ -1010,7 +1009,7 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 8 (OPTIONNELLE): Favorise le regroupement des séances par jour.
+        CONTRAINTE 7 (PRIORITÉ 7 - OPTIONNELLE): Favorise le regroupement des séances par jour.
         VERSION OPTIMISÉE pour performance.
 
         Objectifs:
@@ -1137,19 +1136,28 @@ class SurveillanceOptimizerV3:
     ) -> cp_model.IntVar:
         """
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
+        
+        ORDRE DES PRIORITÉS (selon les contraintes définies):
+        - PRIORITÉ 1-2: ÉGALITÉ par grade + Quota maximum + Nombre d'enseignants (CONTRAINTES FORTES - garanties)
+        - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ - 50% ou 40%)
+        - PRIORITÉ 4: Responsables (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 5: Équilibre entre séances (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 6: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 7: Regroupement des séances (POIDS SECONDAIRE - 10%)
 
         Composantes du score (avec regroupement temporel activé):
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 35%
-        2. Équilibre global de charge (minimiser dispersion) - POIDS: 25%
-        3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
-        4. Bonus regroupement (favoriser séances regroupées) - POIDS: 10%
-        5. Pénalité pour vœux de non-disponibilité (éviter d'affecter sur créneaux non-souhaités) - POIDS: 10%
+        1. ÉVITER vœux de non-disponibilité (PRIORITÉ 3) - POIDS: -40% (MAXIMISER le respect)
+        2. Équilibre global de charge (minimiser dispersion globale) - POIDS: -30%
+        3. Maximisation des quotas (utiliser le maximum de séances) - POIDS: +20%
+        4. Bonus regroupement (favoriser séances groupées - PRIORITÉ 7) - POIDS: +10%
 
         Composantes du score (sans regroupement temporel):
-        1. Maximisation des quotas (utiliser le maximum de séances par enseignant) - POIDS: 40%
-        2. Équilibre global de charge (minimiser dispersion) - POIDS: 30%
-        3. Équilibre par grade (minimiser dispersion dans chaque grade) - POIDS: 20%
-        4. Pénalité pour vœux de non-disponibilité (éviter d'affecter sur créneaux non-souhaités) - POIDS: 10%
+        1. ÉVITER vœux de non-disponibilité (PRIORITÉ 3) - POIDS: -50% (MAXIMISER le respect)
+        2. Équilibre global de charge (minimiser dispersion globale) - POIDS: -35%
+        3. Maximisation des quotas (utiliser le maximum de séances) - POIDS: +15%
+        
+        NOTE: L'équilibre par grade (dispersion intra-grade) est déjà garanti par la CONTRAINTE 1
+              (Égalité stricte par grade) qui impose dispersion_grades = 0. Pas besoin de l'optimiser.
         """
 
         # COMPOSANTE 1: Maximisation de l'utilisation des quotas (NOUVEAU - PRIORITAIRE)
@@ -1176,26 +1184,29 @@ class SurveillanceOptimizerV3:
             dispersion = self.model.NewIntVar(0, len(seances), "dispersion")
             self.model.Add(dispersion == charge_max - charge_min)
 
-        # COMPOSANTE 2.5: Équilibre par grade (NOUVEAU - IMPORTANT)
-        # Minimiser la somme des dispersions dans chaque grade
+        # COMPOSANTE 2.5: Équilibre par grade
+        # ⚠️ NOTE: Cette composante est REDONDANTE avec la CONTRAINTE 1 (Égalité stricte par grade)
+        # La contrainte 1 impose que dispersion_grades = 0 (TOUJOURS)
+        # Donc minimiser dispersion_grades n'a aucun effet supplémentaire
+        # → Cette composante est DÉSACTIVÉE pour éviter la redondance
         dispersion_grades = None
-        if hasattr(self, "dispersions_par_grade") and self.dispersions_par_grade:
-            nb_grades = len(self.dispersions_par_grade)
-            max_quota = max(
-                [
-                    config.get("nb_surveillances", 5)
-                    for config in self.grade_configs.values()
-                ]
-            )
-
-            dispersion_grades = self.model.NewIntVar(
-                0,
-                nb_grades * max_quota,  # Somme max des dispersions
-                "dispersion_grades",
-            )
-            self.model.Add(
-                dispersion_grades == sum(self.dispersions_par_grade.values())
-            )
+        # if hasattr(self, "dispersions_par_grade") and self.dispersions_par_grade:
+        #     nb_grades = len(self.dispersions_par_grade)
+        #     max_quota = max(
+        #         [
+        #             config.get("nb_surveillances", 5)
+        #             for config in self.grade_configs.values()
+        #         ]
+        #     )
+        #
+        #     dispersion_grades = self.model.NewIntVar(
+        #         0,
+        #         nb_grades * max_quota,  # Somme max des dispersions
+        #         "dispersion_grades",
+        #     )
+        #     self.model.Add(
+        #         dispersion_grades == sum(self.dispersions_par_grade.values())
+        #     )
 
         # COMPOSANTE 3: Pénalité pour vœux de NON-disponibilité (SECONDAIRE)
         # On veut MINIMISER le nombre d'affectations sur des créneaux non-souhaités
@@ -1218,19 +1229,23 @@ class SurveillanceOptimizerV3:
         #if equilibrer_temporel:
             #self._ajouter_equilibre_temporel(affectations_vars, seances, enseignants)
 
-        # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade,
-        # maximiser bonus_consecutivite (optionnel), MINIMISER penalite_voeux
+        # OBJECTIF COMBINÉ: ÉVITER penalite_voeux (PRIORITÉ 3), minimiser dispersion globale,
+        # maximiser total_affectations, maximiser bonus_consecutivite (optionnel - PRIORITÉ 7)
         #
         # Avec regroupement temporel:
-        # Score = 35*total_affectations - 25*dispersion - 20*dispersion_grades + 10*bonus_consecutivite - 10*penalite_voeux
+        # Score = -40*penalite_voeux - 30*dispersion + 20*total_affectations + 10*bonus_consecutivite
         #
         # Sans regroupement temporel:
-        # Score = 40*total_affectations - 30*dispersion - 20*dispersion_grades - 10*penalite_voeux
+        # Score = -50*penalite_voeux - 35*dispersion + 15*total_affectations
         #
         # Le solveur maximise, donc on veut:
-        # - Maximiser total_affectations (positif) - PRIORITÉ 1
-        # - Minimiser dispersion globale (négatif) - PRIORITÉ 2
-        # - Minimiser dispersion par grade (négatif) - PRIORITÉ 3
+        # - MINIMISER penalite_voeux (négatif fort) - PRIORITÉ 3 - RESPECTER LES VŒUX
+        # - Minimiser dispersion globale (négatif) - Équité globale entre tous les enseignants
+        # - Maximiser total_affectations (positif) - Utiliser les quotas
+        # - Maximiser bonus regroupement (positif) - PRIORITÉ 7 - Confort (si activé)
+        #
+        # NOTE: dispersion_grades n'est PAS incluse car la CONTRAINTE 1 garantit déjà 
+        #       que dispersion_grades = 0 (égalité stricte par grade)
         # - Maximiser bonus regroupement (positif) - Bonus léger (si activé)
         # - Minimiser penalite_voeux (négatif) - Pénaliser les affectations sur créneaux non-souhaités
 
@@ -1238,27 +1253,30 @@ class SurveillanceOptimizerV3:
         composantes = []
         poids = []
 
+        # PRIORITÉ 3: ÉVITER les vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ)
+        if penalite_voeux is not None:
+            composantes.append(penalite_voeux)
+            # Poids ajusté selon si regroupement temporel activé
+            poids.append(-50 if not activer_regroupement_temporel else -40)
+
+        # Équilibre global de charge (minimiser dispersion globale entre TOUS les enseignants)
+        if dispersion is not None:
+            composantes.append(dispersion)
+            poids.append(-35 if not activer_regroupement_temporel else -30)
+
+        # NOTE: dispersion_grades est DÉSACTIVÉE car redondante avec CONTRAINTE 1
+        # La CONTRAINTE 1 (Égalité stricte par grade) impose déjà dispersion_grades = 0
+
+        # Maximisation des quotas (utiliser le maximum de séances)
         if total_affectations is not None:
             composantes.append(total_affectations)
             # Poids ajusté selon si regroupement temporel activé
-            poids.append(35 if activer_regroupement_temporel else 40)
+            poids.append(20 if activer_regroupement_temporel else 15)
 
-        if dispersion is not None:
-            composantes.append(dispersion)
-            # Poids ajusté selon si regroupement temporel activé
-            poids.append(-25 if activer_regroupement_temporel else -30)
-
-        if dispersion_grades is not None:
-            composantes.append(dispersion_grades)
-            poids.append(-20)  # Poids -20% (minimiser) - IMPORTANT
-
+        # PRIORITÉ 7: Bonus regroupement (POIDS LE PLUS BAS - optionnel)
         if activer_regroupement_temporel and bonus_consecutivite is not None:
             composantes.append(bonus_consecutivite)
-            poids.append(10)  # Poids 10% - Bonus secondaire (seulement si activé)
-
-        if penalite_voeux is not None:
-            composantes.append(penalite_voeux)
-            poids.append(-10)  # Poids -10% - PÉNALITÉ pour vœux de non-disponibilité (minimiser)
+            poids.append(10)  # Poids 10% - Bonus secondaire (PRIORITÉ 7)
 
         if composantes:
             # Calculer les bornes du score combiné
