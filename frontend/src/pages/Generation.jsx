@@ -174,7 +174,7 @@ export default function Generation() {
                   <AdjustmentsHorizontalIcon className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">Surveillants Minimum</h3>
+                  <h3 className="font-semibold text-gray-900">Surveillants Maximum</h3>
                   <p className="text-sm text-gray-500">Par salle d'examen</p>
                 </div>
               </div>
@@ -438,6 +438,18 @@ export default function Generation() {
                 if (w.includes('⚠️')) return true;
                 if (w.includes('❌')) return true;
                 
+                // Garder les messages du MODE ADAPTATIF
+                if (w.includes('MODE ADAPTATIF')) return true;
+                if (w.includes('CALCUL INTELLIGENT')) return true;
+                if (w.includes('Situation:')) return true;
+                if (w.includes('Configuration par examen:')) return true;
+                if (w.includes('Besoins calculés:')) return true;
+                if (w.includes('MINIMUM:') || w.includes('MAXIMUM:')) return true;
+                if (w.includes('Quotas totaux disponibles:')) return true;
+                if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
+                if (w.includes('Ratio de couverture:')) return true;
+                if (w.includes('surveillant(s) par examen')) return true;
+                
                 // Garder les statistiques des vœux (headers, résumés, listes)
                 if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
                 if (w.includes('STATISTIQUES')) return true;
@@ -478,6 +490,16 @@ export default function Generation() {
               // Même filtre répété pour la vérification de longueur
               if (w.includes('⚠️')) return true;
               if (w.includes('❌')) return true;
+              if (w.includes('MODE ADAPTATIF')) return true;
+              if (w.includes('CALCUL INTELLIGENT')) return true;
+              if (w.includes('Situation:')) return true;
+              if (w.includes('Configuration par examen:')) return true;
+              if (w.includes('Besoins calculés:')) return true;
+              if (w.includes('MINIMUM:') || w.includes('MAXIMUM:')) return true;
+              if (w.includes('Quotas totaux disponibles:')) return true;
+              if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
+              if (w.includes('Ratio de couverture:')) return true;
+              if (w.includes('surveillant(s) par examen')) return true;
               if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
               if (w.includes('STATISTIQUES')) return true;
               if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
@@ -515,6 +537,16 @@ export default function Generation() {
                       {result.warnings.filter(w => {
                         if (w.includes('⚠️')) return true;
                         if (w.includes('❌')) return true;
+                        if (w.includes('MODE ADAPTATIF')) return true;
+                        if (w.includes('CALCUL INTELLIGENT')) return true;
+                        if (w.includes('Situation:')) return true;
+                        if (w.includes('Configuration par examen:')) return true;
+                        if (w.includes('Besoins calculés:')) return true;
+                        if (w.includes('MINIMUM:') || w.includes('MAXIMUM:')) return true;
+                        if (w.includes('Quotas totaux disponibles:')) return true;
+                        if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
+                        if (w.includes('Ratio de couverture:')) return true;
+                        if (w.includes('surveillant(s) par examen')) return true;
                         if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
                         if (w.includes('STATISTIQUES')) return true;
                         if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
@@ -541,6 +573,16 @@ export default function Generation() {
                       }).length} message{result.warnings.filter(w => {
                         if (w.includes('⚠️')) return true;
                         if (w.includes('❌')) return true;
+                        if (w.includes('MODE ADAPTATIF')) return true;
+                        if (w.includes('CALCUL INTELLIGENT')) return true;
+                        if (w.includes('Situation:')) return true;
+                        if (w.includes('Configuration par examen:')) return true;
+                        if (w.includes('Besoins calculés:')) return true;
+                        if (w.includes('MINIMUM:') || w.includes('MAXIMUM:')) return true;
+                        if (w.includes('Quotas totaux disponibles:')) return true;
+                        if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
+                        if (w.includes('Ratio de couverture:')) return true;
+                        if (w.includes('surveillant(s) par examen')) return true;
                         if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
                         if (w.includes('STATISTIQUES')) return true;
                         if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
@@ -573,6 +615,16 @@ export default function Generation() {
                     // Filtrage final pour l'affichage
                     if (w.includes('⚠️')) return true;
                     if (w.includes('❌')) return true;
+                    if (w.includes('MODE ADAPTATIF')) return true;
+                    if (w.includes('CALCUL INTELLIGENT')) return true;
+                    if (w.includes('Situation:')) return true;
+                    if (w.includes('Configuration par examen:')) return true;
+                    if (w.includes('Besoins calculés:')) return true;
+                    if (w.includes('MINIMUM:') || w.includes('MAXIMUM:')) return true;
+                    if (w.includes('Quotas totaux disponibles:')) return true;
+                    if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
+                    if (w.includes('Ratio de couverture:')) return true;
+                    if (w.includes('surveillant(s) par examen')) return true;
                     if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
                     if (w.includes('STATISTIQUES')) return true;
                     if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
@@ -603,6 +655,7 @@ export default function Generation() {
                     // Déterminer le type de message et le style
                     const isError = warning.includes('❌');
                     const isWarning = warning.includes('⚠️');
+                    const isModeAdaptatif = warning.includes('MODE ADAPTATIF') || warning.includes('CALCUL INTELLIGENT');
                     const isVoeuxHeader = warning.includes('===') || warning.includes('STATISTIQUES') || warning.includes('VŒUX') || warning.includes('VOEUX');
                     const isVoeuxSummary = warning.includes('RÉSUMÉ GLOBAL') || warning.includes('RÉSULTATS DU PLANNING') || warning.includes('LISTE COMPLÈTE');
                     const isDiagnostic = warning.includes('DIAGNOSTIC');
@@ -611,6 +664,17 @@ export default function Generation() {
                     // Sauter les lignes de séparation pures (que des =)
                     if (/^[=\-\s]+$/.test(warning)) {
                       return null;
+                    }
+                    
+                    // MODE ADAPTATIF - Même style que les résumés (bleu)
+                    if (isModeAdaptatif) {
+                      return (
+                        <div key={idx} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border-l-4 border-blue-400 shadow-sm mt-3 mb-2">
+                          <p className="text-sm font-bold text-gray-800 leading-relaxed">
+                            {warning.trim()}
+                          </p>
+                        </div>
+                      );
                     }
                     
                     // Headers des statistiques des vœux

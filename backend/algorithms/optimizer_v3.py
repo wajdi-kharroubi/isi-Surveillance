@@ -29,7 +29,10 @@ class SurveillanceOptimizerV3:
     4. Non-conflit horaire
     5. Nombre d'enseignants par séance:
        - Mode normal: EXACTEMENT nb_examens × min_surveillants_par_examen
-       - Mode adaptatif: MIN = nb_examens (1 par examen), MAX = nb_examens × min_surveillants_par_examen
+       - Mode adaptatif (si min_surveillants_par_examen > 2): 
+         MIN = nb_examens × (quotas_totaux // besoin_ideal), MAX = nb_examens × min_surveillants_par_examen
+       - Mode adaptatif (si min_surveillants_par_examen <= 2):
+         MIN = nb_examens (1 par examen), MAX = nb_examens × min_surveillants_par_examen
 
     RÈGLES DE PRÉFÉRENCE (Contraintes souples - SOFT):
     1. Respect des vœux de NON-disponibilité (vœux = créneaux où l'enseignant NE VEUT PAS surveiller)
@@ -82,7 +85,7 @@ class SurveillanceOptimizerV3:
         min_surveillants_par_examen: int = 2,
         allow_fallback: bool = True,
         respecter_voeux: bool = True,
-        equilibrer_temporel: bool = True,
+        equilibrer_temporel: bool = False,
         activer_regroupement_temporel: bool = True,
         max_time_in_seconds: int = 900,
         relative_gap_limit: float = 0.01,
@@ -530,9 +533,18 @@ class SurveillanceOptimizerV3:
         - Nombre idéal et maximum = 15 × 2 = 30 enseignants
         - Chaque examen aura exactement 2 surveillants (les 30 enseignants surveillent tous les 15 examens)
 
-        ADAPTATION si nécessaire:
-        - Si pas assez d'enseignants disponibles totalement, réduction proportionnelle
-        - Garantit au minimum 1 surveillant par examen (minimum absolu)
+        ADAPTATION si nécessaire (MODE ADAPTATIF avec allow_fallback=True):
+        
+        CAS 1 - Si min_surveillants_par_examen > 2:
+        - Calcul intelligent du minimum basé sur le ratio: quotas_totaux / besoin_ideal
+        - Exemple: besoin_ideal=500, quotas_totaux=1005 → ratio=2.01 → minimum=2 surveillants/examen
+        - Garantit une répartition proportionnelle et équitable
+        
+        CAS 2 - Si min_surveillants_par_examen <= 2:
+        - Comportement classique: minimum 1 surveillant par examen
+        - Réduction progressive selon les quotas disponibles
+        
+        Dans tous les cas:
         - En mode ADAPTATIF: NE JAMAIS DÉPASSER nb_examens × min_surveillants_par_examen
         """
         besoins_par_seance = {}
@@ -553,35 +565,77 @@ class SurveillanceOptimizerV3:
         # Calculer le besoin total avec min_surveillants_par_examen
         nb_total_examens = sum([len(examens) for examens in seances.values()])
         besoin_ideal = nb_total_examens * min_surveillants_par_examen
-        besoin_minimal = nb_total_examens  # Au minimum 1 surveillant par examen
+        
+        # Calculer le minimum adaptatif basé sur le ratio quotas/besoin
+        # Si min_surveillants_par_examen > 2, on calcule un minimum proportionnel
+        if min_surveillants_par_examen > 2:
+            # Calcul du ratio: combien de fois on peut satisfaire le besoin idéal
+            ratio_couverture = quotas_totaux / besoin_ideal if besoin_ideal > 0 else 1
+            # Le minimum par examen sera proportionnel au ratio (au moins 1, au max min_surveillants_par_examen)
+            min_par_examen_adaptatif = max(1, min(min_surveillants_par_examen, int(ratio_couverture * min_surveillants_par_examen)))
+            besoin_minimal = nb_total_examens * min_par_examen_adaptatif
+        else:
+            # Pour min_surveillants_par_examen <= 2, on garde le comportement classique
+            besoin_minimal = nb_total_examens  # Au minimum 1 surveillant par examen
+            min_par_examen_adaptatif = 1
 
         # Vérifier s'il faut adapter (quotas insuffisants)
         # ⚠️ MODE ADAPTATIF SEULEMENT SI allow_fallback=True
         mode_adaptatif = allow_fallback and (quotas_totaux < besoin_ideal)
 
         if mode_adaptatif:
-            # Calculer combien d'examens peuvent avoir min_surveillants_par_examen
-            # et combien devront se contenter de 1 seul
-            nb_examens_min_complet = (quotas_totaux - besoin_minimal) // (
-                min_surveillants_par_examen - 1
-            )
-            nb_examens_min_reduit = nb_total_examens - nb_examens_min_complet
+            if min_surveillants_par_examen > 2:
+                # Mode adaptatif intelligent avec calcul proportionnel
+                print(f"\n⚠️  MODE ADAPTATIF ACTIVÉ:")
+                print(f"   → Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})")
+                print(f"   → Ratio de couverture: {quotas_totaux}/{besoin_ideal} = {quotas_totaux/besoin_ideal:.2f}")
+                print(f"   → Adaptation intelligente: minimum de {min_par_examen_adaptatif} surveillant(s) par examen")
+                print(f"   → Maximum autorisé: {min_surveillants_par_examen} surveillant(s) par examen")
+                print(f"   → Besoin minimal calculé: {besoin_minimal} enseignants (={nb_total_examens} examens × {min_par_examen_adaptatif})")
+                print(f"   → Besoin maximal: {besoin_ideal} enseignants (={nb_total_examens} examens × {min_surveillants_par_examen})")
+                
+                # Ajouter aux warnings pour le rapport final
+                self.warnings.append("⚠️  MODE ADAPTATIF ACTIVÉ (CALCUL INTELLIGENT)")
+                self.warnings.append(f"   • Quotas totaux disponibles: {quotas_totaux} enseignants")
+                self.warnings.append(f"   • Besoin idéal: {besoin_ideal} enseignants")
+                self.warnings.append(f"   • MINIMUM: {min_par_examen_adaptatif} surveillant(s) par examen")
+                self.warnings.append(f"   • MAXIMUM: {min_surveillants_par_examen} surveillant(s) par examen")
+                self.warnings.append(f"   • Besoin minimal: {besoin_minimal} enseignants ({nb_total_examens} examens × {min_par_examen_adaptatif})")
+                self.warnings.append(f"   • Besoin maximal: {besoin_ideal} enseignants ({nb_total_examens} examens × {min_surveillants_par_examen})")
+            else:
+                # Calculer combien d'examens peuvent avoir min_surveillants_par_examen
+                # et combien devront se contenter de 1 seul
+                nb_examens_min_complet = (quotas_totaux - besoin_minimal) // (
+                    min_surveillants_par_examen - 1
+                )
+                nb_examens_min_reduit = nb_total_examens - nb_examens_min_complet
 
-            self.warnings.append(
-                f"⚠️ MODE ADAPTATIF ACTIVÉ: Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})"
-            )
-            self.warnings.append(
-                f"   → Adaptation: ~{nb_examens_min_complet} examens avec {min_surveillants_par_examen} surveillants, "
-                f"~{nb_examens_min_reduit} examens avec 1 seul surveillant"
-            )
+                print(f"\n⚠️  MODE ADAPTATIF ACTIVÉ:")
+                print(f"   → Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})")
+                print(f"   → Minimum par examen: 1 surveillant")
+                print(f"   → Maximum par examen: {min_surveillants_par_examen} surveillants")
+                print(f"   → Adaptation: ~{nb_examens_min_complet} examens avec {min_surveillants_par_examen} surveillants, "
+                      f"~{nb_examens_min_reduit} examens avec 1 seul surveillant")
+                
+                # Ajouter aussi aux warnings pour le rapport final
+                self.warnings.append(
+                    f"⚠️ MODE ADAPTATIF: {nb_examens_min_complet} examens avec {min_surveillants_par_examen} surveillants, "
+                    f"{nb_examens_min_reduit} avec 1 surveillant"
+                )
 
         for seance_key, examens_seance in seances.items():
             nb_examens = len(examens_seance)
 
             # Nombre idéal et maximum pour cette séance = nb_examens × min_surveillants_par_examen
             nb_requis_ideal = nb_examens * min_surveillants_par_examen
-            # Nombre minimal absolu (1 surveillant par examen)
-            nb_requis_minimal = nb_examens
+            
+            # Nombre minimal adaptatif selon le mode
+            if mode_adaptatif and min_surveillants_par_examen > 2:
+                # Mode adaptatif intelligent: utiliser le minimum calculé proportionnellement
+                nb_requis_minimal = nb_examens * min_par_examen_adaptatif
+            else:
+                # Mode classique: minimum 1 surveillant par examen
+                nb_requis_minimal = nb_examens
 
             besoins_par_seance[seance_key] = nb_requis_ideal
 
@@ -591,12 +645,12 @@ class SurveillanceOptimizerV3:
 
             # Vérifier si suffisamment d'enseignants disponibles
             if nb_requis_minimal > len(enseignants):
-                # Pas assez d'enseignants pour garantir 1 par examen
+                # Pas assez d'enseignants pour garantir le minimum par examen
                 self.model.Add(sum(surveillants_pour_seance) >= len(enseignants))
 
             elif mode_adaptatif:
                 # MODE ADAPTATIF: Nombre flexible mais NE JAMAIS DÉPASSER l'idéal
-                # RÈGLE 1: Minimum strict (exactement 1 enseignant par examen)
+                # RÈGLE 1: Minimum adaptatif (calculé selon le ratio quotas/besoin)
                 self.model.Add(sum(surveillants_pour_seance) >= nb_requis_minimal)
 
                 # RÈGLE 2: MAXIMUM ABSOLU = nb_examens × min_surveillants_par_examen
@@ -1161,8 +1215,8 @@ class SurveillanceOptimizerV3:
                 self.model.Add(penalite_voeux == sum(affectations_avec_voeu))
 
         # COMPOSANTE 4: Équilibre temporel (si activé)
-        if equilibrer_temporel:
-            self._ajouter_equilibre_temporel(affectations_vars, seances, enseignants)
+        #if equilibrer_temporel:
+            #self._ajouter_equilibre_temporel(affectations_vars, seances, enseignants)
 
         # OBJECTIF COMBINÉ: Maximiser total_affectations, minimiser dispersion globale et par grade,
         # maximiser bonus_consecutivite (optionnel), MINIMISER penalite_voeux
@@ -1564,11 +1618,6 @@ class SurveillanceOptimizerV3:
                 )
             )
 
-            if nb_enseignants_uniques < nb_requis:
-                self.warnings.append(
-                    f"⚠️ Séance {seance_key[1]} du {seance_key[0].strftime('%d/%m')}: "
-                    f"{nb_enseignants_uniques} enseignants affectés (requis: {nb_requis})"
-                )
 
     def _generer_statistiques(
         self, enseignants: List[Enseignant], seances: Dict, affectations_vars: Dict
