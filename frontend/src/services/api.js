@@ -109,7 +109,6 @@ export const exportAPI = {
 export const planningAPI = {
   getEmploiEnseignant: (enseignantId) => api.get(`/planning/emploi-enseignant/${enseignantId}`),
   getEmploiSeances: () => api.get('/planning/emploi-seances'),
-  ajouterEnseignantSeance: (data) => api.post('/planning/ajouter-enseignant-seance', data),
   supprimerEnseignantSeance: (data) => api.delete('/planning/supprimer-enseignant-seance', { data }),
   ajouterEnseignantParDateHeure: (data) => api.post('/planning/ajouter-enseignant-par-date-heure', data),
 };
@@ -117,10 +116,7 @@ export const planningAPI = {
 // ========== Statistiques ==========
 export const statistiquesAPI = {
   getGlobal: () => api.get('/statistiques/'),
-  getRepartitionGrades: () => api.get('/statistiques/repartition-grades'),
-  getChargeEnseignants: () => api.get('/statistiques/charge-enseignants'),
-  getExamensParJour: () => api.get('/statistiques/examens-par-jour'),
-  getDisponibilites: () => api.get('/statistiques/disponibilites'),
+  getChargeEnseignants: () => api.get('/statistiques/charge-enseignants')
 };
 
 // ========== Grades Configuration ==========

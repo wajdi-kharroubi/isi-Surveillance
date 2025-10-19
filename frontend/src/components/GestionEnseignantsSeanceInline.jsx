@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { planningAPI, enseignantsAPI } from '../services/api';
+import { planningAPI, enseignantsAPI, statistiquesAPI, gradesAPI } from '../services/api';
 import { XMarkIcon, PlusIcon, StarIcon } from '@heroicons/react/24/solid';
 
 /**
@@ -17,6 +17,43 @@ export default function GestionEnseignantsSeanceInline({ seance, onUpdate }) {
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
   });
+
+  // Récupérer les configurations de grades avec leurs quotas
+  const { data: gradesConfig = [] } = useQuery({
+    queryKey: ['grades'],
+    queryFn: () => gradesAPI.getAll().then(res => res.data),
+  });
+
+  // Récupérer les statistiques de charge des enseignants
+  const { data: chargeEnseignantsData } = useQuery({
+    queryKey: ['charge-enseignants'],
+    queryFn: () => statistiquesAPI.getChargeEnseignants().then(res => res.data),
+  });
+
+  // S'assurer que chargeEnseignants est un tableau
+  const chargeEnseignants = Array.isArray(chargeEnseignantsData?.charges) 
+    ? chargeEnseignantsData.charges 
+    : [];
+
+  // Fusionner les données des enseignants avec leurs statistiques
+  const enseignantsAvecStats = useMemo(() => {
+    return enseignants?.map(ens => {
+      const charge = chargeEnseignants.find(c => c.enseignant_id === ens.id);
+      const gradeInfo = gradesConfig.find(g => g.grade_code === ens.grade_code);
+      const quota_max = gradeInfo?.nb_surveillances || 0;
+      const nb_surveillances_affectees = charge?.nb_surveillances || 0;
+      const pourcentage_quota = quota_max > 0 
+        ? Math.round((nb_surveillances_affectees / quota_max) * 100)
+        : 0;
+      
+      return {
+        ...ens,
+        nb_surveillances_affectees,
+        quota_max,
+        pourcentage_quota,
+      };
+    }) || [];
+  }, [enseignants, chargeEnseignants, gradesConfig]);
 
   // Mutation pour supprimer un enseignant
   const supprimerMutation = useMutation({
@@ -68,8 +105,8 @@ export default function GestionEnseignantsSeanceInline({ seance, onUpdate }) {
     });
   };
 
-  // Filtrer les enseignants disponibles
-  const enseignantsDisponibles = enseignants?.filter(
+  // Filtrer les enseignants disponibles avec leurs stats
+  const enseignantsDisponibles = enseignantsAvecStats?.filter(
     ens => !seance.enseignants?.some(e => e.id === ens.id) && ens.participe_surveillance
   ) || [];
 
@@ -119,14 +156,19 @@ export default function GestionEnseignantsSeanceInline({ seance, onUpdate }) {
           <select
             value={selectedEnseignantId}
             onChange={(e) => setSelectedEnseignantId(e.target.value)}
-            className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
           >
-            <option value="">-- Choisir --</option>
-            {enseignantsDisponibles.map(ens => (
-              <option key={ens.id} value={ens.id}>
-                {ens.nom} {ens.prenom} ({ens.grade_code})
-              </option>
-            ))}
+            <option value="">-- Choisir un enseignant --</option>
+            {enseignantsDisponibles
+              .sort((a, b) => {
+                // Trier par pourcentage de quota (ceux qui ont moins en premier)
+                return a.pourcentage_quota - b.pourcentage_quota;
+              })
+              .map(ens => (
+                <option key={ens.id} value={ens.id}>
+                  {ens.nom} {ens.prenom} ({ens.grade_code}) - {ens.nb_surveillances_affectees}/{ens.quota_max} ({ens.pourcentage_quota}%)
+                </option>
+              ))}
           </select>
           <button
             onClick={handleAjouter}
