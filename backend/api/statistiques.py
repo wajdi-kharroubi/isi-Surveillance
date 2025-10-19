@@ -67,9 +67,10 @@ def obtenir_statistiques(db: Session = Depends(get_db)):
 @router.get("/charge-enseignants")
 def charge_par_enseignant(db: Session = Depends(get_db)):
     """Retourne la charge de travail par enseignant (séances uniques)"""
-    from sqlalchemy import func, distinct
+    from sqlalchemy import func, distinct, case
 
     # Compter les séances uniques par enseignant (même date + même heure = 1 séance)
+    # Utiliser CASE pour retourner 0 quand il n'y a pas d'affectations au lieu de 1
     charges = (
         db.query(
             Enseignant.id,
@@ -77,7 +78,12 @@ def charge_par_enseignant(db: Session = Depends(get_db)):
             Enseignant.prenom,
             Enseignant.grade_code,
             func.count(
-                distinct(func.concat(func.date(Examen.dateExam), "-", Examen.h_debut))
+                distinct(
+                    case(
+                        (Examen.id.isnot(None), func.concat(func.date(Examen.dateExam), "-", Examen.h_debut)),
+                        else_=None
+                    )
+                )
             ).label("nb_surveillances"),
         )
         .join(Affectation, Enseignant.id == Affectation.enseignant_id, isouter=True)

@@ -1759,7 +1759,7 @@ class SurveillanceOptimizerV3:
         
         # Affichage détaillé pour l'interface (self.infos)
         self.infos.append("\n" + "=" * 80)
-        self.infos.append("🎯 STATISTIQUES DES VŒUX DE NON-DISPONIBILITÉ")
+        self.infos.append("🎯 STATISTIQUES DES Souhait DE NON-DISPONIBILITÉ")
         self.infos.append("=" * 80)
         self.infos.append("")
         
@@ -1767,14 +1767,14 @@ class SurveillanceOptimizerV3:
         
         # Résultats avec emoji et couleurs
         self.infos.append("📈 RÉSULTATS:")
-        self.infos.append(f"   ✅ Vœux respectés: {nb_voeux_respectes} ({pourcentage_respectes:.1f}%)")
-        self.infos.append(f"   ⚠️ Vœux violés: {nb_voeux_violes} ({pourcentage_violes:.1f}%)")
+        self.infos.append(f"   ✅ Souhait respectés: {nb_voeux_respectes} ({pourcentage_respectes:.1f}%)")
+        self.infos.append(f"   ⚠️ Souhait violés: {nb_voeux_violes} ({pourcentage_violes:.1f}%)")
         self.infos.append("")
         
         # Si des vœux ont été violés, afficher TOUS les détails
         if nb_voeux_violes > 0:
             self.infos.append("-" * 80)
-            self.infos.append(f"⚠️ LISTE COMPLÈTE DES {nb_voeux_violes} VŒUX NON RESPECTÉS:")
+            self.infos.append(f"⚠️ LISTE COMPLÈTE DES {nb_voeux_violes} SOUHAITS NON RESPECTÉS:")
             self.infos.append("-" * 80)
             self.infos.append("")
             self.infos.append("Ces enseignants ont été affectés sur des créneaux qu'ils ne souhaitaient pas:")
