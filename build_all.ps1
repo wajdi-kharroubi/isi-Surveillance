@@ -35,10 +35,17 @@ Write-Host "   Activating virtual environment..." -ForegroundColor Gray
 
 # Install PyInstaller if not present
 Write-Host "   Checking PyInstaller..." -ForegroundColor Gray
-pip show pyinstaller > $null 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "   Installing PyInstaller..." -ForegroundColor Gray
-    pip install pyinstaller
+$pyinstallerCheck = pip show pyinstaller 2>&1
+if ($pyinstallerCheck -match "WARNING: Package\(s\) not found") {
+    Write-Host "   PyInstaller not found. Installing..." -ForegroundColor Yellow
+    python -m pip install pyinstaller
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "   Failed to install PyInstaller!" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "   PyInstaller installed successfully!" -ForegroundColor Green
+} else {
+    Write-Host "   PyInstaller is already installed." -ForegroundColor Green
 }
 
 # Clean previous builds
