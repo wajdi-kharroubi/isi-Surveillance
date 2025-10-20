@@ -7,6 +7,7 @@
 
 ## 📑 Table des Matières
 - [Description](#-description)
+- [Démonstration Vidéo](#-démonstration-vidéo)
 - [Fonctionnalités](#-fonctionnalités-principales)
 - [Structure du Projet](#-structure-du-projet)
 - [Installation](#-installation-et-exécution)
@@ -31,7 +32,7 @@ Application de bureau complète pour la **gestion automatisée des plannings de 
 
 ---
 
-## � Démonstration Vidéo
+## 🎥 Démonstration Vidéo
 
 Découvrez l'application en action à travers cette démonstration complète :
 
