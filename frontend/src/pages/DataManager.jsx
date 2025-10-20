@@ -156,7 +156,7 @@ export default function DataManager() {
       color: 'from-blue-500 to-cyan-500',
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200',
-      examples: ['Code Smartex', 'Nom', 'Prénom', 'Email', 'Grade'],
+      examples: ['nom_ens', 'prenom_ens', 'abrv_ens', 'email_ens', 'grade_code_ens','code_smartex_ens','participe_surveillance'],
     },
     {
       id: 'examens',
@@ -169,7 +169,7 @@ export default function DataManager() {
       color: 'from-green-500 to-emerald-500',
       bgColor: 'bg-green-50',
       borderColor: 'border-green-200',
-      examples: ['Date', 'Heure début/fin', 'Salle', 'Semestre', 'Session'],
+      examples: ['dateExam', 'h_debut', 'h_fin', 'session', 'type ex', 'semestre', 'enseignant', 'cod_salle'],
     },
     {
       id: 'voeux',
@@ -182,7 +182,7 @@ export default function DataManager() {
       color: 'from-red-500 to-red-600',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200',
-      examples: ['Code enseignant', 'Date', 'Heure', 'Disponibilité'],
+      examples: ['Enseignant', 'Semestre', 'Session', 'Date', 'Jour', 'Séances'],
     },
   ];
 

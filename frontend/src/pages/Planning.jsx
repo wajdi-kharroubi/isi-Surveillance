@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { planningAPI, enseignantsAPI, exportAPI, statistiquesAPI, gradesAPI } from '../services/api';
+import { toast } from 'react-hot-toast';
 import { 
   Calendar, 
   Users, 
@@ -123,11 +124,11 @@ export default function Planning() {
       setShowAddSeanceForm(false);
       setSelectedSeanceKey('');
       
-      // Afficher un message de succès (optionnel, vous pouvez utiliser toast)
-      alert(response.data.message);
+      // Afficher un message de succès avec toast
+      toast.success(response.data.message);
     },
     onError: (error) => {
-      alert(error.response?.data?.detail || 'Erreur lors de l\'ajout de la séance');
+      toast.error(error.response?.data?.detail || 'Erreur lors de l\'ajout de la séance');
     },
   });
 
@@ -225,7 +226,7 @@ export default function Planning() {
     e.preventDefault();
     
     if (!selectedSeanceKey) {
-      alert('Veuillez sélectionner une séance');
+      toast.error('Veuillez sélectionner une séance');
       return;
     }
 

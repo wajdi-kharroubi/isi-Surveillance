@@ -224,10 +224,8 @@ def ajouter_enseignant_seance(
     
     db.commit()
     
-    # Message personnalisé selon le statut responsable
-    message = f"✅ Enseignant {enseignant.nom} {enseignant.prenom} ajouté avec succès à la séance ({nb_affectations} affectations créées)"
-    if doit_etre_responsable:
-        message += " ⭐ Marqué comme responsable (responsable d'un examen dans cette séance)"
+    # Message simple
+    message = f"Enseignant {enseignant.nom} {enseignant.prenom} ajouté avec succès"
     
     return AffectationOperationResponse(
         success=True,
@@ -368,13 +366,8 @@ def ajouter_enseignant_par_date_heure(
     
     db.commit()
     
-    # Message personnalisé selon le statut responsable
-    message = f"✅ Enseignant {enseignant.nom} {enseignant.prenom} ajouté avec succès à la séance du {request.date_examen} à {request.h_debut} ({nb_affectations} affectations créées)"
-    if doit_etre_responsable:
-        message += " ⭐ Marqué comme responsable (responsable d'un examen dans cette séance)"
-    
-    # Ajouter les informations de la séance dans le message
-    message += f"\n📅 Séance: {request.h_debut} - {h_fin} | Session: {session} | Semestre: {semestre}"
+    # Message simple
+    message = f"Enseignant {enseignant.nom} {enseignant.prenom} ajouté avec succès"
     
     return AffectationOperationResponse(
         success=True,

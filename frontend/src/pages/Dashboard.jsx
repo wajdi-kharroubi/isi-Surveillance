@@ -81,15 +81,6 @@ export default function Dashboard() {
       bgGradient: 'from-pink-50 to-pink-50',
       iconBg: 'bg-gradient-to-br from-pink-600 to-pink-600',
     },
-    {
-      title: 'Couverture',
-      value: `${stats?.taux_couverture || 0}%`,
-      subtitle: 'Taux de couverture',
-      icon: CheckCircleIcon,
-      gradient: 'from-orange-500 to-amber-500',
-      bgGradient: 'from-orange-50 to-amber-50',
-      iconBg: 'bg-gradient-to-br from-orange-500 to-amber-500',
-    },
   ];
 
   const quickActions = [
@@ -141,7 +132,7 @@ export default function Dashboard() {
       number: 2,
       title: 'Configurer les paramètres',
       description: 'Vérifiez les grades et quotas',
-      completed: false,
+      completed: true,
     },
     {
       number: 3,
@@ -243,7 +234,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <div key={card.title} className={`stat-card bg-gradient-to-br ${card.bgGradient} border-2 border-white shadow-xl`}>
             <div className="flex items-start justify-between mb-4">

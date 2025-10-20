@@ -110,8 +110,12 @@ class SurveillanceOptimizerV3:
         """
         start_time = time.time()
 
+        print("=" * 80)
+        print("🚀 DÉMARRAGE DE L'ALGORITHME D'OPTIMISATION V3.0")
+        print("=" * 80)
 
         # ===== PHASE 1: RÉCUPÉRATION DES DONNÉES =====
+        print("\n📊 Phase 1: Récupération des données...")
 
         enseignants = (
             self.db.query(Enseignant)
@@ -133,7 +137,9 @@ class SurveillanceOptimizerV3:
                     "⚠️ Impossible de traiter les vœux (format inattendu)"
                 )
 
-
+        print(f"   ✓ {len(enseignants)} enseignants disponibles")
+        print(f"   ✓ {len(examens)} examens à planifier")
+        print(f"   ✓ {len(voeux)} vœux de non-disponibilité")
 
         # Vérifications préliminaires
         if not enseignants:
@@ -145,21 +151,35 @@ class SurveillanceOptimizerV3:
             return False, 0, 0.0, self.warnings
 
         # ===== PHASE 2: NETTOYAGE =====
+        print("\n🗑️  Phase 2: Nettoyage des anciennes affectations...")
         nb_supprimees = self.db.query(Affectation).delete()
         self.db.commit()
+        print(f"   ✓ {nb_supprimees} anciennes affectations supprimées")
 
         # ===== PHASE 3: GROUPEMENT PAR SÉANCE =====
+        print("\n🗂️  Phase 3: Groupement des examens par séance...")
         seances = self._grouper_examens_par_seance(examens)
+        print(f"   ✓ {len(seances)} séances identifiées")
 
         if not seances:
             self.warnings.append("⚠️ Aucune séance d'examen trouvée")
             return False, 0, 0.0, self.warnings
 
+        # Afficher les séances
+        for idx, (seance_key, examens_seance) in enumerate(seances.items(), 1):
+            date_exam, seance_code, semestre, session, jour_index = seance_key
+            print(
+                f"   • Séance {idx}: Jour {jour_index} - {date_exam.strftime('%d/%m/%Y')} - {seance_code} - {semestre} - {session} ({len(examens_seance)} examens)"
+            )
+
         # ===== PHASE 4: ANALYSE DES RESPONSABLES D'EXAMENS =====
+        print("\n👥 Phase 4: Identification des responsables d'examens...")
         responsables_examens = self._identifier_responsables(examens)
+        print(f"   ✓ {len(responsables_examens)} examens avec responsable identifié")
 
 
         # ===== PHASE 5: CRÉATION DES VARIABLES DE DÉCISION =====
+        print("\n🔢 Phase 5: Création des variables de décision...")
 
         # Variables: enseignant affecté à une séance
         affectations_vars = {}
@@ -170,16 +190,23 @@ class SurveillanceOptimizerV3:
                 affectations_vars[(seance_key, enseignant.id)] = self.model.NewBoolVar(
                     var_name
                 )
-        #      
+        #      print(f"      • Variable: {var_name} | Clé: {seance_key}, Enseignant: {enseignant.id}")
+
+        print(f"   ✓ {len(affectations_vars)} variables booléennes créées")
 
         # ===== PHASE 6: APPLICATION DES CONTRAINTES =====
+        print("\n🔒 Phase 6: Application des contraintes...")
 
         # CONTRAINTE 1: ÉGALITÉ STRICTE par grade (PRIORITÉ 1 - OBLIGATOIRE)
+        print("   → Contrainte 1: ÉGALITÉ STRICTE par grade (PRIORITÉ 1 - OBLIGATOIRE)")
+        print("      ⚠️ Tous les enseignants d'un même grade feront EXACTEMENT le même nombre de séances")
         charge_par_enseignant = self._contrainte_quotas_grades(
             enseignants, seances, affectations_vars, responsables_examens
         )
+        print(f"      ✓ Contrainte d'égalité stricte appliquée pour tous les grades")
 
         # CONTRAINTE 2: Nombre d'enseignants par séance (PRIORITÉ 2 - OBLIGATOIRE)
+        print("   → Contrainte 2: Nombre d'enseignants par séance (PRIORITÉ 2 - OBLIGATOIRE)")
         besoins_par_seance, mode_adaptatif = self._contrainte_nombre_minimal(
             seances,
             enseignants,
@@ -187,26 +214,39 @@ class SurveillanceOptimizerV3:
             min_surveillants_par_examen,
             allow_fallback,
         )
+        print(f"      ✓ Contraintes de couverture appliquées")
 
         # CONTRAINTE 3: Respect des vœux de NON-disponibilité (PRIORITÉ 3)
         preferences_voeux = {}
         if respecter_voeux and list_voeux:
+            print(
+                "   → Contrainte 3: Respect des vœux de NON-disponibilité (PRIORITÉ 3)"
+            )
             preferences_voeux = self._contrainte_voeux(
                 list_voeux, seances, enseignants, affectations_vars
             )
             nb_avec_voeu = len(preferences_voeux.get("avec_voeu", []))
             nb_sans_voeu = len(preferences_voeux.get("sans_voeu", []))
+            print(f"      ✓ {nb_avec_voeu} combinaisons à ÉVITER (vœux de non-disponibilité)")
+            print(f"      ✓ {nb_sans_voeu} combinaisons sans contrainte de vœu")
         else:
-            pass
+            print("   → Contrainte 3: Vœux désactivés")
 
         # CONTRAINTE 4: Présence obligatoire des responsables (PRIORITÉ 4)
+        print("   → Contrainte 4: Présence obligatoire des responsables d'examens (PRIORITÉ 4)")
         nb_contraintes_responsables = self._contrainte_responsables(
             responsables_examens, seances, affectations_vars, enseignants
         )
+        print(
+            f"      ✓ {nb_contraintes_responsables} responsables ajoutés obligatoirement (peuvent surveiller d'autres examens)"
+        )
 
         # CONTRAINTE 5: Non-conflit horaire (automatique avec séances)
+        print("   → Contrainte 5: Non-conflit horaire (automatique)")
+        print(f"      ✓ Garanti par le système de séances")
 
         # CONTRAINTE 6: Équilibre entre séances (PRIORITÉ 5)
+        print("   → Contrainte 6: Équilibre entre séances de taille similaire (PRIORITÉ 5)")
         self._contrainte_equilibre_entre_seances(
             seances,
             enseignants,
@@ -214,22 +254,36 @@ class SurveillanceOptimizerV3:
             besoins_par_seance,
             min_surveillants_par_examen,
         )
+        print(f"      ✓ Contraintes d'équilibre appliquées")
 
         # CONTRAINTE 7: Interdire première+dernière séance isolées (PRIORITÉ 6)
+        print(
+            "   → Contrainte 7: Interdiction première+dernière séance sans autres séances (PRIORITÉ 6)"
+        )
         self._contrainte_interdire_premiere_derniere_isolees(
             seances, enseignants, affectations_vars
+        )
+        print(
+            f"      ✓ Contrainte appliquée: impossible d'avoir SEULEMENT 1ère ET dernière séance d'un jour"
         )
 
         # CONTRAINTE 8: Favoriser séances consécutives (PRIORITÉ 7 - OPTIONNEL)
         bonus_consecutivite = None
         if activer_regroupement_temporel:
+            print(
+                "   → Contrainte 8: Regroupement des séances (PRIORITÉ 7 - OPTIONNEL - ACTIVÉ)"
+            )
             bonus_consecutivite = self._contrainte_seances_consecutives(
                 seances, enseignants, affectations_vars
             )
+            print(
+                f"      ✓ Bonus de regroupement calculé (favorise les séances groupées)"
+            )
         else:
-            pass
+            print("   → Contrainte 8: Regroupement temporel (PRIORITÉ 7 - OPTIONNEL - DÉSACTIVÉ)")
 
         # ===== PHASE 7: FONCTION OBJECTIF =====
+        print("\n🎯 Phase 7: Configuration de la fonction objectif...")
 
         score_total = self._configurer_fonction_objectif(
             charge_par_enseignant,
@@ -243,7 +297,37 @@ class SurveillanceOptimizerV3:
             mode_adaptatif,
         )
 
+        if activer_regroupement_temporel:
+            print(f"      ✓ Fonction objectif configurée (ordre de priorité):")
+            if mode_adaptatif:
+                print(f"         MODE ADAPTATIF (quotas insuffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 40% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 20%")
+                print(f"         3. Maximiser l'utilisation des quotas - 20%")
+                print(f"         4. Favoriser les séances regroupées (PRIORITÉ 7) - 20%")
+            else:
+                print(f"         MODE NORMAL (quotas suffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 50% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 30%")
+                print(f"         3. Favoriser les séances regroupées (PRIORITÉ 7) - 20%")
+                print(f"         Note: Quotas déjà maximisés par CONTRAINTE 1 (pas d'optimisation)")
+            print(f"         Note: Égalité par grade garantie par CONTRAINTE 1 (dispersion = 0)")
+        else:
+            print(f"      ✓ Fonction objectif configurée (ordre de priorité):")
+            if mode_adaptatif:
+                print(f"         MODE ADAPTATIF (quotas insuffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 50% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 30%")
+                print(f"         3. Maximiser l'utilisation des quotas - 20%")
+            else:
+                print(f"         MODE NORMAL (quotas suffisants):")
+                print(f"         1. ÉVITER les vœux de non-disponibilité (PRIORITÉ 3) - 60% - PÉNALITÉ")
+                print(f"         2. Minimiser la dispersion globale entre enseignants - 40%")
+                print(f"         Note: Quotas déjà maximisés par CONTRAINTE 1 (pas d'optimisation)")
+            print(f"         Note: Égalité par grade garantie par CONTRAINTE 1 (dispersion = 0)")
+
         # ===== PHASE 8: RÉSOLUTION =====
+        print("\n⚡ Phase 8: Résolution du problème...")
 
         # Configuration ultra-optimisée du solveur pour performances maximales
         import os
@@ -271,15 +355,25 @@ class SurveillanceOptimizerV3:
             max_time_in_seconds / 2.0  # Temps déterministe = moitié du temps max
         )
 
+        print(f"      → Utilisation de {min(nb_cores, 16)} workers CPU")
+        print(
+            f"      → Timeout: {max_time_in_seconds} secondes ({max_time_in_seconds / 60:.1f} min)"
+        )
+        print(f"      → Gap relatif accepté: {relative_gap_limit * 100:.1f}%")
+
         status = self.solver.Solve(self.model)
 
         # ===== PHASE 9: TRAITEMENT DES RÉSULTATS =====
+        print("\n📋 Phase 9: Traitement des résultats...")
 
         if status == cp_model.OPTIMAL:
+            print("   ✅ Solution OPTIMALE trouvée!")
             status_text = "OPTIMALE"
         elif status == cp_model.FEASIBLE:
+            print("   ✅ Solution RÉALISABLE trouvée")
             status_text = "RÉALISABLE"
         else:
+            print("   ❌ Aucune solution trouvée")
             
             self.warnings.append(
                 "❌ Impossible de trouver une solution avec TOUTES les contraintes"
@@ -308,6 +402,7 @@ class SurveillanceOptimizerV3:
         execution_time = time.time() - start_time
 
         # ===== PHASE 10: VÉRIFICATIONS ET STATISTIQUES =====
+        print("\n📊 Phase 10: Vérifications et statistiques...")
 
         # Vérifications finales
         self._verifier_couverture_seances(seances, besoins_par_seance)
@@ -321,6 +416,13 @@ class SurveillanceOptimizerV3:
                 enseignants,
                 len(list_voeux)
             )
+
+        print("\n" + "=" * 80)
+        print(
+            f"✅ GÉNÉRATION TERMINÉE EN {execution_time:.2f}s - {nb_affectations} affectations créées"
+        )
+        print(f"📊 Statut: {status_text}")
+        print("=" * 80)
 
         return (
             True,
@@ -499,6 +601,13 @@ class SurveillanceOptimizerV3:
         if mode_adaptatif:
             if min_surveillants_par_examen > 2:
                 # Mode adaptatif intelligent avec calcul proportionnel
+                print(f"\n⚠️  MODE ADAPTATIF ACTIVÉ:")
+                print(f"   → Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})")
+                print(f"   → Ratio de couverture: {quotas_totaux}/{besoin_ideal} = {quotas_totaux/besoin_ideal:.2f}")
+                print(f"   → Adaptation intelligente: minimum de {min_par_examen_adaptatif} surveillant(s) par examen")
+                print(f"   → Maximum autorisé: {min_surveillants_par_examen} surveillant(s) par examen")
+                print(f"   → Besoin minimal calculé: {besoin_minimal} enseignants (={nb_total_examens} examens × {min_par_examen_adaptatif})")
+                print(f"   → Besoin maximal: {besoin_ideal} enseignants (={nb_total_examens} examens × {min_surveillants_par_examen})")
                 
                 # Ajouter aux warnings pour le rapport final
                 self.warnings.append("⚠️  MODE ADAPTATIF ACTIVÉ (CALCUL INTELLIGENT)")
@@ -515,6 +624,13 @@ class SurveillanceOptimizerV3:
                     min_surveillants_par_examen - 1
                 )
                 nb_examens_min_reduit = nb_total_examens - nb_examens_min_complet
+
+                print(f"\n⚠️  MODE ADAPTATIF ACTIVÉ:")
+                print(f"   → Quotas totaux ({quotas_totaux}) < besoin idéal ({besoin_ideal})")
+                print(f"   → Minimum par examen: 1 surveillant")
+                print(f"   → Maximum par examen: {min_surveillants_par_examen} surveillants")
+                print(f"   → Adaptation: ~{nb_examens_min_complet} examens avec {min_surveillants_par_examen} surveillants, "
+                      f"~{nb_examens_min_reduit} examens avec 1 seul surveillant")
                 
                 # Ajouter aussi aux warnings pour le rapport final
                 self.warnings.append(
@@ -1577,11 +1693,13 @@ class SurveillanceOptimizerV3:
             enseignants: Liste des enseignants
             nb_list_voeux: Nombre total de vœux exprimés dans la base
         """
+        print("\n🎯 Statistiques sur les vœux de non-disponibilité:")
         
         # Récupérer les affectations sur créneaux avec vœux de non-disponibilité
         affectations_avec_voeu = preferences_voeux.get("avec_voeu", [])
         
         if not affectations_avec_voeu:
+            print("   ✅ Aucun vœu de non-disponibilité à gérer dans le planning")
             self.infos.append("\n" + "=" * 80)
             self.infos.append("🎯 STATISTIQUES DES VŒUX DE NON-DISPONIBILITÉ")
             self.infos.append("=" * 80)
@@ -1634,6 +1752,10 @@ class SurveillanceOptimizerV3:
         # Calculer les pourcentages
         pourcentage_respectes = (nb_voeux_respectes / nb_list_voeux * 100) if nb_list_voeux > 0 else 100
         pourcentage_violes = (nb_voeux_violes / nb_list_voeux * 100) if nb_list_voeux > 0 else 0
+        
+        # Affichage console simplifié
+        print(f"   ✅ Vœux respectés: {nb_voeux_respectes} ({pourcentage_respectes:.1f}%)")
+        print(f"   ⚠️ Vœux violés: {nb_voeux_violes} ({pourcentage_violes:.1f}%)")
         
         # Affichage détaillé pour l'interface (self.infos)
         self.infos.append("\n" + "=" * 80)

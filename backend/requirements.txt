@@ -25,10 +25,7 @@ python-docx==1.1.0
 # Word to PDF Conversion
 docx2pdf==0.1.8
 
-<<<<<<< HEAD
-=======
 
->>>>>>> 51b0e6a345a07678356956bc25980a6cdd28445d
 # Optimization Algorithm - Version précompilée pour Windows
 ortools>=9.14
 numpy>=2.3

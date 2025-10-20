@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { planningAPI, enseignantsAPI, statistiquesAPI, gradesAPI } from '../services/api';
+import { toast } from 'react-hot-toast';
 import { XMarkIcon, PlusIcon, StarIcon } from '@heroicons/react/24/solid';
 
 /**
@@ -61,7 +62,11 @@ export default function GestionEnseignantsSeanceInline({ seance, onUpdate }) {
     onSuccess: () => {
       queryClient.invalidateQueries(['emploi-seances']);
       queryClient.invalidateQueries(['statistiques']);
+      toast.success('Enseignant retiré de la séance avec succès');
       if (onUpdate) onUpdate();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');
     },
   });
 
@@ -73,7 +78,11 @@ export default function GestionEnseignantsSeanceInline({ seance, onUpdate }) {
       setSelectedEnseignantId('');
       queryClient.invalidateQueries(['emploi-seances']);
       queryClient.invalidateQueries(['statistiques']);
+      toast.success('Enseignant ajouté à la séance avec succès');
       if (onUpdate) onUpdate();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Erreur lors de l\'ajout');
     },
   });
 

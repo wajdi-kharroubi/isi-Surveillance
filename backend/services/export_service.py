@@ -746,44 +746,10 @@ class ExportService:
         
         # Ajouter l'image du logo ISI
         logo_path = os.path.join(os.path.dirname(__file__), '..', 'logo', 'logoISI.png')
-        if os.path.exists(logo_path):
-            p_logo = cell_logo.paragraphs[0]
-            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run_logo = p_logo.add_run()
-            run_logo.add_picture(logo_path, width=Inches(1.2))
-        else:
-            # Si le logo n'existe pas, utiliser le texte comme fallback
-            p_logo1 = cell_logo.paragraphs[0]
-            p_logo1.paragraph_format.space_after = Pt(0)
-            run_logo1 = p_logo1.add_run("INSTITUT")
-            run_logo1.font.size = Pt(7)
-            run_logo1.font.color.rgb = RGBColor(0, 51, 153)
-            p_logo1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            
-            p_logo2 = cell_logo.add_paragraph()
-            p_logo2.paragraph_format.space_after = Pt(0)
-            run_logo2 = p_logo2.add_run("SUPÉRIEUR")
-            run_logo2.font.size = Pt(7)
-            run_logo2.font.color.rgb = RGBColor(0, 51, 153)
-            p_logo2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            
-            p_logo3 = cell_logo.add_paragraph()
-            p_logo3.paragraph_format.space_after = Pt(2)
-            run_logo3 = p_logo3.add_run("INFORMATIQUE  ")
-            run_logo3.font.size = Pt(7)
-            run_logo3.font.color.rgb = RGBColor(0, 51, 153)
-            run_logo3_isi = p_logo3.add_run("ISI")
-            run_logo3_isi.font.size = Pt(11)
-            run_logo3_isi.font.bold = True
-            run_logo3_isi.font.color.rgb = RGBColor(0, 153, 0)  # Vert plus vif
-            p_logo3.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            
-            p_logo4 = cell_logo.add_paragraph()
-            p_logo4.paragraph_format.space_after = Pt(0)
-            run_logo4 = p_logo4.add_run("المعهد العالي للإعلامية")
-            run_logo4.font.size = Pt(7)
-            run_logo4.font.color.rgb = RGBColor(0, 51, 153)
-            p_logo4.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo = cell_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_logo = p_logo.add_run()
+        run_logo.add_picture(logo_path, width=Inches(1.2))
         
         # Sous-titre (ligne 2, colonne 2)
         cell_titre2 = header_table.rows[1].cells[1]
