@@ -290,7 +290,8 @@ export default function Layout({ children }) {
               </div>
             </div> */}
             <div className="text-center">
-              <p className="text-xs text-gray-400">Version 2.0.0</p>
+              <p className="text-xs text-gray-400">Version 1.0.0</p>
+              <p className="text-xxs text-gray-300">&#169; Marwen Benammou - Wajdi Kharroubi</p>
             </div>
           </div>
         </div>
