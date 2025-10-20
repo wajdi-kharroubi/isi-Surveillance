@@ -35,8 +35,6 @@ Application de bureau complète pour la **gestion automatisée des plannings de 
 
 Découvrez l'application en action à travers cette démonstration complète :
 
-[![Démonstration de l'Application](https://img.youtube.com/vi/JNGDvO74-O0/maxresdefault.jpg)](https://www.youtube.com/watch?v=JNGDvO74-O0)
-
 **[▶️ Voir la démonstration sur YouTube](https://www.youtube.com/watch?v=JNGDvO74-O0)**
 
 Cette vidéo présente :
@@ -48,7 +46,7 @@ Cette vidéo présente :
 
 ---
 
-## �🎯 Fonctionnalités Principales
+## 🎯 Fonctionnalités Principales
 
 ### 1️⃣ Gestion des Enseignants
 - ✅ Import des enseignants via fichiers Excel
@@ -533,13 +531,11 @@ Les quotas sont **entièrement configurables** via :
 
 **Exemple de fichier :**
 
-```
-nom_ens   | prenom_ens | email_ens   | abrv_ens           | grade_code_ens | code_smartex_ens  | participe_surveillance
-----------|--------|---------------------|---------------|-------------|---------------|------
-BENAMMOU  | Marwen | marwen.b@example.com |M.BENAMMOU      | MA             | 65            | Oui
-KHARROUBI | Wajdi  | wajdi.k@example.com   | W.KHARROUBI   | PR             | 66            | Oui
-DUPONT    | Jean   | jean.dupont@example.com | J.DUPONT   | AS             | 67              | Non
-```
+| nom_ens   | prenom_ens | email_ens                | abrv_ens    | grade_code_ens | code_smartex_ens | participe_surveillance |
+|-----------|------------|--------------------------|-------------|----------------|------------------|------------------------|
+| BENAMMOU  | Marwen     | marwen.b@example.com     | M.BENAMMOU  | MA             | 65               | Oui                    |
+| KHARROUBI | Wajdi      | wajdi.k@example.com      | W.KHARROUBI | PR             | 66               | Oui                    |
+| DUPONT    | Jean       | jean.dupont@example.com  | J.DUPONT    | AS             | 67               | Non                    |
 
 ### Import Excel - Examens
 
@@ -558,13 +554,12 @@ DUPONT    | Jean   | jean.dupont@example.com | J.DUPONT   | AS             | 67 
 
 
 **Exemple de fichier :**
-```
-dateExam   | h_debut | h_fin | session | type ex | semestre    | enseignant | cod_salle
------------|---------|-------|---------|---------|-------------|------------|----------
-15/01/2025 | 08:30   | 10:30 | P       | E  | SEMESTRE 1  | 58         | A.201
-15/01/2025 | 08:30   | 10:30 | P       | E   | SEMESTRE 1  | 41         | A.202
-15/01/2025 | 14:00   | 16:00 | P       | E      | SEMESTRE 1  | 64         | B.101
-```
+
+| dateExam   | h_debut | h_fin | session | type ex | semestre   | enseignant | cod_salle |
+|------------|---------|-------|---------|---------|------------|------------|-----------|
+| 15/01/2025 | 08:30   | 10:30 | P       | E       | SEMESTRE 1 | 58         | A.201     |
+| 15/01/2025 | 08:30   | 10:30 | P       | E       | SEMESTRE 1 | 41         | A.202     |
+| 15/01/2025 | 14:00   | 16:00 | P       | E       | SEMESTRE 1 | 64         | B.101     |
 
 ### Import Excel - Vœux
 
