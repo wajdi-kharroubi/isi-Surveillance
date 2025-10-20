@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { planningAPI, enseignantsAPI, exportAPI, statistiquesAPI, gradesAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -22,6 +23,7 @@ import {
 import GestionEnseignantsSeanceInline from '../components/GestionEnseignantsSeanceInline';
 
 export default function Planning() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('seances');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
@@ -307,37 +309,37 @@ export default function Planning() {
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Hero Header - Compact */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
-        
-        <div className="relative px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center shadow-lg border border-white/30">
-                <Calendar className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white drop-shadow-md">
-                  Planning de Surveillance
-                </h1>
-                <p className="text-blue-100 text-sm font-medium">
-                  Visualisez et gérez les affectations en temps réel
-                </p>
-              </div>
+        <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+          
+          <div className="relative px-6 py-5">
+            <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center shadow-lg border border-white/30">
+              <Calendar className="w-6 h-6 text-white" />
             </div>
-            
-            <button 
-              onClick={() => window.location.href = '/export'}
-              className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105"
-            >
-              <Download className="w-4 h-4" />
-              Exporter
-            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-white drop-shadow-md">
+            Planning de Surveillance
+              </h1>
+              <p className="text-blue-100 text-sm font-medium">
+            Visualisez et gérez les affectations en temps réel
+              </p>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => navigate('/export')}
+            className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105"
+          >
+            <Download className="w-4 h-4" />
+            Exporter
+          </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Tabs Navigation */}
+        {/* Tabs Navigation */}
       <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
         <nav className="flex border-b border-gray-200">
           <button
