@@ -53,6 +53,15 @@ Write-Host "   Cleaning previous builds..." -ForegroundColor Gray
 if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 
+# Verify logo directory exists before building
+Write-Host "   Verifying resources..." -ForegroundColor Gray
+if (-Not (Test-Path "logo\logoISI.png")) {
+    Write-Host "   WARNING: Logo file not found at logo\logoISI.png" -ForegroundColor Yellow
+    Write-Host "   This may cause export errors in the application." -ForegroundColor Yellow
+} else {
+    Write-Host "   Logo file found: logo\logoISI.png" -ForegroundColor Green
+}
+
 # Build with PyInstaller
 Write-Host "   Running PyInstaller (this may take several minutes)..." -ForegroundColor Gray
 pyinstaller build_backend.spec --clean --noconfirm
@@ -116,6 +125,11 @@ Set-Location "$PROJECT_ROOT"
 if (-Not (Test-Path "database")) {
     Write-Host "   Creating database directory..." -ForegroundColor Gray
     New-Item -ItemType Directory -Path "database" -Force | Out-Null
+}
+
+if (-Not (Test-Path "exports")) {
+    Write-Host "   Creating exports directory..." -ForegroundColor Gray
+    New-Item -ItemType Directory -Path "exports" -Force | Out-Null
 }
 
 if (-Not (Test-Path "database\surveillance.db")) {

@@ -43,6 +43,8 @@ a = Analysis(
         ('models/__init__.py', 'models'),
         ('services/__init__.py', 'services'),
         ('algorithms/__init__.py', 'algorithms'),
+        # Include logo directory
+        ('logo', 'logo'),
     ],
     hiddenimports=[
         # Uvicorn

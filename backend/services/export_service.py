@@ -16,10 +16,31 @@ from models.models import Enseignant, Examen, Affectation
 from datetime import datetime, date
 from typing import List, Dict
 import os
+import sys
 from config import EXPORT_DIR
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def get_resource_path(relative_path):
+    """
+    Obtient le chemin absolu d'une ressource, que ce soit en mode développement ou PyInstaller.
+    
+    Args:
+        relative_path: Chemin relatif de la ressource
+        
+    Returns:
+        Chemin absolu de la ressource
+    """
+    try:
+        # PyInstaller crée un dossier temporaire et stocke le chemin dans _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # En mode développement, utilise le répertoire courant
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    return os.path.join(base_path, relative_path)
 
 
 class ExportService:
@@ -745,7 +766,7 @@ class ExportService:
         self._set_cell_vertical_alignment(cell_logo, 'center')
         
         # Ajouter l'image du logo ISI
-        logo_path = os.path.join(os.path.dirname(__file__), '..', 'logo', 'logoISI.png')
+        logo_path = get_resource_path(os.path.join('logo', 'logoISI.png'))
         p_logo = cell_logo.paragraphs[0]
         p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run_logo = p_logo.add_run()
