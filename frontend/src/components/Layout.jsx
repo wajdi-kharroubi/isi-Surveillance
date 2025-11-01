@@ -44,6 +44,7 @@ const navigation = [
     description: 'Génération & Consultation',
     highlight: true,
     subItems: [
+      { name: 'Aide à la Décision', href: '/aide-decision', description: '🧮 Calculer quotas', icon: ChartBarIcon },
       { name: 'Génération', href: '/generation', description: 'Créer le planning', icon: SparklesIcon },
       { name: 'Consulter Planning', href: '/planning', description: 'Voir le planning', icon: DocumentTextIcon },
       { name: 'Export', href: '/export', description: 'Télécharger', icon: ArrowDownTrayIcon },

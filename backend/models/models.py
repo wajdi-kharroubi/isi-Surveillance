@@ -15,6 +15,7 @@ class Enseignant(Base):
     code_smartex = Column(String(50), unique=True, nullable=False, index=True)
     abrv_ens = Column(String(50), nullable=True)  # Abréviation de l'enseignant (ex: P.NOM)
     participe_surveillance = Column(Boolean, default=True)
+    nombre_max = Column(Integer, default=4, nullable=False)  # Nombre max de séances par jour
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -42,6 +42,7 @@ from api import (
     statistiques,
     grades,
     planning,
+    decision,
 )
 
 # Enregistrement des routers
@@ -54,6 +55,7 @@ app.include_router(export.router, prefix="/api")
 app.include_router(statistiques.router, prefix="/api")
 app.include_router(grades.router, prefix="/api")
 app.include_router(planning.router, prefix="/api")
+app.include_router(decision.router, prefix="/api")
 
 
 # Routes de base

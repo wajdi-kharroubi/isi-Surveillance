@@ -378,6 +378,17 @@ export default function Enseignants() {
                   )}
                 </button>
               </th>
+              <th>
+                <button 
+                  onClick={() => handleSort('nombre_max')}
+                  className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                >
+                  Max/Jour
+                  {sortConfig.key === 'nombre_max' && (
+                    <span>{sortConfig.direction === 'asc' ? ' ↑' : ' ↓'}</span>
+                  )}
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -400,6 +411,11 @@ export default function Enseignants() {
                   ) : (
                     <span className="badge badge-danger">✕ Non</span>
                   )}
+                </td>
+                <td>
+                  <span className="font-semibold text-orange-600 bg-orange-50 px-3 py-1 rounded-lg">
+                    {ens.nombre_max !== undefined && ens.nombre_max !== null ? ens.nombre_max : 4} séance{(ens.nombre_max !== undefined && ens.nombre_max !== null ? ens.nombre_max : 4) > 1 ? 's' : ''}
+                  </span>
                 </td>
               </tr>
             ))}

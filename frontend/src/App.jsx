@@ -10,6 +10,7 @@ import Planning from './pages/Planning';
 import Export from './pages/Export';
 import Statistiques from './pages/Statistiques';
 import ConfigGrades from './pages/ConfigGrades';
+import AideDecision from './pages/AideDecision';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
         <Route path="/enseignants" element={<Enseignants />} />
         <Route path="/examens" element={<Examens />} />
         <Route path="/voeux" element={<Voeux />} />
+        <Route path="/aide-decision" element={<AideDecision />} />
         <Route path="/generation" element={<Generation />} />
         <Route path="/planning" element={<Planning />} />
         <Route path="/export" element={<Export />} />

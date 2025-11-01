@@ -12,6 +12,7 @@ class EnseignantBase(BaseModel):
     code_smartex: str = Field(..., min_length=1, max_length=50)
     abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant (ex: P.NOM)
     participe_surveillance: bool = True
+    nombre_max: int = Field(default=4, ge=0, le=10)  # Nombre max de séances par jour (0-10)
 
 class EnseignantCreate(EnseignantBase):
     pass
@@ -24,6 +25,7 @@ class EnseignantUpdate(BaseModel):
     grade_code: Optional[str] = Field(None, min_length=1, max_length=10)
     abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant
     participe_surveillance: Optional[bool] = None
+    nombre_max: Optional[int] = Field(None, ge=0, le=10)  # Nombre max de séances par jour
 
 class EnseignantResponse(EnseignantBase):
     id: int

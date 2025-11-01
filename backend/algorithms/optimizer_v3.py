@@ -32,6 +32,7 @@ class SurveillanceOptimizerV3:
        - Mode adaptatif (si min_surveillants_par_examen <= 2):
          MIN = nb_examens (1 par examen), MAX = nb_examens × min_surveillants_par_examen
     4. Non-conflit horaire
+    5. Nombre maximum de séances par jour pour chaque enseignant (respect du champ nombre_max)
 
     RÈGLES DE PRÉFÉRENCE (Contraintes souples - SOFT):
     1. Respect des vœux de NON-disponibilité (vœux = créneaux où l'enseignant NE VEUT PAS surveiller)
@@ -44,11 +45,12 @@ class SurveillanceOptimizerV3:
     1. ÉGALITÉ STRICTE par Grade (PRIORITÉ 1 - OBLIGATOIRE)
     2. Quota Maximum Strict par Grade (PRIORITÉ 1 - OBLIGATOIRE)
     3. Nombre d'Enseignants par Séance (PRIORITÉ 2 - OBLIGATOIRE)
-    4. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3)
-    5. Présence Obligatoire des Responsables (PRIORITÉ 4)
-    6. Équilibre entre Séances de Taille Similaire (PRIORITÉ 5)
-    7. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 6)
-    8. Regroupement des Séances (PRIORITÉ 7)
+    4. Nombre Maximum de Séances par Jour (PRIORITÉ 2.5 - OBLIGATOIRE)
+    5. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3)
+    6. Présence Obligatoire des Responsables (PRIORITÉ 4)
+    7. Équilibre entre Séances de Taille Similaire (PRIORITÉ 5)
+    8. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 6)
+    9. Regroupement des Séances (PRIORITÉ 7)
     """
 
     def __init__(self, db: Session):
@@ -206,7 +208,12 @@ class SurveillanceOptimizerV3:
 
         # CONTRAINTE 5: Non-conflit horaire (automatique avec séances)
 
-        # CONTRAINTE 6: Équilibre entre séances (PRIORITÉ 5)
+        # CONTRAINTE 5bis: Nombre maximum de séances par jour pour chaque enseignant (PRIORITÉ 5 - SOUPLE)
+        penalite_max_seances = self._contrainte_nombre_max_seances_par_jour(
+            enseignants, seances, affectations_vars
+        )
+
+        # CONTRAINTE 6: Équilibre entre séances (PRIORITÉ 6)
         self._contrainte_equilibre_entre_seances(
             seances,
             enseignants,
@@ -215,12 +222,12 @@ class SurveillanceOptimizerV3:
             min_surveillants_par_examen,
         )
 
-        # CONTRAINTE 7: Interdire première+dernière séance isolées (PRIORITÉ 6)
+        # CONTRAINTE 7: Interdire première+dernière séance isolées (PRIORITÉ 7)
         self._contrainte_interdire_premiere_derniere_isolees(
             seances, enseignants, affectations_vars
         )
 
-        # CONTRAINTE 8: Favoriser séances consécutives (PRIORITÉ 7 - OPTIONNEL)
+        # CONTRAINTE 8: Favoriser séances consécutives (PRIORITÉ 8 - OPTIONNEL)
         bonus_consecutivite = None
         if activer_regroupement_temporel:
             bonus_consecutivite = self._contrainte_seances_consecutives(
@@ -241,6 +248,7 @@ class SurveillanceOptimizerV3:
             bonus_consecutivite,
             activer_regroupement_temporel,
             mode_adaptatif,
+            penalite_max_seances,
         )
 
         # ===== PHASE 8: RÉSOLUTION =====
@@ -321,6 +329,21 @@ class SurveillanceOptimizerV3:
                 enseignants,
                 len(list_voeux)
             )
+        
+        # Statistiques sur les responsables d'examens
+        self._generer_statistiques_responsables(
+            affectations_vars,
+            responsables_examens,
+            seances,
+            enseignants
+        )
+        
+        # Statistiques sur le nombre max de séances par jour
+        self._generer_statistiques_max_seances_par_jour(
+            affectations_vars,
+            seances,
+            enseignants
+        )
 
         return (
             True,
@@ -645,6 +668,100 @@ class SurveillanceOptimizerV3:
 
         return charge_par_enseignant
 
+    def _contrainte_nombre_max_seances_par_jour(
+        self,
+        enseignants: List[Enseignant],
+        seances: Dict,
+        affectations_vars: Dict,
+    ):
+        """
+        CONTRAINTE 5 (PRIORITÉ 5 - SOUPLE): Nombre maximum de séances par jour pour chaque enseignant.
+
+        RÈGLE: Chaque enseignant a un attribut `nombre_max` qui indique le nombre maximum
+        de séances qu'il peut surveiller dans une même journée.
+
+        - Si nombre_max = 0 : l'enseignant ne peut pas surveiller (participe_surveillance=False) - CONTRAINTE DURE
+        - Si nombre_max = 2 : l'enseignant PRÉFÈRE surveiller au maximum 2 séances dans la même journée - SOUPLE
+        - Si nombre_max = 4 : l'enseignant peut surveiller toutes les séances d'une journée (S1, S2, S3, S4)
+
+        Cette contrainte souple pénalise les dépassements du nombre max de séances par jour,
+        mais permet de les dépasser si nécessaire pour couvrir toutes les séances.
+        
+        Retourne un score de pénalité pour la fonction objectif.
+        """
+        # Grouper les séances par date (jour)
+        seances_par_date = {}
+        for seance_key in seances.keys():
+            date_exam = seance_key[0]  # La date est le premier élément de la clé
+            if date_exam not in seances_par_date:
+                seances_par_date[date_exam] = []
+            seances_par_date[date_exam].append(seance_key)
+
+        # Pour les enseignants avec nombre_max = 0, on garde une contrainte DURE
+        # Pour les autres, on calcule une pénalité souple
+        nb_contraintes_dures = 0
+        penalites_depassement = []
+        
+        for enseignant in enseignants:
+            nombre_max = getattr(enseignant, 'nombre_max', 4)  # Défaut: 4 séances max
+            
+            # Si nombre_max = 0, l'enseignant ne devrait pas participer (CONTRAINTE DURE)
+            if nombre_max == 0:
+                # Forcer toutes les affectations à 0
+                for seance_key in seances.keys():
+                    if (seance_key, enseignant.id) in affectations_vars:
+                        self.model.Add(affectations_vars[(seance_key, enseignant.id)] == 0)
+                        nb_contraintes_dures += 1
+            else:
+                # Pour chaque jour, calculer la pénalité de dépassement (CONTRAINTE SOUPLE)
+                for date_exam, seances_du_jour in seances_par_date.items():
+                    # Calculer le nombre de séances affectées à cet enseignant ce jour-là
+                    seances_affectees_ce_jour = []
+                    for seance_key in seances_du_jour:
+                        if (seance_key, enseignant.id) in affectations_vars:
+                            seances_affectees_ce_jour.append(
+                                affectations_vars[(seance_key, enseignant.id)]
+                            )
+                    
+                    if seances_affectees_ce_jour:
+                        # Créer une variable pour le nombre de séances ce jour-là
+                        nb_seances_jour = self.model.NewIntVar(
+                            0, len(seances_du_jour), 
+                            f"nb_seances_{enseignant.id}_{date_exam}"
+                        )
+                        self.model.Add(nb_seances_jour == sum(seances_affectees_ce_jour))
+                        
+                        # Créer une variable pour le dépassement (0 si <= nombre_max, sinon nb - nombre_max)
+                        depassement = self.model.NewIntVar(
+                            0, len(seances_du_jour), 
+                            f"depassement_{enseignant.id}_{date_exam}"
+                        )
+                        self.model.AddMaxEquality(depassement, [0, nb_seances_jour - nombre_max])
+                        
+                        # Ajouter à la liste des pénalités
+                        penalites_depassement.append(depassement)
+
+        if nb_contraintes_dures > 0:
+            self.infos.append(
+                f"✓ Contrainte DURE nombre max de séances/jour: {nb_contraintes_dures} contraintes (nombre_max=0)"
+            )
+        
+        # Calculer le score total de pénalité
+        penalite_max_seances = None
+        if penalites_depassement:
+            penalite_max_seances = self.model.NewIntVar(
+                0, 
+                len(penalites_depassement) * max([len(s) for s in seances_par_date.values()]), 
+                "penalite_max_seances_par_jour"
+            )
+            self.model.Add(penalite_max_seances == sum(penalites_depassement))
+            
+            self.infos.append(
+                f"✓ Contrainte SOUPLE nombre max de séances/jour: {len(penalites_depassement)} pénalités calculées"
+            )
+        
+        return penalite_max_seances
+
     def _contrainte_voeux(
         self,
         list_voeux: List[Dict],
@@ -738,7 +855,7 @@ class SurveillanceOptimizerV3:
         min_surveillants_par_examen: int,
     ):
         """
-        CONTRAINTE 5 (PRIORITÉ 5): Équilibre adaptatif entre séances de taille similaire.
+        CONTRAINTE 6 (PRIORITÉ 6): Équilibre adaptatif entre séances de taille similaire.
 
         Les séances ayant le même nombre d'examens doivent avoir approximativement
         le même nombre d'enseignants affectés, avec une tolérance adaptée au contexte.
@@ -841,7 +958,7 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 6 (PRIORITÉ 6): Interdire d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
+        CONTRAINTE 7 (PRIORITÉ 7): Interdire d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
 
         Règle stricte:
         - Si un enseignant a la 1ère séance ET la dernière séance d'un jour
@@ -909,7 +1026,7 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 7 (PRIORITÉ 7 - OPTIONNELLE): Favorise le regroupement des séances par jour.
+        CONTRAINTE 8 (PRIORITÉ 8 - OPTIONNELLE): Favorise le regroupement des séances par jour.
         VERSION OPTIMISÉE pour performance.
 
         Objectifs:
@@ -1034,17 +1151,19 @@ class SurveillanceOptimizerV3:
         bonus_consecutivite=None,
         activer_regroupement_temporel: bool = False,
         mode_adaptatif: bool = False,
+        penalite_max_seances=None,
     ) -> cp_model.IntVar:
         """
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
         
         ORDRE DES PRIORITÉS (selon les contraintes définies):
         - PRIORITÉ 1-2: ÉGALITÉ par grade + Quota maximum + Nombre d'enseignants (CONTRAINTES FORTES - garanties)
-        - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ)
+        - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ - SOUPLE)
         - PRIORITÉ 4: Responsables (CONTRAINTE FORTE - garantie)
-        - PRIORITÉ 5: Équilibre entre séances (CONTRAINTE FORTE - garantie)
-        - PRIORITÉ 6: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
-        - PRIORITÉ 7: Regroupement des séances (POIDS SECONDAIRE)
+        - PRIORITÉ 5: Respect du nombre max de séances/jour (POIDS MOYEN - SOUPLE)
+        - PRIORITÉ 6: Équilibre entre séances (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 7: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 8: Regroupement des séances (POIDS SECONDAIRE - SOUPLE)
 
         ADAPTATION SELON LE MODE:
         
@@ -1167,6 +1286,13 @@ class SurveillanceOptimizerV3:
             else:
                 poids.append(-60 if not activer_regroupement_temporel else -50)
 
+        # PRIORITÉ 5: Pénalité dépassement nombre max séances/jour (POIDS MOYEN - SOUPLE)
+        if penalite_max_seances is not None:
+            composantes.append(penalite_max_seances)
+            # Poids moyen car c'est une préférence importante (PRIORITÉ 5)
+            # Plus élevé que le regroupement, mais moins que les vœux
+            poids.append(-30)  # Poids moyen: -30 (PRIORITÉ 5)
+
         # Équilibre global de charge (minimiser dispersion globale entre TOUS les enseignants)
         if dispersion is not None:
             composantes.append(dispersion)
@@ -1187,10 +1313,10 @@ class SurveillanceOptimizerV3:
             # Poids ajusté selon si regroupement temporel activé
             poids.append(20 if activer_regroupement_temporel else 20)
 
-        # PRIORITÉ 7: Bonus regroupement (POIDS AUGMENTÉ pour meilleur confort enseignants)
+        # PRIORITÉ 8: Bonus regroupement (POIDS FAIBLE pour meilleur confort enseignants)
         if activer_regroupement_temporel and bonus_consecutivite is not None:
             composantes.append(bonus_consecutivite)
-            poids.append(20)  # Poids augmenté à 20% pour favoriser le confort (PRIORITÉ 7)
+            poids.append(10)  # Poids faible: 10 (PRIORITÉ 8 - la plus basse)
 
         if composantes:
             # Calculer les bornes du score combiné
@@ -1637,7 +1763,7 @@ class SurveillanceOptimizerV3:
         
         # Affichage détaillé pour l'interface (self.infos)
         self.infos.append("\n" + "=" * 80)
-        self.infos.append("🎯 STATISTIQUES DES Souhait DE NON-DISPONIBILITÉ")
+        self.infos.append("🎯 STATISTIQUES DES SOUHAITS DE NON-DISPONIBILITÉ")
         self.infos.append("=" * 80)
         self.infos.append("")
         
@@ -1664,7 +1790,233 @@ class SurveillanceOptimizerV3:
             for i, detail in enumerate(voeux_violes_details, 1):
                 self.infos.append(
                     f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
-                    f"Date: {detail['date']:10s} | Séance: {detail['seance']:3s} | "
-                    f"{detail['semestre']} - {detail['session']}"
+                    f"Date: {detail['date']:10s} | Séance: {detail['seance']:3s}"
                 )
             
+
+
+    def _generer_statistiques_responsables(
+        self,
+        affectations_vars: Dict,
+        responsables_examens: Dict[int, int],
+        seances: Dict,
+        enseignants: List[Enseignant]
+    ):
+        """
+        Génère des statistiques détaillées sur la présence des responsables d'examens.
+        
+        Args:
+            affectations_vars: Variables d'affectation du modèle
+            responsables_examens: Dictionnaire {examen_id: enseignant_id}
+            seances: Dictionnaire des séances
+            enseignants: Liste des enseignants
+        """
+        if not responsables_examens:
+            self.infos.append("\n" + "=" * 80)
+            self.infos.append("👨‍🏫 STATISTIQUES DES RESPONSABLES D'EXAMENS")
+            self.infos.append("=" * 80)
+            self.infos.append("")
+            self.infos.append("ℹ️  Aucun responsable d'examen défini dans le planning")
+            self.infos.append("")
+            self.infos.append("=" * 80)
+            return
+        
+        nb_responsables_total = 0
+        nb_responsables_presents = 0
+        nb_responsables_absents = 0
+        nb_responsables_non_participants = 0  # Compteur pour les responsables qui ne participent pas
+        
+        responsables_absents_details = []
+        
+        # Pour chaque séance et chaque examen de la séance
+        for seance_key, examens_seance in seances.items():
+            for examen in examens_seance:
+                if examen.id in responsables_examens:
+                    responsable_id = responsables_examens[examen.id]
+                    
+                    # Récupérer les informations de l'enseignant
+                    enseignant = next((e for e in enseignants if e.id == responsable_id), None)
+                    if not enseignant:
+                        # Chercher dans la BDD
+                        enseignant = self.db.query(Enseignant).filter(Enseignant.id == responsable_id).first()
+                    
+                    # Vérifier si l'enseignant participe aux surveillances
+                    participe = getattr(enseignant, 'participe_surveillance', True) if enseignant else True
+                    
+                    # Si l'enseignant ne participe pas aux surveillances, on ne le compte pas dans les statistiques
+                    if not participe:
+                        nb_responsables_non_participants += 1
+                        continue
+                    
+                    # Compter uniquement les responsables qui participent aux surveillances
+                    nb_responsables_total += 1
+                    
+                    # Vérifier si le responsable est affecté à cette séance
+                    var = affectations_vars.get((seance_key, responsable_id))
+                    
+                    if var is not None and self.solver.Value(var) == 1:
+                        # Le responsable est présent
+                        nb_responsables_presents += 1
+                    else:
+                        # Le responsable est absent
+                        nb_responsables_absents += 1
+                        
+                        if enseignant:
+                            date_exam, seance_code, semestre, session, jour_index = seance_key
+                            responsables_absents_details.append({
+                                'enseignant': f"{enseignant.nom} {enseignant.prenom}",
+                                'code': enseignant.code_smartex or f"ID_{responsable_id}",
+                                'date': date_exam.strftime('%d/%m/%Y'),
+                                'seance': seance_code,
+                                'semestre': semestre,
+                                'session': session,
+                                'module': examen.nomModule if hasattr(examen, 'nomModule') else 'Module inconnu',
+                                'salle': examen.cod_salle if hasattr(examen, 'cod_salle') else 'Salle inconnue'
+                            })
+        
+        # Calculer les pourcentages
+        pourcentage_presents = (nb_responsables_presents / nb_responsables_total * 100) if nb_responsables_total > 0 else 0
+        pourcentage_absents = (nb_responsables_absents / nb_responsables_total * 100) if nb_responsables_total > 0 else 0
+        
+        # Affichage détaillé
+        self.infos.append("\n" + "=" * 80)
+        self.infos.append("👨‍🏫 STATISTIQUES DES RESPONSABLES D'EXAMENS")
+        self.infos.append("=" * 80)
+        self.infos.append("")
+        
+        # Note sur les enseignants exclus
+        if nb_responsables_non_participants > 0:
+            self.infos.append(
+                f"ℹ️ Remarque : {nb_responsables_non_participants} responsable(s) ont été exclus des statistiques car leur participation est désactivée.")
+            self.infos.append("")
+        
+        # Résultats avec emoji
+        self.infos.append("📈 RÉSULTATS:")
+        self.infos.append(f"   ✅ Responsables présents: {nb_responsables_presents} ({pourcentage_presents:.1f}%)")
+        self.infos.append(f"   ❌ Responsables absents: {nb_responsables_absents} ({pourcentage_absents:.1f}%)")
+        self.infos.append(f"   📊 Total analysé: {nb_responsables_total} responsables participants")
+        self.infos.append("")
+        
+        # Si des responsables sont absents, afficher les détails
+        if nb_responsables_absents > 0:
+            self.infos.append("-" * 80)
+            self.infos.append(f"❌ LISTE DES {nb_responsables_absents} RESPONSABLES ABSENTS:")
+            self.infos.append("-" * 80)
+            self.infos.append("")
+            self.infos.append("Ces responsables ne sont pas affectés à la surveillance de leur propre examen:")
+            self.infos.append("")
+            
+            # Trier par date, puis par séance, puis par nom
+            responsables_absents_details.sort(key=lambda x: (x['date'], x['seance'], x['enseignant']))
+            
+            for i, detail in enumerate(responsables_absents_details, 1):
+                self.infos.append(
+                    f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
+                    f"Date: {detail['date']:10s} | Séance: {detail['seance']:3s} | "
+                    f"Salle: {detail['salle']}"
+                )
+            self.infos.append("")
+        
+        self.infos.append("=" * 80)
+
+
+    def _generer_statistiques_max_seances_par_jour(
+        self,
+        affectations_vars: Dict,
+        seances: Dict,
+        enseignants: List[Enseignant]
+    ):
+        """
+        Génère des statistiques détaillées sur le respect de la contrainte du nombre maximum de séances par jour.
+        
+        Args:
+            affectations_vars: Variables d'affectation du modèle
+            seances: Dictionnaire des séances
+            enseignants: Liste des enseignants
+        """
+        # Grouper les séances par date
+        seances_par_date = {}
+        for seance_key in seances.keys():
+            date_exam = seance_key[0]
+            if date_exam not in seances_par_date:
+                seances_par_date[date_exam] = []
+            seances_par_date[date_exam].append(seance_key)
+        
+        nb_total_contraintes = 0
+        nb_contraintes_respectees = 0
+        nb_contraintes_violees = 0
+        
+        violations_details = []
+        
+        # Pour chaque enseignant
+        for enseignant in enseignants:
+            nombre_max = getattr(enseignant, 'nombre_max', 4)
+            
+            # Pour chaque jour
+            for date_exam, seances_du_jour in seances_par_date.items():
+                # Compter le nombre de séances affectées à cet enseignant ce jour-là
+                nb_seances_affectees = 0
+                seances_affectees_liste = []
+                
+                for seance_key in seances_du_jour:
+                    var = affectations_vars.get((seance_key, enseignant.id))
+                    if var is not None and self.solver.Value(var) == 1:
+                        nb_seances_affectees += 1
+                        seances_affectees_liste.append(seance_key[1])  # seance_code
+                
+                # Si l'enseignant a au moins une séance ce jour-là, vérifier la contrainte
+                if nb_seances_affectees > 0:
+                    nb_total_contraintes += 1
+                    
+                    if nb_seances_affectees <= nombre_max:
+                        nb_contraintes_respectees += 1
+                    else:
+                        # Violation de la contrainte
+                        nb_contraintes_violees += 1
+                        violations_details.append({
+                            'enseignant': f"{enseignant.nom} {enseignant.prenom}",
+                            'code': enseignant.code_smartex or f"ID_{enseignant.id}",
+                            'date': date_exam.strftime('%d/%m/%Y'),
+                            'nb_seances': nb_seances_affectees,
+                            'max_autorise': nombre_max,
+                            'seances': ', '.join(sorted(seances_affectees_liste)),
+                            'depassement': nb_seances_affectees - nombre_max
+                        })
+        
+        # Calculer les pourcentages
+        pourcentage_respectees = (nb_contraintes_respectees / nb_total_contraintes * 100) if nb_total_contraintes > 0 else 100
+        pourcentage_violees = (nb_contraintes_violees / nb_total_contraintes * 100) if nb_total_contraintes > 0 else 0
+        
+        # Affichage détaillé
+        self.infos.append("\n" + "=" * 80)
+        self.infos.append("📅 STATISTIQUES DU NOMBRE MAX DE SÉANCES PAR JOUR")
+        self.infos.append("=" * 80)
+        self.infos.append("")
+        
+        # Résultats avec emoji
+        self.infos.append("📈 RÉSULTATS:")
+        self.infos.append(f"   ✅ Contraintes respectées: {nb_contraintes_respectees} ({pourcentage_respectees:.1f}%)")
+        self.infos.append(f"   ⚠️ Contraintes violées: {nb_contraintes_violees} ({pourcentage_violees:.1f}%)")
+        self.infos.append("")
+        
+        # Si des violations ont été détectées, afficher les détails
+        if nb_contraintes_violees > 0:
+            self.infos.append("-" * 80)
+            self.infos.append(f"⚠️ LISTE DES {nb_contraintes_violees} VIOLATIONS:")
+            self.infos.append("-" * 80)
+            self.infos.append("")
+            self.infos.append("Ces enseignants dépassent leur nombre maximum de séances par jour:")
+            self.infos.append("")
+            
+            # Trier par date, puis par dépassement (du plus grave au moins grave), puis par nom
+            violations_details.sort(key=lambda x: (x['date'], -x['depassement'], x['enseignant']))
+            
+            for i, detail in enumerate(violations_details, 1):
+                self.infos.append(
+                    f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
+                    f"Date: {detail['date']:10s} | Séances: {detail['nb_seances']}/{detail['max_autorise']} "
+                    f"(+{detail['depassement']}) | [{detail['seances']}]"
+                )
+            self.infos.append("")
+        
+        self.infos.append("=" * 80)

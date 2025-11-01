@@ -451,11 +451,12 @@ export default function Generation() {
                 if (w.includes('surveillant(s) par examen')) return true;
                 
                 // Garder les statistiques des vœux (headers, résumés, listes)
-                if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                if (w.includes('VŒUX') || w.includes('VOEUX') || w.includes('Souhait')) return true;
                 if (w.includes('STATISTIQUES')) return true;
                 if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
                 if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
-                if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                if (w.includes('RÉSULTATS:') || w.includes('RESULTATS:')) return true;
+                if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE') || w.includes('LISTE DES')) return true;
                 if (w.includes('respectés') || w.includes('respectes')) return true;
                 if (w.includes('violés') || w.includes('violes')) return true;
                 if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
@@ -467,9 +468,24 @@ export default function Generation() {
                 if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
                 if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
                 
+                // Garder les statistiques des responsables d'examens
+                if (w.includes('RESPONSABLES')) return true;
+                if (w.includes('Responsables présents') || w.includes('Responsables absents')) return true;
+                if (w.includes('Total analysé')) return true;
+                if (w.includes('participe_surveillance')) return true;
+                if (w.includes('exclu(s) des statistiques')) return true;
+                
+                // Garder les statistiques du nombre max de séances par jour
+                if (w.includes('SÉANCES PAR JOUR') || w.includes('SEANCES PAR JOUR')) return true;
+                if (w.includes('Contraintes respectées') || w.includes('Contraintes respectees')) return true;
+                if (w.includes('Contraintes violées') || w.includes('Contraintes violees')) return true;
+                if (w.includes('VIOLATIONS:')) return true;
+                if (w.includes('dépassent leur nombre maximum') || w.includes('depassent leur nombre maximum')) return true;
+                
                 // Garder les lignes avec emojis de diagnostic
                 if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
-                if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫') || w.includes('📅')) return true;
+                if (w.includes('✅') || w.includes('📈')) return true;
                 if (w.includes('💡') || w.includes('🔧')) return true;
                 if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
                 
@@ -500,11 +516,12 @@ export default function Generation() {
               if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
               if (w.includes('Ratio de couverture:')) return true;
               if (w.includes('surveillant(s) par examen')) return true;
-              if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+              if (w.includes('VŒUX') || w.includes('VOEUX') || w.includes('Souhait')) return true;
               if (w.includes('STATISTIQUES')) return true;
               if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
               if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
-              if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+              if (w.includes('RÉSULTATS:') || w.includes('RESULTATS:')) return true;
+              if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE') || w.includes('LISTE DES')) return true;
               if (w.includes('respectés') || w.includes('respectes')) return true;
               if (w.includes('violés') || w.includes('violes')) return true;
               if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
@@ -515,8 +532,19 @@ export default function Generation() {
               if (w.includes('SOLUTIONS POSSIBLES')) return true;
               if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
               if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+              if (w.includes('RESPONSABLES')) return true;
+              if (w.includes('Responsables présents') || w.includes('Responsables absents')) return true;
+              if (w.includes('Total analysé')) return true;
+              if (w.includes('participe_surveillance')) return true;
+              if (w.includes('exclu(s) des statistiques')) return true;
+              if (w.includes('SÉANCES PAR JOUR') || w.includes('SEANCES PAR JOUR')) return true;
+              if (w.includes('Contraintes respectées') || w.includes('Contraintes respectees')) return true;
+              if (w.includes('Contraintes violées') || w.includes('Contraintes violees')) return true;
+              if (w.includes('VIOLATIONS:')) return true;
+              if (w.includes('dépassent leur nombre maximum') || w.includes('depassent leur nombre maximum')) return true;
               if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
-              if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+              if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫') || w.includes('📅')) return true;
+              if (w.includes('✅') || w.includes('📈')) return true;
               if (w.includes('💡') || w.includes('🔧')) return true;
               if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
               if (/^\s*\d+\.\s+/.test(w)) return true;
@@ -531,7 +559,7 @@ export default function Generation() {
                   </div>
                   <div>
                     <p className="text-lg font-bold text-gray-900">
-                      Avertissements et Statistiques des Vœux
+                      Avertissements et Statistiques des Souhaits
                     </p>
                     <p className="text-xs text-blue-700 font-medium">
                       {result.warnings.filter(w => {
@@ -547,11 +575,12 @@ export default function Generation() {
                         if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
                         if (w.includes('Ratio de couverture:')) return true;
                         if (w.includes('surveillant(s) par examen')) return true;
-                        if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                        if (w.includes('VŒUX') || w.includes('VOEUX') || w.includes('Souhait')) return true;
                         if (w.includes('STATISTIQUES')) return true;
                         if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
                         if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
-                        if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                        if (w.includes('RÉSULTATS:') || w.includes('RESULTATS:')) return true;
+                        if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE') || w.includes('LISTE DES')) return true;
                         if (w.includes('respectés') || w.includes('respectes')) return true;
                         if (w.includes('violés') || w.includes('violes')) return true;
                         if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
@@ -562,8 +591,19 @@ export default function Generation() {
                         if (w.includes('SOLUTIONS POSSIBLES')) return true;
                         if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
                         if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+                        if (w.includes('RESPONSABLES')) return true;
+                        if (w.includes('Responsables présents') || w.includes('Responsables absents')) return true;
+                        if (w.includes('Total analysé')) return true;
+                        if (w.includes('participe_surveillance')) return true;
+                        if (w.includes('exclu(s) des statistiques')) return true;
+                        if (w.includes('SÉANCES PAR JOUR') || w.includes('SEANCES PAR JOUR')) return true;
+                        if (w.includes('Contraintes respectées') || w.includes('Contraintes respectees')) return true;
+                        if (w.includes('Contraintes violées') || w.includes('Contraintes violees')) return true;
+                        if (w.includes('VIOLATIONS:')) return true;
+                        if (w.includes('dépassent leur nombre maximum') || w.includes('depassent leur nombre maximum')) return true;
                         if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
-                        if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                        if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫') || w.includes('📅')) return true;
+                        if (w.includes('✅') || w.includes('📈')) return true;
                         if (w.includes('💡') || w.includes('🔧')) return true;
                         if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
                         if (/^\s*\d+\.\s+/.test(w)) return true;
@@ -583,11 +623,12 @@ export default function Generation() {
                         if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
                         if (w.includes('Ratio de couverture:')) return true;
                         if (w.includes('surveillant(s) par examen')) return true;
-                        if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                        if (w.includes('VŒUX') || w.includes('VOEUX') || w.includes('Souhait')) return true;
                         if (w.includes('STATISTIQUES')) return true;
                         if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
                         if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
-                        if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                        if (w.includes('RÉSULTATS:') || w.includes('RESULTATS:')) return true;
+                        if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE') || w.includes('LISTE DES')) return true;
                         if (w.includes('respectés') || w.includes('respectes')) return true;
                         if (w.includes('violés') || w.includes('violes')) return true;
                         if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
@@ -598,8 +639,19 @@ export default function Generation() {
                         if (w.includes('SOLUTIONS POSSIBLES')) return true;
                         if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
                         if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+                        if (w.includes('RESPONSABLES')) return true;
+                        if (w.includes('Responsables présents') || w.includes('Responsables absents')) return true;
+                        if (w.includes('Total analysé')) return true;
+                        if (w.includes('participe_surveillance')) return true;
+                        if (w.includes('exclu(s) des statistiques')) return true;
+                        if (w.includes('SÉANCES PAR JOUR') || w.includes('SEANCES PAR JOUR')) return true;
+                        if (w.includes('Contraintes respectées') || w.includes('Contraintes respectees')) return true;
+                        if (w.includes('Contraintes violées') || w.includes('Contraintes violees')) return true;
+                        if (w.includes('VIOLATIONS:')) return true;
+                        if (w.includes('dépassent leur nombre maximum') || w.includes('depassent leur nombre maximum')) return true;
                         if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
-                        if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                        if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫') || w.includes('📅')) return true;
+                        if (w.includes('✅') || w.includes('📈')) return true;
                         if (w.includes('💡') || w.includes('🔧')) return true;
                         if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
                         if (/^\s*\d+\.\s+/.test(w)) return true;
@@ -625,11 +677,12 @@ export default function Generation() {
                     if (w.includes('Besoin idéal:') || w.includes('Besoin minimal:') || w.includes('Besoin maximal:')) return true;
                     if (w.includes('Ratio de couverture:')) return true;
                     if (w.includes('surveillant(s) par examen')) return true;
-                    if (w.includes('VŒUX') || w.includes('VOEUX')) return true;
+                    if (w.includes('VŒUX') || w.includes('VOEUX') || w.includes('Souhait')) return true;
                     if (w.includes('STATISTIQUES')) return true;
                     if (w.includes('RÉSUMÉ GLOBAL') || w.includes('RESUME GLOBAL')) return true;
                     if (w.includes('RÉSULTATS DU PLANNING') || w.includes('RESULTATS DU PLANNING')) return true;
-                    if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE')) return true;
+                    if (w.includes('RÉSULTATS:') || w.includes('RESULTATS:')) return true;
+                    if (w.includes('LISTE COMPLÈTE') || w.includes('LISTE COMPLETE') || w.includes('LISTE DES')) return true;
                     if (w.includes('respectés') || w.includes('respectes')) return true;
                     if (w.includes('violés') || w.includes('violes')) return true;
                     if (w.includes('Total de vœux') || w.includes('Total de voeux')) return true;
@@ -640,9 +693,22 @@ export default function Generation() {
                     if (w.includes('SOLUTIONS POSSIBLES')) return true;
                     if (w.includes('SOLUTIONS GÉNÉRALES')) return true;
                     if (w.includes('CONTRAINTES POSSIBLEMENT PROBLÉMATIQUES')) return true;
+                    // Inclure les statistiques des responsables
+                    if (w.includes('RESPONSABLES')) return true;
+                    if (w.includes('Responsables présents') || w.includes('Responsables absents')) return true;
+                    if (w.includes('Total analysé')) return true;
+                    if (w.includes('participe_surveillance')) return true;
+                    if (w.includes('exclu(s) des statistiques')) return true;
+                    // Inclure les statistiques des séances par jour
+                    if (w.includes('SÉANCES PAR JOUR') || w.includes('SEANCES PAR JOUR')) return true;
+                    if (w.includes('Contraintes respectées') || w.includes('Contraintes respectees')) return true;
+                    if (w.includes('Contraintes violées') || w.includes('Contraintes violees')) return true;
+                    if (w.includes('VIOLATIONS:')) return true;
+                    if (w.includes('dépassent leur nombre maximum') || w.includes('depassent leur nombre maximum')) return true;
                     // Inclure les lignes avec emojis de diagnostic
                     if (w.includes('📊') || w.includes('👥') || w.includes('📝') || w.includes('🕐')) return true;
-                    if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫')) return true;
+                    if (w.includes('🎯') || w.includes('💼') || w.includes('👨‍🏫') || w.includes('📅')) return true;
+                    if (w.includes('✅') || w.includes('📈')) return true;
                     if (w.includes('💡') || w.includes('🔧')) return true;
                     if (w.includes('1️⃣') || w.includes('2️⃣') || w.includes('3️⃣') || w.includes('4️⃣') || w.includes('5️⃣') || w.includes('6️⃣')) return true;
                     // Inclure les lignes numérotées et les bullet points
@@ -740,8 +806,8 @@ export default function Generation() {
                         </div>
                       );
                     }
-                    
-                    // Messages standards (statistiques des vœux, listes)
+
+                    // Messages standards (statistiques des souhaits, listes)
                     return (
                       <div key={idx} className="bg-white p-3 rounded-lg border-l-4 border-gray-300 shadow-sm hover:shadow-md transition-shadow">
                         <p className="text-sm text-gray-700 font-medium leading-relaxed whitespace-pre-wrap">

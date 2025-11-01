@@ -130,6 +130,10 @@ class ImportService:
                         if pd.notna(abrv_ens_raw) and str(abrv_ens_raw).strip() != '':
                             abrv_ens = str(abrv_ens_raw).strip()
                     
+                    # Définir nombre_max en fonction de participe_surveillance
+                    # Si l'enseignant ne participe pas aux surveillances, nombre_max = 0
+                    nombre_max = 0 if not participe else 4
+                    
                     # Créer l'enseignant (pas besoin de vérifier l'existence, tout est supprimé avant)
                     enseignant = Enseignant(
                         nom=str(row['nom_ens']).strip(),
@@ -139,7 +143,8 @@ class ImportService:
                         grade_code=grade_code,
                         code_smartex=code_smartex,
                         abrv_ens=abrv_ens,
-                        participe_surveillance=participe
+                        participe_surveillance=participe,
+                        nombre_max=nombre_max
                     )
                     db.add(enseignant)
                     count += 1
@@ -169,6 +174,7 @@ class ImportService:
         - Date: format j/m/a (ex: 15/01/2025)
         - Jour: Lundi, Mardi, Mercredi, Jeudi, Vendredi, Samedi
         - Séances: Liste de séances séparées par des virgules (ex: S1,S3 ou S2,S4)
+        - Nombre-Max: Nombre maximum de séances par jour (optionnel, défaut: 4)
         
         Returns:
             (nombre_importes, erreurs)
@@ -189,7 +195,7 @@ class ImportService:
             df = pd.read_excel(file_path)
             
             # Vérification des colonnes obligatoires
-            colonnes_requises = ['Enseignant', 'Semestre', 'Session', 'Jour', 'Séances']
+            colonnes_requises = ['Enseignant', 'Semestre', 'Session', 'Date', 'Jour', 'Séances']
             colonnes_manquantes = [col for col in colonnes_requises if col not in df.columns]
             
             if colonnes_manquantes:
@@ -198,6 +204,42 @@ class ImportService:
             
             # Liste des jours valides
             jours_valides = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+            
+            # ÉTAPE 1: Pré-analyser le fichier pour extraire le Nombre-Max de chaque enseignant
+            # Dictionnaire pour stocker le nombre_max de chaque enseignant
+            enseignants_nombre_max_dict = {}
+            
+            if 'Nombre-Max' in df.columns:
+                logger.info("🔍 Pré-analyse des valeurs Nombre-Max pour chaque enseignant...")
+                
+                for idx, row in df.iterrows():
+                    abrv_ens = str(row['Enseignant']).strip()
+                    
+                    # Vérifier si l'enseignant existe
+                    enseignant = db.query(Enseignant).filter(
+                        Enseignant.abrv_ens == abrv_ens
+                    ).first()
+                    
+                    if enseignant and enseignant.id not in enseignants_nombre_max_dict:
+                        # Chercher une valeur Nombre-Max valide pour cet enseignant dans toutes ses lignes
+                        enseignant_rows = df[df['Enseignant'].str.strip() == abrv_ens]
+                        nombre_max_trouve = None
+                        
+                        for _, ens_row in enseignant_rows.iterrows():
+                            if pd.notna(ens_row['Nombre-Max']) and str(ens_row['Nombre-Max']).strip() != '':
+                                try:
+                                    nb = int(ens_row['Nombre-Max'])
+                                    if 0 <= nb <= 10:
+                                        nombre_max_trouve = nb
+                                        logger.info(f"   ✓ Enseignant {abrv_ens}: Nombre-Max trouvé = {nb}")
+                                        break
+                                except (ValueError, TypeError):
+                                    continue
+                        
+                        enseignants_nombre_max_dict[enseignant.id] = nombre_max_trouve
+            
+            # ÉTAPE 2: Dictionnaire pour stocker le nombre_max finalement assigné
+            enseignants_nombre_max = {}
             
             # Import ligne par ligne
             for idx, row in df.iterrows():
@@ -213,6 +255,30 @@ class ImportService:
                         erreurs.append(f"Ligne {idx + 2}: Enseignant avec abréviation '{abrv_ens}' introuvable")
                         continue
                     
+                    # Définir le Nombre-Max si pas encore défini pour cet enseignant
+                    if enseignant.id not in enseignants_nombre_max:
+                        # Si l'enseignant ne participe pas aux surveillances, nombre_max = 0
+                        if not enseignant.participe_surveillance:
+                            nombre_max = 0
+                            logger.info(f"📊 Enseignant {abrv_ens}: Ne participe pas aux surveillances, Nombre-Max forcé à 0")
+                        else:
+                            # Utiliser la valeur trouvée dans la pré-analyse, sinon valeur par défaut
+                            nombre_max_preanalyse = enseignants_nombre_max_dict.get(enseignant.id)
+                            
+                            if nombre_max_preanalyse is not None:
+                                nombre_max = nombre_max_preanalyse
+                                logger.info(f"📊 Enseignant {abrv_ens}: Nombre-Max défini à {nombre_max}")
+                            else:
+                                nombre_max = 4  # Valeur par défaut
+                                logger.info(f"📊 Enseignant {abrv_ens}: Aucun Nombre-Max valide trouvé, utilisation de la valeur par défaut (4)")
+                        
+                        # Stocker le nombre_max pour cet enseignant
+                        enseignants_nombre_max[enseignant.id] = nombre_max
+                        
+                        # Mettre à jour l'enseignant avec le nombre_max
+                        enseignant.nombre_max = nombre_max
+                        db.add(enseignant)
+                    
                     # Récupérer et valider le jour (capitaliser la première lettre)
                     jour = str(row['Jour']).strip().capitalize()
                     if jour not in jours_valides:
@@ -223,13 +289,16 @@ class ImportService:
                     semestre = str(row['Semestre']).strip()
                     session = str(row['Session']).strip()
                     
-                    # Récupérer la date (optionnel)
-                    date_voeu = None
-                    if 'Date' in df.columns and pd.notna(row['Date']):
-                        try:
-                            date_voeu = pd.to_datetime(row['Date'], dayfirst=True).date()
-                        except Exception as e:
-                            logger.warning(f"Ligne {idx + 2}: Date invalide '{row['Date']}' - ignorée")
+                    # Récupérer la date (OBLIGATOIRE)
+                    if pd.isna(row['Date']) or str(row['Date']).strip() == '':
+                        erreurs.append(f"Ligne {idx + 2}: La colonne Date est obligatoire et ne peut pas être vide")
+                        continue
+                    
+                    try:
+                        date_voeu = pd.to_datetime(row['Date'], dayfirst=True).date()
+                    except Exception as e:
+                        erreurs.append(f"Ligne {idx + 2}: Format de date invalide '{row['Date']}' - utilisez le format DD/MM/YYYY ou YYYY-MM-DD")
+                        continue
                     
                     # Récupérer les séances (ex: "S1,S3" ou "S2,S4" ou "S1,S2,S3,S4")
                     seances_str = str(row['Séances']).strip().upper()
@@ -261,6 +330,7 @@ class ImportService:
             
             db.commit()
             logger.info(f"✅ {count} vœux importés avec succès")
+            logger.info(f"📊 {len(enseignants_nombre_max)} enseignants mis à jour avec leur Nombre-Max")
             
         except Exception as e:
             erreurs.append(f"Erreur lors de la lecture du fichier: {str(e)}")
