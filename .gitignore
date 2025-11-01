@@ -16,6 +16,18 @@ build/
 *.sqlite
 *.sqlite3
 
+# Environment variables & Secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Google OAuth credentials
+credentials.json
+token.json
+client_secret.json
+
 # Uploads & Exports
 uploads/
 exports/

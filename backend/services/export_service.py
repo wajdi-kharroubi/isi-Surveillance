@@ -582,7 +582,7 @@ class ExportService:
                     # Nom de l'enseignant
                     self._set_cell_vertical_alignment(row_cells[0], 'center')
                     row_cells[0].text = f"{ens['nom']} {ens['prenom']}"
-                    row_cells[0].paragraphs[0].runs[0].font.size = Pt(8)  # Police plus petite
+                    row_cells[0].paragraphs[0].runs[0].font.size = Pt(11)  
                     row_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
                     
                     # Salle (vide)
@@ -1110,3 +1110,224 @@ class ExportService:
         
         logger.info(f"✅ Liste PDF générée pour la séance {seance.upper()} du {date_exam}: {filepath_pdf}")
         return filepath_pdf
+    
+    def generer_convocations_csv(self) -> str:
+        """Génère un fichier CSV des convocations avec la structure des souhaits
+        
+        Structure: Enseignant, Semestre, Session, Date, Jour, Séances
+        
+        Returns:
+            Chemin du fichier CSV généré
+        """
+        logger.info("🔄 Génération du fichier CSV des convocations...")
+        
+        # Récupérer toutes les affectations avec les informations nécessaires
+        affectations = self.db.query(Affectation).options(
+            joinedload(Affectation.enseignant),
+            joinedload(Affectation.examen)
+        ).join(Examen).order_by(
+            Affectation.enseignant_id,
+            Examen.dateExam,
+            Examen.h_debut
+        ).all()
+        
+        if not affectations:
+            raise ValueError("Aucune affectation trouvée")
+        
+        # Regrouper par enseignant, date et semestre/session
+        convocations_data = {}
+        
+        for aff in affectations:
+            ens = aff.enseignant
+            exam = aff.examen
+            
+            # Créer l'identifiant de l'enseignant (nom complet avec abréviation si disponible)
+            if ens.abrv_ens:
+                enseignant_nom = ens.abrv_ens
+            else:
+                enseignant_nom = f"{ens.prenom[0] if ens.prenom else ''}.{ens.nom}"
+            
+            # Déterminer le semestre
+            semestre = exam.semestre.replace("SEMESTRE ", "Semestre ")
+            
+            # Convertir la session
+            session = self._convertir_session(exam.session)
+            
+            # Date et jour
+            date_exam = exam.dateExam
+            jour_semaine = self._obtenir_jour_semaine(date_exam)
+            
+            # Déterminer la séance
+            seance = self._determiner_numero_seance(exam.h_debut)
+            
+            # Créer une clé unique pour regrouper
+            key = (enseignant_nom, semestre, session, date_exam, jour_semaine)
+            
+            if key not in convocations_data:
+                convocations_data[key] = []
+            
+            convocations_data[key].append(seance)
+        
+        # Créer la liste des données pour le CSV
+        rows = []
+        for (enseignant, semestre, session, date_exam, jour), seances in sorted(convocations_data.items()):
+            # Grouper les séances et les trier
+            seances_uniques = sorted(set(seances), key=lambda x: int(x[1]))  # Tri par numéro de séance
+            seances_str = ','.join(seances_uniques)
+            
+            rows.append({
+                'Enseignant': enseignant,
+                'Semestre': semestre,
+                'Session': session,
+                'Date': date_exam.strftime('%d/%m/%Y'),
+                'Jour': jour,
+                'Séances': seances_str
+            })
+        
+        # Créer le DataFrame
+        df = pd.DataFrame(rows)
+        
+        # Générer le fichier CSV
+        filename = f"convocations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filepath = os.path.join(self.export_dir, filename)
+        
+        # Sauvegarder en CSV avec encodage UTF-8 BOM pour Excel
+        df.to_csv(filepath, index=False, encoding='utf-8-sig', sep=';')
+        
+        logger.info(f"✅ Fichier CSV généré: {filepath} ({len(rows)} lignes)")
+        return filepath
+    
+    def generer_convocations_xlsx(self) -> str:
+        """Génère un fichier XLSX des convocations avec la structure des souhaits
+        
+        Structure: Enseignant, Semestre, Session, Date, Jour, Séances
+        
+        Returns:
+            Chemin du fichier XLSX généré
+        """
+        logger.info("🔄 Génération du fichier Excel des convocations...")
+        
+        # Récupérer toutes les affectations avec les informations nécessaires
+        affectations = self.db.query(Affectation).options(
+            joinedload(Affectation.enseignant),
+            joinedload(Affectation.examen)
+        ).join(Examen).order_by(
+            Affectation.enseignant_id,
+            Examen.dateExam,
+            Examen.h_debut
+        ).all()
+        
+        if not affectations:
+            raise ValueError("Aucune affectation trouvée")
+        
+        # Regrouper par enseignant, date et semestre/session
+        convocations_data = {}
+        
+        for aff in affectations:
+            ens = aff.enseignant
+            exam = aff.examen
+            
+            # Créer l'identifiant de l'enseignant (nom complet avec abréviation si disponible)
+            if ens.abrv_ens:
+                enseignant_nom = ens.abrv_ens
+            else:
+                enseignant_nom = f"{ens.prenom[0] if ens.prenom else ''}.{ens.nom}"
+            
+            # Déterminer le semestre
+            semestre = exam.semestre.replace("SEMESTRE ", "Semestre ")
+            
+            # Convertir la session
+            session = self._convertir_session(exam.session)
+            
+            # Date et jour
+            date_exam = exam.dateExam
+            jour_semaine = self._obtenir_jour_semaine(date_exam)
+            
+            # Déterminer la séance
+            seance = self._determiner_numero_seance(exam.h_debut)
+            
+            # Créer une clé unique pour regrouper
+            key = (enseignant_nom, semestre, session, date_exam, jour_semaine)
+            
+            if key not in convocations_data:
+                convocations_data[key] = []
+            
+            convocations_data[key].append(seance)
+        
+        # Créer la liste des données pour l'Excel
+        rows = []
+        for (enseignant, semestre, session, date_exam, jour), seances in sorted(convocations_data.items()):
+            # Grouper les séances et les trier
+            seances_uniques = sorted(set(seances), key=lambda x: int(x[1]))  # Tri par numéro de séance
+            seances_str = ','.join(seances_uniques)
+            
+            rows.append({
+                'Enseignant': enseignant,
+                'Semestre': semestre,
+                'Session': session,
+                'Date': date_exam.strftime('%d/%m/%Y'),
+                'Jour': jour,
+                'Séances': seances_str
+            })
+        
+        # Créer le DataFrame
+        df = pd.DataFrame(rows)
+        
+        # Générer le fichier Excel
+        filename = f"convocations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filepath = os.path.join(self.export_dir, filename)
+        
+        # Sauvegarder en Excel avec mise en forme
+        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Convocations', index=False)
+            
+            # Récupérer la feuille pour la mise en forme
+            worksheet = writer.sheets['Convocations']
+            
+            # Ajuster la largeur des colonnes
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            # Formater l'en-tête
+            from openpyxl.styles import Font, PatternFill, Alignment
+            
+            header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+            header_font = Font(bold=True, color="FFFFFF")
+            
+            for cell in worksheet[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        logger.info(f"✅ Fichier Excel généré: {filepath} ({len(rows)} lignes)")
+        return filepath
+    
+    @staticmethod
+    def _obtenir_jour_semaine(date_obj: date) -> str:
+        """Retourne le nom du jour de la semaine en français
+        
+        Args:
+            date_obj: Objet date
+            
+        Returns:
+            Nom du jour en français (Lundi, Mardi, etc.)
+        """
+        jours = {
+            0: 'Lundi',
+            1: 'Mardi',
+            2: 'Mercredi',
+            3: 'Jeudi',
+            4: 'Vendredi',
+            5: 'Samedi',
+            6: 'Dimanche'
+        }
+        return jours[date_obj.weekday()]

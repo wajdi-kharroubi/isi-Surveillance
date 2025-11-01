@@ -115,6 +115,24 @@ export const exportAPI = {
       params, 
       responseType: 'blob' 
     }),
+  // Nouveaux exports CSV et XLSX pour les convocations
+  convocationsCSV: () =>
+    api.get('/export/convocations/csv', {
+      responseType: 'blob'
+    }),
+  convocationsXLSX: () =>
+    api.get('/export/convocations/xlsx', {
+      responseType: 'blob'
+    }),
+  // Endpoints Gmail OAuth2
+  getGmailAuthUrl: () =>
+    api.get('/export/gmail/auth-url'),
+  handleGmailOAuthCallback: (data) =>
+    api.post('/export/gmail/oauth-callback', data),
+  testerTokenGmail: (tokenInfo) =>
+    api.post('/export/gmail/tester-token', tokenInfo),
+  envoyerConvocationsGmail: (data) =>
+    api.post('/export/gmail/envoyer-convocations', data),
   listeFichiers: () => api.get('/export/fichiers'),
   telechargerFichier: (filename) => 
     api.get(`/export/fichiers/${filename}`, { 

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentification Google - Callback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        h2 {
+            color: #333;
+            margin: 0 0 10px;
+        }
+        p {
+            color: #666;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h2>Authentification en cours...</h2>
+        <p>Veuillez patienter, vous allez être redirigé.</p>
+    </div>
+
+    <script>
+        // Récupérer le code d'autorisation de l'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const error = urlParams.get('error');
+
+        if (error) {
+            // Erreur d'authentification
+            if (window.opener) {
+                window.opener.postMessage({
+                    type: 'GOOGLE_OAUTH_ERROR',
+                    error: error
+                }, window.location.origin);
+            }
+            window.close();
+        } else if (code) {
+            // Succès - envoyer le code à la fenêtre parent
+            if (window.opener) {
+                window.opener.postMessage({
+                    type: 'GOOGLE_OAUTH_SUCCESS',
+                    code: code
+                }, window.location.origin);
+            }
+            // La fenêtre sera fermée par le parent après traitement
+        } else {
+            // Aucun code ni erreur
+            setTimeout(() => {
+                window.close();
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

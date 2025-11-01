@@ -1,16 +1,54 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 from sqlalchemy.orm import Session
 from database import get_db
 from services import ExportService
+from services.gmail_oauth_service import GmailOAuthService, GmailConvocationService
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, Dict
+from pydantic import BaseModel, EmailStr
 import os
 import zipfile
 import tempfile
 
 router = APIRouter(prefix="/export", tags=["Export"])
+
+
+# Modèles Pydantic pour la validation
+class OAuthRequest(BaseModel):
+    """Requête pour obtenir l'URL d'autorisation OAuth2"""
+    redirect_uri: Optional[str] = None
+
+
+class OAuthCallback(BaseModel):
+    """Callback OAuth2 avec le code d'autorisation"""
+    code: str
+
+
+class TokenInfo(BaseModel):
+    """Informations du token OAuth2"""
+    token: str
+    refresh_token: Optional[str] = None
+    token_uri: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    scopes: Optional[list] = None
+    expiry: Optional[str] = None
+
+
+class SendEmailsRequest(BaseModel):
+    """Requête d'envoi d'emails avec token OAuth2"""
+    token_info: Dict
+    avec_pieces_jointes: bool = False
+
+
+class EmailResult(BaseModel):
+    """Résultat de l'envoi d'emails"""
+    total: int
+    success: int
+    failed: int
+    details: list
 
 
 
@@ -322,3 +360,178 @@ def exporter_liste_creneau_pdf(
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 
+# ===== NOUVEAUX ENDPOINTS POUR EXPORT CSV ET XLSX =====
+
+@router.get("/convocations/csv")
+def exporter_convocations_csv(db: Session = Depends(get_db)):
+    """Exporte toutes les convocations au format CSV avec la structure des souhaits"""
+    try:
+        export_service = ExportService(db)
+        filepath = export_service.generer_convocations_csv()
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=500, detail="Erreur lors de la génération du fichier CSV")
+        
+        # Fonction pour supprimer le fichier après l'envoi
+        def cleanup(path: str):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {path}: {str(e)}")
+        
+        return FileResponse(
+            path=filepath,
+            media_type='text/csv',
+            filename=os.path.basename(filepath),
+            background=BackgroundTask(cleanup, filepath)
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.get("/convocations/xlsx")
+def exporter_convocations_xlsx(db: Session = Depends(get_db)):
+    """Exporte toutes les convocations au format XLSX avec la structure des souhaits"""
+    try:
+        export_service = ExportService(db)
+        filepath = export_service.generer_convocations_xlsx()
+        
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=500, detail="Erreur lors de la génération du fichier Excel")
+        
+        # Fonction pour supprimer le fichier après l'envoi
+        def cleanup(path: str):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                print(f"Erreur lors de la suppression de {path}: {str(e)}")
+        
+        return FileResponse(
+            path=filepath,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename=os.path.basename(filepath),
+            background=BackgroundTask(cleanup, filepath)
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+# ===== NOUVEAUX ENDPOINTS POUR GMAIL OAUTH2 =====
+
+@router.get("/gmail/auth-url")
+def get_gmail_auth_url():
+    """
+    Génère l'URL d'autorisation OAuth2 Google
+    
+    Returns:
+        URL d'autorisation pour rediriger l'utilisateur
+    """
+    try:
+        gmail_service = GmailOAuthService()
+        auth_url, state = gmail_service.get_authorization_url()
+        
+        return {
+            "authorization_url": auth_url,
+            "state": state
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/gmail/oauth-callback")
+def handle_oauth_callback(callback: OAuthCallback):
+    """
+    Gère le callback OAuth2 et échange le code contre un token
+    
+    Args:
+        callback: Code d'autorisation reçu de Google
+    
+    Returns:
+        Informations du token à sauvegarder côté client
+    """
+    try:
+        gmail_service = GmailOAuthService()
+        token_info = gmail_service.exchange_code_for_token(callback.code)
+        
+        # Récupérer l'email de l'utilisateur
+        email = gmail_service.get_user_email()
+        
+        return {
+            "success": True,
+            "token_info": token_info,
+            "user_email": email
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/gmail/envoyer-convocations")
+def envoyer_convocations_gmail(
+    request: SendEmailsRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Envoie les convocations par email via Gmail API avec OAuth2
+    
+    Args:
+        request: Token OAuth2 et options d'envoi
+        db: Session de base de données
+    
+    Returns:
+        Résultats de l'envoi avec détails par enseignant
+    """
+    try:
+        # Créer le service Gmail OAuth
+        gmail_service = GmailOAuthService()
+        gmail_service.set_credentials_from_token(request.token_info)
+        
+        # Créer le service de convocation
+        convocation_service = GmailConvocationService(db, gmail_service)
+        
+        # Envoyer toutes les convocations
+        resultats = convocation_service.envoyer_toutes_convocations(
+            avec_pieces_jointes=request.avec_pieces_jointes
+        )
+        
+        return resultats
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@router.post("/gmail/tester-token")
+def tester_token_gmail(token_info: Dict):
+    """
+    Teste si le token Gmail OAuth2 est valide
+    
+    Args:
+        token_info: Informations du token
+    
+    Returns:
+        Statut du token et email de l'utilisateur
+    """
+    try:
+        gmail_service = GmailOAuthService()
+        gmail_service.set_credentials_from_token(token_info)
+        
+        # Récupérer l'email de l'utilisateur
+        email = gmail_service.get_user_email()
+        
+        if email:
+            return {
+                "success": True,
+                "user_email": email,
+                "message": "Token valide"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Token invalide ou expiré"
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
