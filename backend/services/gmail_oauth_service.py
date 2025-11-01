@@ -23,7 +23,10 @@ from models.models import Enseignant, Examen, Affectation
 logger = logging.getLogger(__name__)
 
 # Configuration OAuth2
-SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/calendar.events'
+]
 
 # Ces valeurs seront à configurer dans un fichier .env ou config
 CLIENT_CONFIG = {
@@ -43,6 +46,7 @@ class GmailOAuthService:
     def __init__(self):
         self.credentials = None
         self.service = None
+        self.calendar_service = None
     
     def get_authorization_url(self, state: str = None) -> str:
         """
@@ -127,6 +131,14 @@ class GmailOAuthService:
         
         self.service = build('gmail', 'v1', credentials=self.credentials)
         return self.service
+    
+    def build_calendar_service(self):
+        """Construit le service Google Calendar API"""
+        if not self.credentials:
+            raise ValueError("Credentials non configurés")
+        
+        self.calendar_service = build('calendar', 'v3', credentials=self.credentials)
+        return self.calendar_service
     
     def create_message_with_attachment(
         self,
@@ -229,6 +241,77 @@ class GmailOAuthService:
             
         except Exception as e:
             logger.error(f"Erreur récupération email: {str(e)}")
+            return None
+    
+    def create_calendar_event(
+        self,
+        summary: str,
+        description: str,
+        start_datetime: datetime,
+        end_datetime: datetime,
+        attendee_email: str,
+        location: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Crée un événement dans Google Calendar et envoie une invitation
+        
+        Args:
+            summary: Titre de l'événement
+            description: Description de l'événement
+            start_datetime: Date et heure de début
+            end_datetime: Date et heure de fin
+            attendee_email: Email du participant à inviter
+            location: Lieu optionnel
+            
+        Returns:
+            ID de l'événement créé ou None en cas d'erreur
+        """
+        try:
+            if not self.calendar_service:
+                self.build_calendar_service()
+            
+            # Construire l'événement
+            event = {
+                'summary': summary,
+                'description': description,
+                'start': {
+                    'dateTime': start_datetime.isoformat(),
+                    'timeZone': 'Europe/Paris',
+                },
+                'end': {
+                    'dateTime': end_datetime.isoformat(),
+                    'timeZone': 'Europe/Paris',
+                },
+                'attendees': [
+                    {'email': attendee_email}
+                ],
+                'reminders': {
+                    'useDefault': False,
+                    'overrides': [
+                        {'method': 'email', 'minutes': 24 * 60},  # 1 jour avant
+                        {'method': 'popup', 'minutes': 60},        # 1 heure avant
+                    ],
+                },
+            }
+            
+            if location:
+                event['location'] = location
+            
+            # Créer l'événement
+            event = self.calendar_service.events().insert(
+                calendarId='primary',
+                body=event,
+                sendUpdates='all'  # Envoie les invitations par email
+            ).execute()
+            
+            logger.info(f"✅ Événement Calendar créé: {event.get('id')} pour {attendee_email}")
+            return event.get('id')
+            
+        except HttpError as error:
+            logger.error(f"❌ Erreur Google Calendar API: {error}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Erreur création événement: {str(e)}")
             return None
 
 
@@ -378,7 +461,8 @@ class GmailConvocationService:
         self,
         enseignant_id: int,
         avec_piece_jointe: bool = False,
-        filepath_convocation: Optional[str] = None
+        filepath_convocation: Optional[str] = None,
+        creer_evenements_calendar: bool = False
     ) -> Dict[str, any]:
         """
         Envoie une convocation à un enseignant via Gmail API
@@ -387,6 +471,7 @@ class GmailConvocationService:
             enseignant_id: ID de l'enseignant
             avec_piece_jointe: Si True, attache le PDF
             filepath_convocation: Chemin du fichier PDF
+            creer_evenements_calendar: Si True, crée des événements Google Calendar
             
         Returns:
             Dictionnaire avec le résultat de l'envoi
@@ -446,20 +531,61 @@ class GmailConvocationService:
                 attachments=attachments
             )
             
-            if success:
-                return {
-                    'success': True,
-                    'enseignant_id': enseignant_id,
-                    'enseignant': f"{enseignant.prenom} {enseignant.nom}",
-                    'email': enseignant.email
-                }
-            else:
+            if not success:
                 return {
                     'success': False,
                     'enseignant_id': enseignant_id,
                     'enseignant': f"{enseignant.prenom} {enseignant.nom}",
                     'error': 'Échec envoi Gmail API'
                 }
+            
+            # Créer les événements Google Calendar si demandé
+            calendar_events_created = 0
+            calendar_errors = []
+            
+            if creer_evenements_calendar:
+                for aff in affectations:
+                    exam = aff.examen
+                    
+                    # Combiner date et heure
+                    start_dt = datetime.combine(exam.dateExam, exam.h_debut)
+                    end_dt = datetime.combine(exam.dateExam, exam.h_fin)
+                    
+                    # Créer le titre de l'événement
+                    event_summary = f"Surveillance d'examen"
+                    
+                    # Description détaillée
+                    event_description = f"Surveillance d'examen\nEnseignant: {enseignant.prenom} {enseignant.nom}"
+                    
+                    # Créer l'événement
+                    event_id = self.gmail_service.create_calendar_event(
+                        summary=event_summary,
+                        description=event_description,
+                        start_datetime=start_dt,
+                        end_datetime=end_dt,
+                        attendee_email=enseignant.email,
+                        location=None  # Peut être ajouté si vous avez des infos de salle
+                    )
+                    
+                    if event_id:
+                        calendar_events_created += 1
+                    else:
+                        calendar_errors.append(f"Échec événement du {exam.dateExam.strftime('%d/%m/%Y')}")
+            
+            result = {
+                'success': True,
+                'enseignant_id': enseignant_id,
+                'enseignant': f"{enseignant.prenom} {enseignant.nom}",
+                'email': enseignant.email
+            }
+            
+            if creer_evenements_calendar:
+                result['calendar_events_created'] = calendar_events_created
+                result['calendar_events_total'] = len(affectations)
+                if calendar_errors:
+                    result['calendar_errors'] = calendar_errors
+            
+            return result
                 
         except Exception as e:
             logger.error(f"Erreur lors de l'envoi de la convocation: {str(e)}")
@@ -471,13 +597,15 @@ class GmailConvocationService:
     
     def envoyer_toutes_convocations(
         self,
-        avec_pieces_jointes: bool = False
+        avec_pieces_jointes: bool = False,
+        creer_evenements_calendar: bool = False
     ) -> Dict[str, any]:
         """
         Envoie les convocations à tous les enseignants ayant des affectations
         
         Args:
             avec_pieces_jointes: Si True, attache les fichiers PDF
+            creer_evenements_calendar: Si True, crée des événements Google Calendar
             
         Returns:
             Dictionnaire avec les résultats de l'envoi
@@ -513,7 +641,8 @@ class GmailConvocationService:
             resultat = self.envoyer_convocation(
                 enseignant_id=enseignant.id,
                 avec_piece_jointe=avec_pieces_jointes,
-                filepath_convocation=filepath_convocation
+                filepath_convocation=filepath_convocation,
+                creer_evenements_calendar=creer_evenements_calendar
             )
             
             resultats['details'].append(resultat)

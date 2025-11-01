@@ -22,6 +22,8 @@ api.interceptors.response.use(
 export const enseignantsAPI = {
   getAll: (params) => api.get('/enseignants/', { params }),
   vider: () => api.delete('/enseignants/vider'),
+  updateException: (enseignantId, data) => api.patch(`/enseignants/${enseignantId}/exception`, data),
+  resetException: (enseignantId) => api.delete(`/enseignants/${enseignantId}/exception`),
 };
 
 // ========== Examens ==========

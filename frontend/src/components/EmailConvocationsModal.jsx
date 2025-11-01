@@ -13,6 +13,7 @@ import {
   Info,
   Eye,
   EyeOff,
+  Calendar,
 } from 'lucide-react';
 
 export default function EmailConvocationsModal({ isOpen, onClose }) {
@@ -20,6 +21,7 @@ export default function EmailConvocationsModal({ isOpen, onClose }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [avecPiecesJointes, setAvecPiecesJointes] = useState(false);
+  const [creerEvenementsCalendar, setCreerEvenementsCalendar] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);

@@ -3,8 +3,26 @@ from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from models import ExamenResponse, Examen, Affectation, Enseignant
+from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+import logging
 
 router = APIRouter(prefix="/examens", tags=["Examens"])
+logger = logging.getLogger(__name__)
+
+
+def vider_statistiques_generation(db: Session):
+    """Vide toutes les tables de statistiques de génération"""
+    try:
+        db.query(SouhaitViole).delete()
+        db.query(ResponsableAbsent).delete()
+        db.query(DepassementMaxJour).delete()
+        db.query(GenerationStatistique).delete()
+        db.commit()
+        logger.info("Statistiques de génération vidées")
+    except Exception as e:
+        logger.warning(f"Erreur lors de la suppression des statistiques: {str(e)}")
+        db.rollback()
+
 
 
 @router.get("/", response_model=List[ExamenResponse])
@@ -62,6 +80,9 @@ def lister_examens(
 def vider_examens(db: Session = Depends(get_db)):
     """Vide complètement la table examens et les affectations associées"""
     try:
+        # Vider les statistiques de génération
+        vider_statistiques_generation(db)
+        
         # Supprimer d'abord les affectations (dépendances)
         nb_affectations = db.query(Affectation).delete(synchronize_session=False)
         

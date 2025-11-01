@@ -13,6 +13,8 @@ class EnseignantBase(BaseModel):
     abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant (ex: P.NOM)
     participe_surveillance: bool = True
     nombre_max: int = Field(default=4, ge=0, le=10)  # Nombre max de séances par jour (0-10)
+    is_Exception: bool = False  # Si l'enseignant a un quota exceptionnel
+    quota_Exception: Optional[int] = Field(None, ge=0)  # Quota de surveillances exceptionnel
 
 class EnseignantCreate(EnseignantBase):
     pass
@@ -26,6 +28,13 @@ class EnseignantUpdate(BaseModel):
     abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant
     participe_surveillance: Optional[bool] = None
     nombre_max: Optional[int] = Field(None, ge=0, le=10)  # Nombre max de séances par jour
+    is_Exception: Optional[bool] = None  # Si l'enseignant a un quota exceptionnel
+    quota_Exception: Optional[int] = Field(None, ge=0)  # Quota de surveillances exceptionnel
+
+class EnseignantExceptionUpdate(BaseModel):
+    """Schéma pour mettre à jour le statut d'exception d'un enseignant"""
+    is_Exception: bool = Field(..., description="Définir si l'enseignant a un quota exceptionnel")
+    quota_Exception: int = Field(..., ge=0, description="Quota de surveillances exceptionnel (doit être >= 0)")
 
 class EnseignantResponse(EnseignantBase):
     id: int

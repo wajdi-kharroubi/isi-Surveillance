@@ -16,6 +16,8 @@ class Enseignant(Base):
     abrv_ens = Column(String(50), nullable=True)  # Abréviation de l'enseignant (ex: P.NOM)
     participe_surveillance = Column(Boolean, default=True)
     nombre_max = Column(Integer, default=4, nullable=False)  # Nombre max de séances par jour
+    is_Exception = Column(Boolean, default=False, nullable=False)  # Si l'enseignant a un quota exceptionnel
+    quota_Exception = Column(Integer, nullable=True)  # Quota de surveillances exceptionnel
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -102,3 +104,112 @@ class GradeConfig(Base):
 
     def __repr__(self):
         return f"<GradeConfig {self.grade_code}: {self.nb_surveillances} surveillances>"
+
+
+class GenerationStatistique(Base):
+    """Statistiques d'une génération de planning"""
+    __tablename__ = "generation_statistiques"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date_generation = Column(DateTime, default=datetime.utcnow, nullable=False)
+    nb_affectations = Column(Integer, nullable=False)
+    temps_generation = Column(Integer, nullable=False)  # En secondes
+    
+    # Statistiques des souhaits
+    nb_souhaits_total = Column(Integer, nullable=False, default=0)
+    nb_souhaits_respectes = Column(Integer, nullable=False, default=0)
+    nb_souhaits_violes = Column(Integer, nullable=False, default=0)
+    taux_souhaits_respectes = Column(Integer, nullable=False, default=0)  # Pourcentage
+    
+    # Statistiques des responsables
+    nb_responsables_total = Column(Integer, nullable=False, default=0)
+    nb_responsables_presents = Column(Integer, nullable=False, default=0)
+    nb_responsables_absents = Column(Integer, nullable=False, default=0)
+    taux_responsables_presents = Column(Integer, nullable=False, default=0)  # Pourcentage
+    
+    # Statistiques des contraintes de séances par jour
+    nb_contraintes_seances_total = Column(Integer, nullable=False, default=0)
+    nb_contraintes_seances_respectees = Column(Integer, nullable=False, default=0)
+    nb_contraintes_seances_violees = Column(Integer, nullable=False, default=0)
+    taux_contraintes_seances_respectees = Column(Integer, nullable=False, default=0)  # Pourcentage
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relations
+    souhaits_violes = relationship("SouhaitViole", back_populates="generation_statistique", cascade="all, delete-orphan")
+    responsables_absents = relationship("ResponsableAbsent", back_populates="generation_statistique", cascade="all, delete-orphan")
+    depassements_max_jour = relationship("DepassementMaxJour", back_populates="generation_statistique", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<GenerationStatistique {self.date_generation} - {self.nb_affectations} affectations>"
+
+
+class SouhaitViole(Base):
+    """Enregistrement d'un souhait violé lors de la génération"""
+    __tablename__ = "souhaits_violes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    generation_statistique_id = Column(Integer, ForeignKey("generation_statistiques.id"), nullable=False)
+    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
+    enseignant_nom = Column(String(100), nullable=False)
+    enseignant_prenom = Column(String(100), nullable=False)
+    code_smartex = Column(String(50), nullable=False)
+    date_exam = Column(Date, nullable=False)
+    seance = Column(String(10), nullable=False)
+    jour = Column(String(20), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relations
+    generation_statistique = relationship("GenerationStatistique", back_populates="souhaits_violes")
+    enseignant = relationship("Enseignant")
+
+    def __repr__(self):
+        return f"<SouhaitViole {self.enseignant_nom} {self.enseignant_prenom} - {self.date_exam} {self.seance}>"
+
+
+class ResponsableAbsent(Base):
+    """Enregistrement d'un responsable absent lors de la génération"""
+    __tablename__ = "responsables_absents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    generation_statistique_id = Column(Integer, ForeignKey("generation_statistiques.id"), nullable=False)
+    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
+    enseignant_nom = Column(String(100), nullable=False)
+    enseignant_prenom = Column(String(100), nullable=False)
+    code_smartex = Column(String(50), nullable=False)
+    date_exam = Column(Date, nullable=False)
+    seance = Column(String(10), nullable=False)
+    salle = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relations
+    generation_statistique = relationship("GenerationStatistique", back_populates="responsables_absents")
+    enseignant = relationship("Enseignant")
+
+    def __repr__(self):
+        return f"<ResponsableAbsent {self.enseignant_nom} {self.enseignant_prenom} - {self.date_exam} {self.seance}>"
+
+
+class DepassementMaxJour(Base):
+    """Enregistrement d'un dépassement du nombre max de séances par jour"""
+    __tablename__ = "depassements_max_jour"
+
+    id = Column(Integer, primary_key=True, index=True)
+    generation_statistique_id = Column(Integer, ForeignKey("generation_statistiques.id"), nullable=False)
+    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
+    enseignant_nom = Column(String(100), nullable=False)
+    enseignant_prenom = Column(String(100), nullable=False)
+    code_smartex = Column(String(50), nullable=False)
+    date_exam = Column(Date, nullable=False)
+    nb_seances = Column(Integer, nullable=False)
+    max_autorise = Column(Integer, nullable=False)
+    depassement = Column(Integer, nullable=False)
+    seances = Column(String(100), nullable=False)  # Liste des séances (ex: "S1, S2, S3")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relations
+    generation_statistique = relationship("GenerationStatistique", back_populates="depassements_max_jour")
+    enseignant = relationship("Enseignant")
+
+    def __repr__(self):
+        return f"<DepassementMaxJour {self.enseignant_nom} {self.enseignant_prenom} - {self.date_exam} ({self.nb_seances}/{self.max_autorise})>"

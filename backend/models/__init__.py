@@ -10,6 +10,7 @@ from .models import (
 from .schemas import (
     EnseignantCreate,
     EnseignantUpdate,
+    EnseignantExceptionUpdate,
     EnseignantResponse,
     VoeuCreate,
     VoeuUpdate,
@@ -35,6 +36,7 @@ __all__ = [
     # Schemas
     "EnseignantCreate",
     "EnseignantUpdate",
+    "EnseignantExceptionUpdate",
     "EnseignantResponse",
     "VoeuCreate",
     "VoeuUpdate",

@@ -217,6 +217,7 @@ class DecisionService:
             enseignants_par_grade,
             quotas_recommandes,
             stats_examens,
+            distribution_temporelle,  # Ajouter ce paramètre
         )
 
         # 8. Générer les alertes et recommandations
@@ -458,7 +459,7 @@ class DecisionService:
         # - q1 (MA) - q0 >= difference_min
         # - chaque différence entre groupes adjacents > 0
         # - chaque différence entre groupes adjacents <= 3
-        quota_min = 2
+        quota_min = 3
         quota_max = 20
 
         best_quotas = None
@@ -528,9 +529,10 @@ class DecisionService:
         CONTRAINTE CRITIQUE: Détecte les jours où la charge dépasse la capacité disponible.
         
         Vérifie:
-        1. Jours surchargés (charge > capacité maximale)
-        2. Créneaux critiques (utilisation > 90%)
-        3. Distribution équilibrée dans le temps
+        1. Séances simultanées impossibles (plus de surveillants requis que d'enseignants disponibles)
+        2. Jours surchargés (charge > capacité maximale)
+        3. Créneaux critiques (utilisation > 90%)
+        4. Distribution équilibrée dans le temps
         
         Retourne l'analyse complète avec alertes.
         """
@@ -546,6 +548,35 @@ class DecisionService:
                 "jour_le_plus_charge": None,
                 "variance_charge": 0,
             }
+        
+        # NOUVELLE VÉRIFICATION CRITIQUE: Détecter les séances simultanées impossibles
+        # Grouper par (date, h_debut, h_fin) pour identifier les séances qui ont lieu en même temps
+        from collections import defaultdict
+        seances_simultanees = defaultdict(list)
+        for seance in seances_details:
+            cle = (seance.get("date"), seance.get("h_debut"), seance.get("h_fin"))
+            seances_simultanees[cle].append(seance)
+        
+        # Vérifier chaque groupe de séances simultanées
+        for (date, h_debut, h_fin), seances in seances_simultanees.items():
+            total_surveillants_requis = sum(s.get("nb_surveillants_requis", 0) for s in seances)
+            
+            # CRITIQUE: Plus de surveillants requis simultanément que d'enseignants disponibles
+            # Un enseignant ne peut pas être à deux endroits en même temps !
+            if total_surveillants_requis > nb_total_enseignants:
+                nb_salles = len(seances)
+                alertes.append({
+                    "type": "SEANCE_IMPOSSIBLE",
+                    "date": date,
+                    "h_debut": h_debut,
+                    "h_fin": h_fin,
+                    "nb_salles": nb_salles,
+                    "surveillants_requis": total_surveillants_requis,
+                    "enseignants_disponibles": nb_total_enseignants,
+                    "deficit": total_surveillants_requis - nb_total_enseignants,
+                    "severite": "CRITIQUE",
+                    "message": f"❌ IMPOSSIBLE: Le {date} de {h_debut} à {h_fin}: {total_surveillants_requis} surveillants requis pour {nb_salles} salle(s) simultanée(s) mais seulement {nb_total_enseignants} enseignant(s) disponible(s) (déficit: {total_surveillants_requis - nb_total_enseignants}). Un enseignant ne peut pas être à plusieurs endroits en même temps !"
+                })
         
         # Calculer le nombre_max moyen de tous les enseignants
         nombre_max_total = sum(
@@ -716,6 +747,7 @@ class DecisionService:
         enseignants_par_grade: Dict[str, List[Enseignant]],
         quotas_recommandes: Dict[str, Dict],
         stats_examens: Dict,
+        distribution_temporelle: Dict,
     ) -> Dict:
         """Analyse la faisabilité du planning avec les quotas recommandés"""
 
@@ -728,6 +760,10 @@ class DecisionService:
         total_necessaire = stats_examens["total_surveillances_necessaires"]
         total_majore = stats_examens["total_surveillances_majorees"]
 
+        # VÉRIFICATION PRIORITAIRE: Séances simultanées impossibles
+        alertes_distribution = distribution_temporelle.get("alertes", [])
+        seances_impossibles = [a for a in alertes_distribution if a.get("type") == "SEANCE_IMPOSSIBLE"]
+        
         # NOUVELLE VÉRIFICATION: Vérifier contrainte nombre_max par jour
         violations_nombre_max = self._verifier_nombre_max_respecte(
             enseignants_par_grade,
@@ -745,8 +781,15 @@ class DecisionService:
             else 0
         )
 
-        # Déterminer le statut (en tenant compte des violations nombre_max)
-        if violations_nombre_max:
+        # Déterminer le statut (en tenant compte des séances impossibles ET violations nombre_max)
+        if seances_impossibles:
+            # CRITIQUE: Séances impossibles détectées (priorité maximale)
+            statut = "CRITIQUE"
+            niveau_risque = "Élevé"
+            nb_seances = len(seances_impossibles)
+            total_deficit = sum(a.get("deficit", 0) for a in seances_impossibles)
+            message = f"❌ IMPOSSIBLE: {nb_seances} séance(s) nécessite(nt) plus de surveillants simultanément ({total_deficit} manquants) que d'enseignants disponibles"
+        elif violations_nombre_max:
             statut = "CRITIQUE"
             niveau_risque = "Élevé"
             nb_violations = len(violations_nombre_max)
@@ -776,7 +819,8 @@ class DecisionService:
             "marge_absolue": marge_absolue,
             "marge_majoree": marge_majoree,
             "pourcentage_couverture": pourcentage_couverture,
-            "violations_nombre_max": violations_nombre_max,  # NOUVELLE INFO
+            "violations_nombre_max": violations_nombre_max,
+            "seances_impossibles": seances_impossibles,  # NOUVELLE INFO
         }
 
     def _verifier_nombre_max_respecte(
@@ -836,11 +880,25 @@ class DecisionService:
         """Génère les alertes et recommandations"""
         alertes = []
 
-        # ALERTE PRIORITAIRE 1: Distribution temporelle (CRITIQUE/ATTENTION)
+        # ALERTE PRIORITAIRE 0: Séances simultanées impossibles (BLOQUANT)
         alertes_distribution = distribution_temporelle.get("alertes", [])
+        seances_impossibles = [a for a in alertes_distribution if a.get("type") == "SEANCE_IMPOSSIBLE"]
+        if seances_impossibles:
+            nb_seances_impossibles = len(seances_impossibles)
+            total_deficit = sum(a.get("deficit", 0) for a in seances_impossibles)
+            
+            alertes.append({
+                "type": "BLOQUANT",
+                "categorie": "SEANCES_IMPOSSIBLES",
+                "message": f"🚫 {nb_seances_impossibles} séance(s) IMPOSSIBLE(S) à couvrir: plus de surveillants requis simultanément que d'enseignants disponibles !",
+                "details": [a["message"] for a in seances_impossibles],
+                "deficit_total": total_deficit
+                                        })
+
+        # ALERTE PRIORITAIRE 1: Distribution temporelle (CRITIQUE/ATTENTION)
         if alertes_distribution:
             # Séparer par sévérité
-            critiques = [a for a in alertes_distribution if a.get("severite") == "CRITIQUE"]
+            critiques = [a for a in alertes_distribution if a.get("severite") == "CRITIQUE" and a.get("type") != "SEANCE_IMPOSSIBLE"]
             attentions = [a for a in alertes_distribution if a.get("severite") == "ATTENTION"]
             
             if critiques:
@@ -852,7 +910,6 @@ class DecisionService:
                         "message": f"{len(jours_surcharges)} jour(s) SURCHARGÉ(S): charge > capacité disponible",
                         "details": [a["message"] for a in critiques if a["type"] == "JOUR_SURCHARGE"],
                         "jours_concernes": jours_surcharges,
-                        "recommandation": "Répartir les examens sur plus de jours ou augmenter le nombre_max de certains enseignants",
                     })
             
             if attentions:
@@ -956,7 +1013,6 @@ class DecisionService:
                         "type": "ATTENTION",
                         "categorie": "QUOTAS",
                         "message": f"Quota très élevé pour {grade}: {quota} surveillances",
-                        "recommandation": "Vérifiez si possible de recruter plus d'enseignants",
                     }
                 )
 
@@ -967,7 +1023,6 @@ class DecisionService:
                     "type": "INFO",
                     "categorie": "PLANNING",
                     "message": f"Nombre élevé de séances ({stats_examens['nb_total_seances']})",
-                    "recommandation": "Considérez regrouper certains examens si possible",
                 }
             )
 

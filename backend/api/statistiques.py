@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
 from models import StatistiquesResponse
-from models.models import Enseignant, Examen, Affectation, Voeu
+from models.models import Enseignant, Examen, Affectation, Voeu, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from typing import List, Optional
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/statistiques", tags=["Statistiques"])
 
@@ -104,6 +106,276 @@ def charge_par_enseignant(db: Session = Depends(get_db)):
             for ens_id, nom, prenom, grade, nb in charges
         ]
     }
+
+
+# ============ Schemas pour les statistiques de génération ============
+
+class SouhaitVioleResponse(BaseModel):
+    id: int
+    enseignant_nom: str
+    enseignant_prenom: str
+    code_smartex: str
+    date_exam: str
+    seance: str
+    jour: str
+    
+    class Config:
+        from_attributes = True
+
+
+class ResponsableAbsentResponse(BaseModel):
+    id: int
+    enseignant_nom: str
+    enseignant_prenom: str
+    code_smartex: str
+    date_exam: str
+    seance: str
+    salle: str
+    
+    class Config:
+        from_attributes = True
+
+
+class DepassementMaxJourResponse(BaseModel):
+    id: int
+    enseignant_nom: str
+    enseignant_prenom: str
+    code_smartex: str
+    date_exam: str
+    nb_seances: int
+    max_autorise: int
+    depassement: int
+    seances: str
+    
+    class Config:
+        from_attributes = True
+
+
+class GenerationStatistiqueResponse(BaseModel):
+    id: int
+    date_generation: str
+    nb_affectations: int
+    temps_generation: int
+    
+    # Statistiques des souhaits
+    nb_souhaits_total: int
+    nb_souhaits_respectes: int
+    nb_souhaits_violes: int
+    taux_souhaits_respectes: int
+    
+    # Statistiques des responsables
+    nb_responsables_total: int
+    nb_responsables_presents: int
+    nb_responsables_absents: int
+    taux_responsables_presents: int
+    
+    # Statistiques des contraintes de séances par jour
+    nb_contraintes_seances_total: int
+    nb_contraintes_seances_respectees: int
+    nb_contraintes_seances_violees: int
+    taux_contraintes_seances_respectees: int
+    
+    # Listes détaillées (optionnelles)
+    souhaits_violes: Optional[List[SouhaitVioleResponse]] = []
+    responsables_absents: Optional[List[ResponsableAbsentResponse]] = []
+    depassements_max_jour: Optional[List[DepassementMaxJourResponse]] = []
+    
+    class Config:
+        from_attributes = True
+
+
+# ============ Endpoints pour les statistiques de génération ============
+
+@router.get("/generations", response_model=List[GenerationStatistiqueResponse])
+def obtenir_statistiques_generations(
+    limit: int = 10,
+    include_details: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Retourne l'historique des statistiques de génération.
+    
+    Args:
+        limit: Nombre maximum de générations à retourner (défaut: 10)
+        include_details: Inclure les listes détaillées des violations (défaut: False)
+    """
+    query = db.query(GenerationStatistique).order_by(GenerationStatistique.date_generation.desc()).limit(limit)
+    
+    if include_details:
+        from sqlalchemy.orm import joinedload
+        query = query.options(
+            joinedload(GenerationStatistique.souhaits_violes),
+            joinedload(GenerationStatistique.responsables_absents),
+            joinedload(GenerationStatistique.depassements_max_jour)
+        )
+    
+    generations = query.all()
+    
+    # Convertir en réponse
+    result = []
+    for gen in generations:
+        gen_dict = {
+            'id': gen.id,
+            'date_generation': gen.date_generation.strftime('%Y-%m-%d %H:%M:%S'),
+            'nb_affectations': gen.nb_affectations,
+            'temps_generation': gen.temps_generation,
+            
+            'nb_souhaits_total': gen.nb_souhaits_total,
+            'nb_souhaits_respectes': gen.nb_souhaits_respectes,
+            'nb_souhaits_violes': gen.nb_souhaits_violes,
+            'taux_souhaits_respectes': gen.taux_souhaits_respectes,
+            
+            'nb_responsables_total': gen.nb_responsables_total,
+            'nb_responsables_presents': gen.nb_responsables_presents,
+            'nb_responsables_absents': gen.nb_responsables_absents,
+            'taux_responsables_presents': gen.taux_responsables_presents,
+            
+            'nb_contraintes_seances_total': gen.nb_contraintes_seances_total,
+            'nb_contraintes_seances_respectees': gen.nb_contraintes_seances_respectees,
+            'nb_contraintes_seances_violees': gen.nb_contraintes_seances_violees,
+            'taux_contraintes_seances_respectees': gen.taux_contraintes_seances_respectees,
+        }
+        
+        if include_details:
+            gen_dict['souhaits_violes'] = [
+                {
+                    'id': s.id,
+                    'enseignant_nom': s.enseignant_nom,
+                    'enseignant_prenom': s.enseignant_prenom,
+                    'code_smartex': s.code_smartex,
+                    'date_exam': s.date_exam.strftime('%Y-%m-%d'),
+                    'seance': s.seance,
+                    'jour': s.jour
+                }
+                for s in gen.souhaits_violes
+            ]
+            
+            gen_dict['responsables_absents'] = [
+                {
+                    'id': r.id,
+                    'enseignant_nom': r.enseignant_nom,
+                    'enseignant_prenom': r.enseignant_prenom,
+                    'code_smartex': r.code_smartex,
+                    'date_exam': r.date_exam.strftime('%Y-%m-%d'),
+                    'seance': r.seance,
+                    'salle': r.salle
+                }
+                for r in gen.responsables_absents
+            ]
+            
+            gen_dict['depassements_max_jour'] = [
+                {
+                    'id': d.id,
+                    'enseignant_nom': d.enseignant_nom,
+                    'enseignant_prenom': d.enseignant_prenom,
+                    'code_smartex': d.code_smartex,
+                    'date_exam': d.date_exam.strftime('%Y-%m-%d'),
+                    'nb_seances': d.nb_seances,
+                    'max_autorise': d.max_autorise,
+                    'depassement': d.depassement,
+                    'seances': d.seances
+                }
+                for d in gen.depassements_max_jour
+            ]
+        
+        result.append(gen_dict)
+    
+    return result
+
+
+@router.get("/generations/derniere", response_model=GenerationStatistiqueResponse)
+def obtenir_derniere_statistique_generation(
+    include_details: bool = True,
+    db: Session = Depends(get_db)
+):
+    """
+    Retourne les statistiques de la dernière génération.
+    
+    Args:
+        include_details: Inclure les listes détaillées des violations (défaut: True)
+    """
+    query = db.query(GenerationStatistique).order_by(GenerationStatistique.date_generation.desc()).limit(1)
+    
+    if include_details:
+        from sqlalchemy.orm import joinedload
+        query = query.options(
+            joinedload(GenerationStatistique.souhaits_violes),
+            joinedload(GenerationStatistique.responsables_absents),
+            joinedload(GenerationStatistique.depassements_max_jour)
+        )
+    
+    gen = query.first()
+    
+    if not gen:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Aucune statistique de génération trouvée")
+    
+    gen_dict = {
+        'id': gen.id,
+        'date_generation': gen.date_generation.strftime('%Y-%m-%d %H:%M:%S'),
+        'nb_affectations': gen.nb_affectations,
+        'temps_generation': gen.temps_generation,
+        
+        'nb_souhaits_total': gen.nb_souhaits_total,
+        'nb_souhaits_respectes': gen.nb_souhaits_respectes,
+        'nb_souhaits_violes': gen.nb_souhaits_violes,
+        'taux_souhaits_respectes': gen.taux_souhaits_respectes,
+        
+        'nb_responsables_total': gen.nb_responsables_total,
+        'nb_responsables_presents': gen.nb_responsables_presents,
+        'nb_responsables_absents': gen.nb_responsables_absents,
+        'taux_responsables_presents': gen.taux_responsables_presents,
+        
+        'nb_contraintes_seances_total': gen.nb_contraintes_seances_total,
+        'nb_contraintes_seances_respectees': gen.nb_contraintes_seances_respectees,
+        'nb_contraintes_seances_violees': gen.nb_contraintes_seances_violees,
+        'taux_contraintes_seances_respectees': gen.taux_contraintes_seances_respectees,
+    }
+    
+    if include_details:
+        gen_dict['souhaits_violes'] = [
+            {
+                'id': s.id,
+                'enseignant_nom': s.enseignant_nom,
+                'enseignant_prenom': s.enseignant_prenom,
+                'code_smartex': s.code_smartex,
+                'date_exam': s.date_exam.strftime('%Y-%m-%d'),
+                'seance': s.seance,
+                'jour': s.jour
+            }
+            for s in gen.souhaits_violes
+        ]
+        
+        gen_dict['responsables_absents'] = [
+            {
+                'id': r.id,
+                'enseignant_nom': r.enseignant_nom,
+                'enseignant_prenom': r.enseignant_prenom,
+                'code_smartex': r.code_smartex,
+                'date_exam': r.date_exam.strftime('%Y-%m-%d'),
+                'seance': r.seance,
+                'salle': r.salle
+            }
+            for r in gen.responsables_absents
+        ]
+        
+        gen_dict['depassements_max_jour'] = [
+            {
+                'id': d.id,
+                'enseignant_nom': d.enseignant_nom,
+                'enseignant_prenom': d.enseignant_prenom,
+                'code_smartex': d.code_smartex,
+                'date_exam': d.date_exam.strftime('%Y-%m-%d'),
+                'nb_seances': d.nb_seances,
+                'max_autorise': d.max_autorise,
+                'depassement': d.depassement,
+                'seances': d.seances
+            }
+            for d in gen.depassements_max_jour
+        ]
+    
+    return gen_dict
+
 
 
 

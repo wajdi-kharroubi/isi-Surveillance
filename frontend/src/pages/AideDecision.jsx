@@ -31,13 +31,13 @@ export default function AideDecision() {
   // Paramètres configurables
   const [parametres, setParametres] = useState({
     min_surveillants_par_salle: 2,
-    majoration_absences: 1.1,
+    majoration_absences: 1.05,
     difference_min_grades: 1,
     expert_quota: 3,
   });
 
   // Pourcentage de majoration (pour l'affichage)
-  const [pourcentageMajoration, setPourcentageMajoration] = useState(10); // 10%
+  const [pourcentageMajoration, setPourcentageMajoration] = useState(5); // 5%
 
   // Quotas modifiés manuellement
   const [quotasModifies, setQuotasModifies] = useState({});
@@ -123,7 +123,7 @@ export default function AideDecision() {
       case 'Moyen':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'Élevé':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200'; // CRITIQUE en jaune
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -289,7 +289,7 @@ export default function AideDecision() {
           <div className={`rounded-xl shadow-md p-6 border-2 ${
             recommandations.faisabilite.statut === 'OPTIMAL' ? 'bg-green-50 border-green-200' :
             recommandations.faisabilite.statut === 'ACCEPTABLE' ? 'bg-yellow-50 border-yellow-200' :
-            'bg-red-50 border-red-200'
+            'bg-yellow-50 border-yellow-200'  // CRITIQUE en jaune
           }`}>
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               🎯 Analyse de Faisabilité

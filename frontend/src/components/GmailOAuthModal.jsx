@@ -8,9 +8,9 @@ import {
   CheckCircle,
   AlertCircle,
   Loader,
-  FileText,
   Info,
   LogIn,
+  Calendar,
 } from 'lucide-react';
 
 export default function GmailOAuthModal({ isOpen, onClose }) {
@@ -18,7 +18,7 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [tokenInfo, setTokenInfo] = useState(null);
-  const [avecPiecesJointes, setAvecPiecesJointes] = useState(false);
+  const [creerEvenementsCalendar, setCreerEvenementsCalendar] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendResults, setSendResults] = useState(null);
 
@@ -142,7 +142,8 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
     try {
       const response = await exportAPI.envoyerConvocationsGmail({
         token_info: tokenInfo,
-        avec_pieces_jointes: avecPiecesJointes,
+        avec_pieces_jointes: true,
+        creer_evenements_calendar: creerEvenementsCalendar,
       });
 
       setSendResults(response.data);
@@ -275,19 +276,24 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
               </div>
 
               {/* Options */}
-              <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="pieces-jointes-oauth"
-                  checked={avecPiecesJointes}
-                  onChange={(e) => setAvecPiecesJointes(e.target.checked)}
-                  className="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
-                  disabled={isSending}
-                />
-                <label htmlFor="pieces-jointes-oauth" className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-                  <FileText className="w-4 h-4" />
-                  Joindre les convocations en pièces jointes (format PDF)
-                </label>
+              <div className="bg-purple-50 rounded-lg border-2 border-purple-200 p-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="calendar-events-oauth"
+                    checked={creerEvenementsCalendar}
+                    onChange={(e) => setCreerEvenementsCalendar(e.target.checked)}
+                    className="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
+                    disabled={isSending}
+                  />
+                  <label htmlFor="calendar-events-oauth" className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                    <Calendar className="w-4 h-4 text-purple-600" />
+                    <div>
+                      <div className="text-purple-900">Créer des événements Google Calendar</div>
+                      <div className="text-xs text-purple-700">Les enseignants recevront des invitations dans leur calendrier</div>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               {/* Bouton d'envoi */}
@@ -357,6 +363,15 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
                           )}
                           {detail.error && (
                             <p className="text-xs text-red-600">{detail.error}</p>
+                          )}
+                          {detail.calendar_events_created !== undefined && (
+                            <p className="text-xs text-purple-600 flex items-center gap-1 mt-1">
+                              <Calendar className="w-3 h-3" />
+                              {detail.calendar_events_created}/{detail.calendar_events_total} événements Calendar créés
+                              {detail.calendar_errors && detail.calendar_errors.length > 0 && (
+                                <span className="text-orange-600"> ({detail.calendar_errors.length} erreurs)</span>
+                              )}
+                            </p>
                           )}
                         </div>
                       </div>

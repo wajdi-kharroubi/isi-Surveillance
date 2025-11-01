@@ -306,6 +306,7 @@ class SurveillanceOptimizerV3:
                 0,
                 time.time() - start_time,
                 self.warnings,
+                None,  # Pas de statistiques en cas d'échec
             )
 
         # Sauvegarder les affectations
@@ -321,35 +322,46 @@ class SurveillanceOptimizerV3:
         self._verifier_couverture_seances(seances, besoins_par_seance)
         self._generer_statistiques(enseignants, seances, affectations_vars)
         
+        # Collecter les statistiques pour la base de données
+        statistiques_data = {
+            'souhaits': {'total': 0, 'respectes': 0, 'violes': 0, 'details_violes': []},
+            'responsables': {'total': 0, 'presents': 0, 'absents': 0, 'details_absents': []},
+            'max_seances_jour': {'total': 0, 'respectees': 0, 'violees': 0, 'details_violations': []}
+        }
+        
         # Statistiques sur les vœux de non-disponibilité
         if respecter_voeux and preferences_voeux and preferences_voeux.get("avec_voeu"):
-            self._generer_statistiques_voeux(
+            stats_voeux = self._generer_statistiques_voeux(
                 affectations_vars, 
                 preferences_voeux, 
                 enseignants,
                 len(list_voeux)
             )
+            statistiques_data['souhaits'] = stats_voeux
         
         # Statistiques sur les responsables d'examens
-        self._generer_statistiques_responsables(
+        stats_responsables = self._generer_statistiques_responsables(
             affectations_vars,
             responsables_examens,
             seances,
             enseignants
         )
+        statistiques_data['responsables'] = stats_responsables
         
         # Statistiques sur le nombre max de séances par jour
-        self._generer_statistiques_max_seances_par_jour(
+        stats_max_seances = self._generer_statistiques_max_seances_par_jour(
             affectations_vars,
             seances,
             enseignants
         )
+        statistiques_data['max_seances_jour'] = stats_max_seances
 
         return (
             True,
             nb_affectations,
             execution_time,
             self.warnings + self.infos,
+            statistiques_data,
         )
 
     # ========== CONTRAINTES ==========
@@ -1702,6 +1714,9 @@ class SurveillanceOptimizerV3:
             preferences_voeux: Dictionnaire avec 'avec_voeu' (à éviter) et 'sans_voeu'
             enseignants: Liste des enseignants
             nb_list_voeux: Nombre total de vœux exprimés dans la base
+            
+        Returns:
+            dict: Statistiques avec 'total', 'respectes', 'violes', 'details_violes'
         """
         
         # Récupérer les affectations sur créneaux avec vœux de non-disponibilité
@@ -1718,7 +1733,12 @@ class SurveillanceOptimizerV3:
                 self.infos.append("ℹ️  Ces vœux concernent probablement des créneaux hors du planning actuel")
             self.infos.append("")
             self.infos.append("=" * 80)
-            return
+            return {
+                'total': nb_list_voeux,
+                'respectes': nb_list_voeux,
+                'violes': 0,
+                'details_violes': []
+            }
         
         # Compter le nombre total de vœux concernant le planning
         nb_total_voeux_planning = len(affectations_avec_voeu)
@@ -1741,9 +1761,13 @@ class SurveillanceOptimizerV3:
                     if enseignant:
                         date_exam, seance_code, semestre, session, jour_index = seance_key
                         voeux_violes_details.append({
+                            'enseignant_id': enseignant.id,
+                            'enseignant_nom': enseignant.nom,
+                            'enseignant_prenom': enseignant.prenom,
                             'enseignant': f"{enseignant.nom} {enseignant.prenom}",
                             'code': enseignant.code_smartex,
                             'date': date_exam.strftime('%d/%m/%Y'),
+                            'date_obj': date_exam,
                             'seance': seance_code,
                             'semestre': semestre,
                             'session': session,
@@ -1793,7 +1817,16 @@ class SurveillanceOptimizerV3:
                     f"Date: {detail['date']:10s} | Séance: {detail['seance']:3s}"
                 )
             
-
+        self.infos.append("")
+        self.infos.append("=" * 80)
+        
+        # Retourner les statistiques pour la base de données
+        return {
+            'total': nb_list_voeux,
+            'respectes': nb_voeux_respectes,
+            'violes': nb_voeux_violes,
+            'details_violes': voeux_violes_details
+        }
 
     def _generer_statistiques_responsables(
         self,
@@ -1810,6 +1843,9 @@ class SurveillanceOptimizerV3:
             responsables_examens: Dictionnaire {examen_id: enseignant_id}
             seances: Dictionnaire des séances
             enseignants: Liste des enseignants
+            
+        Returns:
+            dict: Statistiques avec 'total', 'presents', 'absents', 'details_absents'
         """
         if not responsables_examens:
             self.infos.append("\n" + "=" * 80)
@@ -1819,7 +1855,12 @@ class SurveillanceOptimizerV3:
             self.infos.append("ℹ️  Aucun responsable d'examen défini dans le planning")
             self.infos.append("")
             self.infos.append("=" * 80)
-            return
+            return {
+                'total': 0,
+                'presents': 0,
+                'absents': 0,
+                'details_absents': []
+            }
         
         nb_responsables_total = 0
         nb_responsables_presents = 0
@@ -1864,9 +1905,13 @@ class SurveillanceOptimizerV3:
                         if enseignant:
                             date_exam, seance_code, semestre, session, jour_index = seance_key
                             responsables_absents_details.append({
+                                'enseignant_id': enseignant.id,
+                                'enseignant_nom': enseignant.nom,
+                                'enseignant_prenom': enseignant.prenom,
                                 'enseignant': f"{enseignant.nom} {enseignant.prenom}",
                                 'code': enseignant.code_smartex or f"ID_{responsable_id}",
                                 'date': date_exam.strftime('%d/%m/%Y'),
+                                'date_obj': date_exam,
                                 'seance': seance_code,
                                 'semestre': semestre,
                                 'session': session,
@@ -1918,6 +1963,14 @@ class SurveillanceOptimizerV3:
             self.infos.append("")
         
         self.infos.append("=" * 80)
+        
+        # Retourner les statistiques pour la base de données
+        return {
+            'total': nb_responsables_total,
+            'presents': nb_responsables_presents,
+            'absents': nb_responsables_absents,
+            'details_absents': responsables_absents_details
+        }
 
 
     def _generer_statistiques_max_seances_par_jour(
@@ -1933,6 +1986,9 @@ class SurveillanceOptimizerV3:
             affectations_vars: Variables d'affectation du modèle
             seances: Dictionnaire des séances
             enseignants: Liste des enseignants
+            
+        Returns:
+            dict: Statistiques avec 'total', 'respectees', 'violees', 'details_violations'
         """
         # Grouper les séances par date
         seances_par_date = {}
@@ -1974,9 +2030,13 @@ class SurveillanceOptimizerV3:
                         # Violation de la contrainte
                         nb_contraintes_violees += 1
                         violations_details.append({
+                            'enseignant_id': enseignant.id,
+                            'enseignant_nom': enseignant.nom,
+                            'enseignant_prenom': enseignant.prenom,
                             'enseignant': f"{enseignant.nom} {enseignant.prenom}",
                             'code': enseignant.code_smartex or f"ID_{enseignant.id}",
                             'date': date_exam.strftime('%d/%m/%Y'),
+                            'date_obj': date_exam,
                             'nb_seances': nb_seances_affectees,
                             'max_autorise': nombre_max,
                             'seances': ', '.join(sorted(seances_affectees_liste)),
@@ -2020,3 +2080,11 @@ class SurveillanceOptimizerV3:
             self.infos.append("")
         
         self.infos.append("=" * 80)
+        
+        # Retourner les statistiques pour la base de données
+        return {
+            'total': nb_total_contraintes,
+            'respectees': nb_contraintes_respectees,
+            'violees': nb_contraintes_violees,
+            'details_violations': violations_details
+        }

@@ -41,6 +41,7 @@ class SendEmailsRequest(BaseModel):
     """Requête d'envoi d'emails avec token OAuth2"""
     token_info: Dict
     avec_pieces_jointes: bool = False
+    creer_evenements_calendar: bool = False
 
 
 class EmailResult(BaseModel):
@@ -494,7 +495,8 @@ def envoyer_convocations_gmail(
         
         # Envoyer toutes les convocations
         resultats = convocation_service.envoyer_toutes_convocations(
-            avec_pieces_jointes=request.avec_pieces_jointes
+            avec_pieces_jointes=request.avec_pieces_jointes,
+            creer_evenements_calendar=request.creer_evenements_calendar
         )
         
         return resultats

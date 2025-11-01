@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { gradesAPI } from '../services/api';
+import { gradesAPI, enseignantsAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { 
   RefreshCw, 
@@ -12,16 +12,30 @@ import {
   BarChart3,
   Award,
   AlertCircle,
+  Users,
+  ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 
 export default function ConfigGrades() {
+  const [activeTab, setActiveTab] = useState('grades'); // 'grades' ou 'exceptions'
   const [editingGrade, setEditingGrade] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [editingEnseignant, setEditingEnseignant] = useState(null);
+  const [quotaExceptionValue, setQuotaExceptionValue] = useState('');
+  const [filterNom, setFilterNom] = useState('');
+  const [filterGrade, setFilterGrade] = useState('');
+  const [filterException, setFilterException] = useState('all'); // 'all', 'with', 'without'
   const queryClient = useQueryClient();
 
   const { data: grades, isLoading } = useQuery({
     queryKey: ['grades'],
     queryFn: () => gradesAPI.getAll().then(res => res.data),
+  });
+
+  const { data: enseignants, isLoading: isLoadingEnseignants } = useQuery({
+    queryKey: ['enseignants'],
+    queryFn: () => enseignantsAPI.getAll().then(res => res.data),
   });
 
   const updateMutation = useMutation({
@@ -47,6 +61,29 @@ export default function ConfigGrades() {
     },
   });
 
+  const updateExceptionMutation = useMutation({
+    mutationFn: ({ enseignantId, data }) => enseignantsAPI.updateException(enseignantId, data),
+    onSuccess: () => {
+      toast.success('Exception mise à jour');
+      queryClient.invalidateQueries(['enseignants']);
+      setEditingEnseignant(null);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Erreur lors de la mise à jour');
+    },
+  });
+
+  const resetExceptionMutation = useMutation({
+    mutationFn: (enseignantId) => enseignantsAPI.resetException(enseignantId),
+    onSuccess: () => {
+      toast.success('Exception réinitialisée');
+      queryClient.invalidateQueries(['enseignants']);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Erreur lors de la réinitialisation');
+    },
+  });
+
   const handleEdit = (grade) => {
     setEditingGrade(grade.grade_code);
     setEditValue(grade.nb_surveillances.toString());
@@ -54,8 +91,8 @@ export default function ConfigGrades() {
 
   const handleSave = (code) => {
     const nb = parseInt(editValue);
-    if (isNaN(nb) || nb < 0 || nb > 20) {
-      toast.error('Nombre invalide (doit être entre 0 et 20)');
+    if (isNaN(nb) || nb < 1 || nb > 20) {
+      toast.error('Nombre invalide (doit être entre 1 et 20)');
       return;
     }
     updateMutation.mutate({ code, data: { nb_surveillances: nb } });
@@ -72,7 +109,39 @@ export default function ConfigGrades() {
     }
   };
 
-  if (isLoading) {
+  const handleEditEnseignant = (enseignant) => {
+    setEditingEnseignant(enseignant.id);
+    setQuotaExceptionValue((enseignant.quota_Exception || 0).toString());
+  };
+
+  const handleSaveException = (enseignantId) => {
+    const quota = parseInt(quotaExceptionValue);
+    if (isNaN(quota) || quota < 1 || quota > 20) {
+      toast.error('Quota invalide (doit être entre 1 et 20)');
+      return;
+    }
+    
+    updateExceptionMutation.mutate({ 
+      enseignantId, 
+      data: {
+        is_Exception: true,
+        quota_Exception: quota,
+      }
+    });
+  };
+
+  const handleCancelException = () => {
+    setEditingEnseignant(null);
+    setQuotaExceptionValue('');
+  };
+
+  const handleResetException = (enseignantId, nom, prenom) => {
+    if (confirm(`Voulez-vous réinitialiser l'exception pour ${prenom} ${nom} ?`)) {
+      resetExceptionMutation.mutate(enseignantId);
+    }
+  };
+
+  if (isLoading || isLoadingEnseignants) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -83,13 +152,37 @@ export default function ConfigGrades() {
     );
   }
 
-  const totalGrades = grades?.length || 0;
-  const avgSurveillances = grades && grades.length > 0
-    ? Math.round(grades.reduce((sum, g) => sum + g.nb_surveillances, 0) / grades.length)
-    : 0;
-  const maxSurveillances = grades && grades.length > 0
-    ? Math.max(...grades.map(g => g.nb_surveillances))
-    : 0;
+  // Filtrer les enseignants
+  const enseignantsFiltres = enseignants?.filter(ens => {
+    // Uniquement ceux qui participent aux surveillances
+    if (!ens.participe_surveillance) return false;
+    
+    // Filtre par nom
+    if (filterNom && !`${ens.nom} ${ens.prenom}`.toLowerCase().includes(filterNom.toLowerCase())) {
+      return false;
+    }
+    
+    // Filtre par grade
+    if (filterGrade && ens.grade_code !== filterGrade) {
+      return false;
+    }
+    
+    // Filtre par statut d'exception
+    if (filterException === 'with' && !ens.is_Exception) return false;
+    if (filterException === 'without' && ens.is_Exception) return false;
+    
+    return true;
+  });
+
+  // Fonction pour obtenir le quota du grade
+  const getGradeQuota = (gradeCode) => {
+    const grade = grades?.find(g => g.grade_code === gradeCode);
+    return grade?.nb_surveillances || 0;
+  };
+
+  // Compter les enseignants avec exception
+  const nbExceptions = enseignants?.filter(e => e.participe_surveillance && e.is_Exception)?.length || 0;
+  const nbEnseignantsActifs = enseignants?.filter(e => e.participe_surveillance)?.length || 0;
 
   return (
     <div className="space-y-6">
@@ -102,169 +195,428 @@ export default function ConfigGrades() {
               <Settings className="w-10 h-10 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold drop-shadow-lg">Configuration des Grades</h1>
+              <h1 className="text-4xl font-bold drop-shadow-lg">Configuration</h1>
               <p className="text-purple-100 text-lg mt-1">
-                Personnalisez le nombre maximum de surveillances par grade
+                Personnalisez les quotas de surveillances
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="card p-0 overflow-hidden">
+        <div className="flex border-b-2 border-gray-200">
           <button
-            onClick={handleReset}
-            disabled={resetMutation.isPending}
-            className="btn bg-white/20 hover:bg-white/30 backdrop-blur-lg border-2 border-white/40 text-white shadow-lg disabled:opacity-50 flex items-center gap-2"
+            onClick={() => setActiveTab('grades')}
+            className={`flex-1 px-6 py-4 font-bold text-lg transition-all flex items-center justify-center gap-3 ${
+              activeTab === 'grades'
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white border-b-4 border-indigo-700'
+                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+            }`}
           >
-            <RefreshCw className={`w-5 h-5 ${resetMutation.isPending ? 'animate-spin' : ''}`} />
-            <span>Réinitialiser</span>
+            <Award className="w-6 h-6" />
+            <span>Quotas par Grade</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('exceptions')}
+            className={`flex-1 px-6 py-4 font-bold text-lg transition-all flex items-center justify-center gap-3 ${
+              activeTab === 'exceptions'
+                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white border-b-4 border-orange-700'
+                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <ShieldAlert className="w-6 h-6" />
+            <span>Exceptions Enseignants</span>
           </button>
         </div>
       </div>
 
-      {/* Info Card */}
-      <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
-            <AlertCircle className="w-7 h-7 text-white" />
+      {/* Contenu selon l'onglet actif */}
+      {activeTab === 'grades' ? (
+        <div className="space-y-6">
+          {/* Info Card */}
+          <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-blue-900 mb-2">
+                  À propos du nombre de surveillances
+                </h3>
+                <p className="text-sm text-blue-800 leading-relaxed">
+                  Ces valeurs définissent le <strong>nombre maximum de surveillances</strong> que chaque grade peut assurer.
+                  L'algorithme d'optimisation utilise ces limites pour répartir <strong>équitablement</strong> les surveillances
+                  en tenant compte de la hiérarchie des grades et des préférences des enseignants.
+                </p>
+              </div>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-blue-900 mb-2">
-              À propos du nombre de surveillances
-            </h3>
-            <p className="text-sm text-blue-800 leading-relaxed">
-              Ces valeurs définissent le <strong>nombre maximum de surveillances</strong> que chaque grade peut assurer.
-              L'algorithme d'optimisation utilise ces limites pour répartir <strong>équitablement</strong> les surveillances
-              en tenant compte de la hiérarchie des grades et des préférences des enseignants.
-            </p>
-          </div>
-        </div>
-      </div>
 
-      {/* Summary Stats */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-              <Award className="w-8 h-8 text-white" />
+          {/* Table des Grades */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center">
+                  <Award className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Configuration des Grades</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {grades?.length || 0} grade(s) configuré(s)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleReset}
+                disabled={resetMutation.isPending}
+                className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-xl transition-all font-semibold shadow-lg disabled:opacity-50"
+              >
+                <RefreshCw className={`w-5 h-5 ${resetMutation.isPending ? 'animate-spin' : ''}`} />
+                <span>Réinitialiser</span>
+              </button>
             </div>
-            <div>
-              <div className="text-sm font-semibold text-purple-700">Total Grades</div>
-              <div className="text-4xl font-bold text-purple-900">{totalGrades}</div>
-            </div>
-          </div>
-        </div>
-        <div className="card bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-blue-700">Moyenne Surveillances</div>
-              <div className="text-4xl font-bold text-blue-900">{avgSurveillances}</div>
-            </div>
-          </div>
-        </div>
-        <div className="card bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-green-700">Maximum</div>
-              <div className="text-4xl font-bold text-green-900">{maxSurveillances}</div>
-            </div>
-          </div>
-        </div>
-      </div> */}
-
-      {/* Table */}
-      <div className="card">
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th className="bg-gradient-to-r from-indigo-50 to-purple-50">
-                  <span className="text-indigo-900 font-bold">Code Grade</span>
-                </th>
-                <th className="bg-gradient-to-r from-indigo-50 to-purple-50">
-                  <span className="text-indigo-900 font-bold">Nom du Grade</span>
-                </th>
-                <th className="bg-gradient-to-r from-indigo-50 to-purple-50 text-center">
-                  <span className="text-indigo-900 font-bold">Nombre de Surveillances</span>
-                </th>
-                <th className="bg-gradient-to-r from-indigo-50 to-purple-50 text-center">
-                  <span className="text-indigo-900 font-bold">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {grades?.map((grade, index) => (
-                <tr 
-                  key={grade.grade_code}
-                  className={`hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-colors ${
-                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                  }`}
-                >
-                  <td>
-                    <span className="badge badge-primary text-sm font-bold">
-                      {grade.grade_code}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="font-semibold text-gray-900">{grade.grade_nom}</span>
-                  </td>
-                  <td className="text-center">
-                    {editingGrade === grade.grade_code ? (
-                      <input
-                        type="number"
-                        min="0"
-                        max="20"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="input w-24 text-center font-bold text-lg"
-                        autoFocus
-                      />
-                    ) : (
-                      <div className="inline-flex items-center gap-2 bg-gradient-to-br from-indigo-100 to-purple-100 px-4 py-2 rounded-xl border-2 border-indigo-300">
-                        <span className="text-3xl font-bold text-indigo-900">
-                          {grade.nb_surveillances}
+            <div className="overflow-x-auto">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th className="bg-gradient-to-r from-indigo-50 to-purple-50">
+                      <span className="text-indigo-900 font-bold">Code Grade</span>
+                    </th>
+                    <th className="bg-gradient-to-r from-indigo-50 to-purple-50">
+                      <span className="text-indigo-900 font-bold">Nom du Grade</span>
+                    </th>
+                    <th className="bg-gradient-to-r from-indigo-50 to-purple-50 text-center">
+                      <span className="text-indigo-900 font-bold">Nombre de Surveillances</span>
+                    </th>
+                    <th className="bg-gradient-to-r from-indigo-50 to-purple-50 text-center">
+                      <span className="text-indigo-900 font-bold">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {grades?.map((grade, index) => (
+                    <tr 
+                      key={grade.grade_code}
+                      className={`hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-colors ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                      }`}
+                    >
+                      <td>
+                        <span className="badge badge-primary text-sm font-bold">
+                          {grade.grade_code}
                         </span>
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    {editingGrade === grade.grade_code ? (
-                      <div className="flex gap-3 justify-center">
-                        <button
-                          onClick={() => handleSave(grade.grade_code)}
-                          className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors shadow-md"
-                          disabled={updateMutation.isPending}
-                        >
-                          <Check className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={handleCancel}
-                          className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors shadow-md"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() => handleEdit(grade)}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors font-semibold shadow-md"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          <span>Modifier</span>
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </td>
+                      <td>
+                        <span className="font-semibold text-gray-900">{grade.grade_nom}</span>
+                      </td>
+                      <td className="text-center">
+                        {editingGrade === grade.grade_code ? (
+                          <input
+                            type="number"
+                            min="1"
+                            max="20"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="input w-24 text-center font-bold text-lg"
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="inline-flex items-center gap-2 bg-gradient-to-br from-indigo-100 to-purple-100 px-4 py-2 rounded-xl border-2 border-indigo-300">
+                            <span className="text-3xl font-bold text-indigo-900">
+                              {grade.nb_surveillances}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        {editingGrade === grade.grade_code ? (
+                          <div className="flex gap-3 justify-center">
+                            <button
+                              onClick={() => handleSave(grade.grade_code)}
+                              className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors shadow-md"
+                              disabled={updateMutation.isPending}
+                            >
+                              <Check className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={handleCancel}
+                              className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors shadow-md"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex justify-center">
+                            <button
+                              onClick={() => handleEdit(grade)}
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors font-semibold shadow-md"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              <span>Modifier</span>
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Info Card Exceptions */}
+          <div className="card bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <ShieldAlert className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-orange-900 mb-2">
+                  Quotas d'Exception pour les Enseignants
+                </h3>
+                <p className="text-sm text-orange-800 leading-relaxed">
+                  Certains enseignants peuvent avoir des <strong>quotas exceptionnels</strong> de surveillances, 
+                  différents des quotas standards de leur grade. Définissez un quota personnalisé 
+                  pour gérer les cas particuliers (charge réduite, responsabilités spéciales, etc.).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tableau des Enseignants */}
+          <div className="card">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Gestion des Exceptions</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {nbEnseignantsActifs} enseignant(s) actif(s) · {nbExceptions} exception(s) active(s)
+                </p>
+              </div>
+            </div>
+
+            {/* Filtres */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-gray-200">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  🔍 Rechercher par nom
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nom ou prénom..."
+                  value={filterNom}
+                  onChange={(e) => setFilterNom(e.target.value)}
+                  className="input w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  🎓 Filtrer par grade
+                </label>
+                <select
+                  value={filterGrade}
+                  onChange={(e) => setFilterGrade(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="">Tous les grades</option>
+                  {grades?.map(grade => (
+                    <option key={grade.grade_code} value={grade.grade_code}>
+                      {grade.grade_code} - {grade.grade_nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  ⚠️ Statut d'exception
+                </label>
+                <select
+                  value={filterException}
+                  onChange={(e) => setFilterException(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="all">Tous</option>
+                  <option value="with">Avec exception</option>
+                  <option value="without">Sans exception</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Résultat des filtres */}
+            {filterNom || filterGrade || filterException !== 'all' ? (
+              <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                <p className="text-sm text-blue-800">
+                  <strong>{enseignantsFiltres?.length || 0}</strong> enseignant(s) trouvé(s) avec les filtres appliqués
+                  {(filterNom || filterGrade || filterException !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setFilterNom('');
+                        setFilterGrade('');
+                        setFilterException('all');
+                      }}
+                      className="ml-4 text-blue-600 hover:text-blue-800 font-semibold underline"
+                    >
+                      Réinitialiser les filtres
+                    </button>
+                  )}
+                </p>
+              </div>
+            ) : null}
+
+            {enseignantsFiltres && enseignantsFiltres.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th className="bg-gradient-to-r from-orange-50 to-red-50">
+                        <span className="text-orange-900 font-bold">Nom</span>
+                      </th>
+                      <th className="bg-gradient-to-r from-orange-50 to-red-50">
+                        <span className="text-orange-900 font-bold">Prénom</span>
+                      </th>
+                      <th className="bg-gradient-to-r from-orange-50 to-red-50">
+                        <span className="text-orange-900 font-bold">Grade</span>
+                      </th>
+                      <th className="bg-gradient-to-r from-orange-50 to-red-50 text-center">
+                        <span className="text-orange-900 font-bold">Quota Grade</span>
+                      </th>
+                      <th className="bg-gradient-to-r from-orange-50 to-red-50 text-center">
+                        <span className="text-orange-900 font-bold">Quota Exception</span>
+                      </th>
+                      <th className="bg-gradient-to-r from-orange-50 to-red-50 text-center">
+                        <span className="text-orange-900 font-bold">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {enseignantsFiltres.map((enseignant, index) => {
+                      const quotaGrade = getGradeQuota(enseignant.grade_code);
+                      return (
+                        <tr 
+                          key={enseignant.id}
+                          className={`hover:bg-gradient-to-r hover:from-orange-50 hover:to-red-50 transition-colors ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                          } ${enseignant.is_Exception ? 'border-l-4 border-orange-500' : ''}`}
+                        >
+                          <td>
+                            <span className="font-semibold text-gray-900">{enseignant.nom}</span>
+                          </td>
+                          <td>
+                            <span className="font-semibold text-gray-900">{enseignant.prenom}</span>
+                          </td>
+                          <td>
+                            <span className="badge badge-primary text-sm">
+                              {enseignant.grade_code} - {enseignant.grade}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <div className="inline-flex items-center gap-2 bg-gradient-to-br from-indigo-100 to-purple-100 px-3 py-1 rounded-lg border-2 border-indigo-300">
+                              <span className="text-xl font-bold text-indigo-900">
+                                {quotaGrade}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="text-center">
+                            {editingEnseignant === enseignant.id ? (
+                              <input
+                                type="number"
+                                min="1"
+                                max="20"
+                                value={quotaExceptionValue}
+                                onChange={(e) => setQuotaExceptionValue(e.target.value)}
+                                className="input w-24 text-center font-bold text-lg"
+                                placeholder="1"
+                                autoFocus
+                              />
+                            ) : (
+                              <div className="inline-flex items-center gap-2">
+                                {enseignant.is_Exception && enseignant.quota_Exception > 0 ? (
+                                  <div className="bg-gradient-to-br from-orange-100 to-red-100 px-4 py-2 rounded-xl border-2 border-orange-300">
+                                    <span className="text-2xl font-bold text-orange-900">
+                                      {enseignant.quota_Exception}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="bg-gradient-to-br from-gray-100 to-gray-200 px-4 py-2 rounded-xl border-2 border-gray-300">
+                                    <span className="text-xl font-bold text-gray-500">
+                                      {quotaGrade}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            {editingEnseignant === enseignant.id ? (
+                              <div className="flex gap-3 justify-center">
+                                <button
+                                  onClick={() => handleSaveException(enseignant.id)}
+                                  className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors shadow-md"
+                                  disabled={updateExceptionMutation.isPending}
+                                >
+                                  <Check className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={handleCancelException}
+                                  className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors shadow-md"
+                                >
+                                  <X className="w-5 h-5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 justify-center">
+                                <button
+                                  onClick={() => handleEditEnseignant(enseignant)}
+                                  className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-semibold shadow-md"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                  <span>Modifier</span>
+                                </button>
+                                {enseignant.is_Exception && (
+                                  <button
+                                    onClick={() => handleResetException(enseignant.id, enseignant.nom, enseignant.prenom)}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-semibold shadow-md"
+                                    disabled={resetExceptionMutation.isPending}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Réinitialiser</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-lg text-gray-500 font-medium">
+                  {enseignants && enseignants.length > 0 
+                    ? 'Aucun enseignant ne correspond aux filtres'
+                    : 'Aucun enseignant trouvé'}
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  {enseignants && enseignants.length > 0
+                    ? 'Essayez de modifier ou réinitialiser les filtres'
+                    : 'Importez d\'abord la liste des enseignants depuis la page "Importation"'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

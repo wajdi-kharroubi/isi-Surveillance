@@ -3,10 +3,30 @@ from sqlalchemy.orm import Session
 from database import get_db
 from services import ImportService
 from config import UPLOAD_DIR
+from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
 import os
 import shutil
+import logging
 
 router = APIRouter(prefix="/import", tags=["Import"])
+logger = logging.getLogger(__name__)
+
+
+def vider_statistiques_generation(db: Session):
+    """Vide toutes les tables de statistiques de génération"""
+    try:
+        # Supprimer d'abord les tables enfants (à cause des clés étrangères)
+        db.query(SouhaitViole).delete()
+        db.query(ResponsableAbsent).delete()
+        db.query(DepassementMaxJour).delete()
+        # Puis la table parent
+        db.query(GenerationStatistique).delete()
+        db.commit()
+        logger.info("Statistiques de génération vidées suite à l'importation")
+    except Exception as e:
+        logger.warning(f"Erreur lors de la suppression des statistiques: {str(e)}")
+        db.rollback()
+
 
 
 @router.post("/enseignants")
@@ -15,6 +35,9 @@ async def importer_enseignants(file: UploadFile = File(...), db: Session = Depen
     
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Le fichier doit être au format Excel (.xlsx ou .xls)")
+    
+    # Vider les statistiques de génération
+    vider_statistiques_generation(db)
     
     # Sauvegarder temporairement le fichier
     file_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -49,6 +72,9 @@ async def importer_voeux(file: UploadFile = File(...), db: Session = Depends(get
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Le fichier doit être au format Excel (.xlsx ou .xls)")
     
+    # Vider les statistiques de génération
+    vider_statistiques_generation(db)
+    
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     
     try:
@@ -78,6 +104,9 @@ async def importer_examens(file: UploadFile = File(...), db: Session = Depends(g
     
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Le fichier doit être au format Excel (.xlsx ou .xls)")
+    
+    # Vider les statistiques de génération
+    vider_statistiques_generation(db)
     
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     

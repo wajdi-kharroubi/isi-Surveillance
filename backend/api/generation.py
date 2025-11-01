@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import GenerationRequest, GenerationResponse
-from models.models import Affectation, Examen
+from models.models import Affectation, Examen, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
 from algorithms.optimizer_v3 import SurveillanceOptimizerV3
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,9 +51,23 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
         - warnings: Liste des avertissements et informations
     """
     try:
+        # Vider toutes les tables de statistiques de génération avant une nouvelle génération
+        try:
+            # Supprimer d'abord les tables enfants (à cause des clés étrangères)
+            db.query(SouhaitViole).delete()
+            db.query(ResponsableAbsent).delete()
+            db.query(DepassementMaxJour).delete()
+            # Puis la table parent
+            db.query(GenerationStatistique).delete()
+            db.commit()
+            logger.info("Anciennes statistiques de génération supprimées")
+        except Exception as e:
+            logger.warning(f"Erreur lors de la suppression des anciennes statistiques: {str(e)}")
+            db.rollback()
+        
         optimizer = SurveillanceOptimizerV3(db)
 
-        success, nb_affectations, temps_exec, messages = (
+        success, nb_affectations, temps_exec, messages, statistiques_data = (
             optimizer.generer_planning_optimise(
                 min_surveillants_par_examen=request.min_surveillants_par_salle,
                 allow_fallback=request.allow_single_surveillant,
@@ -64,7 +79,7 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
             )
         )
 
-        if success:
+        if success and statistiques_data:
             # Calculer le nombre de surveillances uniques (comme dans le dashboard)
             from sqlalchemy import func, distinct
 
@@ -86,6 +101,97 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                 .scalar()
                 or 0
             )
+            
+            # Enregistrer les statistiques dans la base de données
+            try:
+                # Créer l'enregistrement principal des statistiques
+                stats_souhaits = statistiques_data.get('souhaits', {})
+                stats_responsables = statistiques_data.get('responsables', {})
+                stats_max_seances = statistiques_data.get('max_seances_jour', {})
+                
+                # Calculer les taux en pourcentage
+                taux_souhaits = int((stats_souhaits.get('respectes', 0) / stats_souhaits.get('total', 1) * 100)) if stats_souhaits.get('total', 0) > 0 else 100
+                taux_responsables = int((stats_responsables.get('presents', 0) / stats_responsables.get('total', 1) * 100)) if stats_responsables.get('total', 0) > 0 else 100
+                taux_seances = int((stats_max_seances.get('respectees', 0) / stats_max_seances.get('total', 1) * 100)) if stats_max_seances.get('total', 0) > 0 else 100
+                
+                generation_stat = GenerationStatistique(
+                    date_generation=datetime.utcnow(),
+                    nb_affectations=nb_surveillances_uniques,
+                    temps_generation=int(temps_exec),
+                    
+                    # Statistiques des souhaits
+                    nb_souhaits_total=stats_souhaits.get('total', 0),
+                    nb_souhaits_respectes=stats_souhaits.get('respectes', 0),
+                    nb_souhaits_violes=stats_souhaits.get('violes', 0),
+                    taux_souhaits_respectes=taux_souhaits,
+                    
+                    # Statistiques des responsables
+                    nb_responsables_total=stats_responsables.get('total', 0),
+                    nb_responsables_presents=stats_responsables.get('presents', 0),
+                    nb_responsables_absents=stats_responsables.get('absents', 0),
+                    taux_responsables_presents=taux_responsables,
+                    
+                    # Statistiques des contraintes de séances par jour
+                    nb_contraintes_seances_total=stats_max_seances.get('total', 0),
+                    nb_contraintes_seances_respectees=stats_max_seances.get('respectees', 0),
+                    nb_contraintes_seances_violees=stats_max_seances.get('violees', 0),
+                    taux_contraintes_seances_respectees=taux_seances,
+                )
+                
+                db.add(generation_stat)
+                db.flush()  # Pour obtenir l'ID
+                
+                # Enregistrer les souhaits violés
+                for souhait_viole in stats_souhaits.get('details_violes', []):
+                    souhait = SouhaitViole(
+                        generation_statistique_id=generation_stat.id,
+                        enseignant_id=souhait_viole['enseignant_id'],
+                        enseignant_nom=souhait_viole['enseignant_nom'],
+                        enseignant_prenom=souhait_viole['enseignant_prenom'],
+                        code_smartex=souhait_viole['code'],
+                        date_exam=souhait_viole['date_obj'],
+                        seance=souhait_viole['seance'],
+                        jour=souhait_viole.get('jour', 'Inconnu')
+                    )
+                    db.add(souhait)
+                
+                # Enregistrer les responsables absents
+                for responsable_absent in stats_responsables.get('details_absents', []):
+                    responsable = ResponsableAbsent(
+                        generation_statistique_id=generation_stat.id,
+                        enseignant_id=responsable_absent['enseignant_id'],
+                        enseignant_nom=responsable_absent['enseignant_nom'],
+                        enseignant_prenom=responsable_absent['enseignant_prenom'],
+                        code_smartex=responsable_absent['code'],
+                        date_exam=responsable_absent['date_obj'],
+                        seance=responsable_absent['seance'],
+                        salle=responsable_absent['salle']
+                    )
+                    db.add(responsable)
+                
+                # Enregistrer les dépassements du nombre max de séances par jour
+                for depassement in stats_max_seances.get('details_violations', []):
+                    depass = DepassementMaxJour(
+                        generation_statistique_id=generation_stat.id,
+                        enseignant_id=depassement['enseignant_id'],
+                        enseignant_nom=depassement['enseignant_nom'],
+                        enseignant_prenom=depassement['enseignant_prenom'],
+                        code_smartex=depassement['code'],
+                        date_exam=depassement['date_obj'],
+                        nb_seances=depassement['nb_seances'],
+                        max_autorise=depassement['max_autorise'],
+                        depassement=depassement['depassement'],
+                        seances=depassement['seances']
+                    )
+                    db.add(depass)
+                
+                db.commit()
+                logger.info(f"Statistiques de génération enregistrées avec succès (ID: {generation_stat.id})")
+                
+            except Exception as e:
+                logger.error(f"Erreur lors de l'enregistrement des statistiques: {str(e)}")
+                db.rollback()
+                # Continue même si l'enregistrement des statistiques échoue
 
             return GenerationResponse(
                 success=True,
@@ -99,8 +205,8 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                 success=False,
                 message="❌ Échec de la génération du planning V3",
                 nb_affectations=0,
-                temps_generation=temps_exec,
-                warnings=messages,
+                temps_generation=temps_exec if success is False else 0,
+                warnings=messages if messages else [],
             )
 
     except Exception as e:
@@ -113,16 +219,27 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
 
 @router.delete("/reinitialiser")
 def reinitialiser_planning(db: Session = Depends(get_db)):
-    """Supprime toutes les affectations actuelles"""
+    """Supprime toutes les affectations actuelles et les statistiques de génération"""
     from models.models import Affectation
 
     try:
+        # Vider les statistiques de génération
+        try:
+            db.query(SouhaitViole).delete()
+            db.query(ResponsableAbsent).delete()
+            db.query(DepassementMaxJour).delete()
+            db.query(GenerationStatistique).delete()
+            logger.info("Statistiques de génération supprimées")
+        except Exception as e:
+            logger.warning(f"Erreur lors de la suppression des statistiques: {str(e)}")
+        
+        # Supprimer les affectations
         count = db.query(Affectation).delete()
         db.commit()
 
         return {
             "success": True,
-            "message": f"{count} affectations supprimées",
+            "message": f"{count} affectations supprimées et statistiques vidées",
             "nb_supprimes": count,
         }
 
