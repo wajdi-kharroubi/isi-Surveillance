@@ -116,8 +116,8 @@ export default function ConfigGrades() {
 
   const handleSaveException = (enseignantId) => {
     const quota = parseInt(quotaExceptionValue);
-    if (isNaN(quota) || quota < 1 || quota > 20) {
-      toast.error('Quota invalide (doit être entre 1 et 20)');
+    if (isNaN(quota) || quota < 0 || quota > 20) {
+      toast.error('Quota invalide (doit être entre 0 et 20)');
       return;
     }
     
@@ -528,17 +528,17 @@ export default function ConfigGrades() {
                             {editingEnseignant === enseignant.id ? (
                               <input
                                 type="number"
-                                min="1"
+                                min="0"
                                 max="20"
                                 value={quotaExceptionValue}
                                 onChange={(e) => setQuotaExceptionValue(e.target.value)}
                                 className="input w-24 text-center font-bold text-lg"
-                                placeholder="1"
+                                placeholder="0"
                                 autoFocus
                               />
                             ) : (
                               <div className="inline-flex items-center gap-2">
-                                {enseignant.is_Exception && enseignant.quota_Exception > 0 ? (
+                                {enseignant.is_Exception && enseignant.quota_Exception >= 0 ? (
                                   <div className="bg-gradient-to-br from-orange-100 to-red-100 px-4 py-2 rounded-xl border-2 border-orange-300">
                                     <span className="text-2xl font-bold text-orange-900">
                                       {enseignant.quota_Exception}

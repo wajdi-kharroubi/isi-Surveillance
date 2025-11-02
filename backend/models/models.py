@@ -122,9 +122,10 @@ class GenerationStatistique(Base):
     taux_souhaits_respectes = Column(Integer, nullable=False, default=0)  # Pourcentage
     
     # Statistiques des responsables
-    nb_responsables_total = Column(Integer, nullable=False, default=0)
+    nb_responsables_total = Column(Integer, nullable=False, default=0)  # Responsables pouvant surveiller uniquement
     nb_responsables_presents = Column(Integer, nullable=False, default=0)
-    nb_responsables_absents = Column(Integer, nullable=False, default=0)
+    nb_responsables_absents = Column(Integer, nullable=False, default=0)  # Absents parmi ceux pouvant surveiller
+    nb_responsables_non_participants = Column(Integer, nullable=False, default=0)  # Responsables ne participant pas aux surveillances
     taux_responsables_presents = Column(Integer, nullable=False, default=0)  # Pourcentage
     
     # Statistiques des contraintes de séances par jour
@@ -168,7 +169,7 @@ class SouhaitViole(Base):
 
 
 class ResponsableAbsent(Base):
-    """Enregistrement d'un responsable absent lors de la génération"""
+    """Enregistrement d'un responsable absent lors de la génération (groupé par enseignant/date/séance)"""
     __tablename__ = "responsables_absents"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -179,7 +180,9 @@ class ResponsableAbsent(Base):
     code_smartex = Column(String(50), nullable=False)
     date_exam = Column(Date, nullable=False)
     seance = Column(String(10), nullable=False)
-    salle = Column(String(50), nullable=False)
+    salle = Column(String(50), nullable=True)  # Optionnel (déprécié après groupement)
+    nb_examens = Column(Integer, nullable=False, default=1)  # Nombre d'examens groupés
+    raison = Column(String(50), nullable=True, default='autre')  # 'non_surveillant' ou 'autre'
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relations
@@ -187,7 +190,7 @@ class ResponsableAbsent(Base):
     enseignant = relationship("Enseignant")
 
     def __repr__(self):
-        return f"<ResponsableAbsent {self.enseignant_nom} {self.enseignant_prenom} - {self.date_exam} {self.seance}>"
+        return f"<ResponsableAbsent {self.enseignant_nom} {self.enseignant_prenom} - {self.date_exam} {self.seance} ({self.nb_examens} examens)>"
 
 
 class DepassementMaxJour(Base):

@@ -47,15 +47,10 @@ const navigation = [
       { name: 'Aide à la Décision', href: '/aide-decision', description: '🧮 Calculer quotas', icon: ChartBarIcon },
       { name: 'Génération', href: '/generation', description: 'Créer le planning', icon: SparklesIcon },
       { name: 'Consulter Planning', href: '/planning', description: 'Voir le planning', icon: DocumentTextIcon },
+      { name: 'Statistiques', href: '/statistiques', description: '📊 Résultats génération', icon: ChartBarIcon },
       { name: 'Export', href: '/export', description: 'Télécharger', icon: ArrowDownTrayIcon },
     ]
   },
-  // { 
-  //   name: 'Statistiques', 
-  //   href: '/statistiques', 
-  //   icon: ChartBarIcon, 
-  //   description: 'Analyses' 
-  // },
   { 
     name: 'Configuration', 
     href: '/config-grades', 

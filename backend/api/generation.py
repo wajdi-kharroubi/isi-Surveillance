@@ -129,6 +129,7 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                     nb_responsables_total=stats_responsables.get('total', 0),
                     nb_responsables_presents=stats_responsables.get('presents', 0),
                     nb_responsables_absents=stats_responsables.get('absents', 0),
+                    nb_responsables_non_participants=stats_responsables.get('non_participants', 0),
                     taux_responsables_presents=taux_responsables,
                     
                     # Statistiques des contraintes de séances par jour
@@ -155,7 +156,7 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                     )
                     db.add(souhait)
                 
-                # Enregistrer les responsables absents
+                # Enregistrer les responsables absents (structure groupée avec nb_examens)
                 for responsable_absent in stats_responsables.get('details_absents', []):
                     responsable = ResponsableAbsent(
                         generation_statistique_id=generation_stat.id,
@@ -165,7 +166,9 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                         code_smartex=responsable_absent['code'],
                         date_exam=responsable_absent['date_obj'],
                         seance=responsable_absent['seance'],
-                        salle=responsable_absent['salle']
+                        salle=None,  # Plus utilisé après groupement
+                        nb_examens=responsable_absent.get('nb_examens', 1),  # Nombre d'examens groupés
+                        raison=responsable_absent.get('raison', 'autre')
                     )
                     db.add(responsable)
                 

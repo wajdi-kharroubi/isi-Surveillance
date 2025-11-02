@@ -68,17 +68,21 @@ def obtenir_statistiques(db: Session = Depends(get_db)):
 
 @router.get("/charge-enseignants")
 def charge_par_enseignant(db: Session = Depends(get_db)):
-    """Retourne la charge de travail par enseignant (séances uniques)"""
+    """Retourne la charge de travail par enseignant (séances uniques) - uniquement pour les enseignants qui participent aux surveillances"""
     from sqlalchemy import func, distinct, case
+    from models.models import GradeConfig
 
     # Compter les séances uniques par enseignant (même date + même heure = 1 séance)
     # Utiliser CASE pour retourner 0 quand il n'y a pas d'affectations au lieu de 1
+    # Filtrer uniquement les enseignants qui participent aux surveillances
     charges = (
         db.query(
             Enseignant.id,
             Enseignant.nom,
             Enseignant.prenom,
             Enseignant.grade_code,
+            Enseignant.is_Exception,
+            Enseignant.quota_Exception,
             func.count(
                 distinct(
                     case(
@@ -88,11 +92,16 @@ def charge_par_enseignant(db: Session = Depends(get_db)):
                 )
             ).label("nb_surveillances"),
         )
+        .filter(Enseignant.participe_surveillance == True)  # Ne compter que les enseignants qui participent
         .join(Affectation, Enseignant.id == Affectation.enseignant_id, isouter=True)
         .join(Examen, Affectation.examen_id == Examen.id, isouter=True)
         .group_by(Enseignant.id)
         .all()
     )
+
+    # Récupérer les quotas de grade
+    grade_configs = db.query(GradeConfig).all()
+    quota_par_grade = {gc.grade_code: gc.nb_surveillances for gc in grade_configs}
 
     return {
         "charges": [
@@ -102,8 +111,10 @@ def charge_par_enseignant(db: Session = Depends(get_db)):
                 "prenom": prenom,
                 "grade": grade,
                 "nb_surveillances": nb or 0,
+                "quota_initial": quota_exception if is_exception and quota_exception is not None else quota_par_grade.get(grade, 0),
+                "is_exception": is_exception,
             }
-            for ens_id, nom, prenom, grade, nb in charges
+            for ens_id, nom, prenom, grade, is_exception, quota_exception, nb in charges
         ]
     }
 
@@ -130,7 +141,9 @@ class ResponsableAbsentResponse(BaseModel):
     code_smartex: str
     date_exam: str
     seance: str
-    salle: str
+    salle: Optional[str] = None  # Optionnel (déprécié après groupement)
+    nb_examens: int = 1  # Nombre d'examens groupés
+    raison: Optional[str] = 'autre'
     
     class Config:
         from_attributes = True
@@ -167,6 +180,7 @@ class GenerationStatistiqueResponse(BaseModel):
     nb_responsables_total: int
     nb_responsables_presents: int
     nb_responsables_absents: int
+    nb_responsables_non_participants: int
     taux_responsables_presents: int
     
     # Statistiques des contraintes de séances par jour
@@ -177,7 +191,8 @@ class GenerationStatistiqueResponse(BaseModel):
     
     # Listes détaillées (optionnelles)
     souhaits_violes: Optional[List[SouhaitVioleResponse]] = []
-    responsables_absents: Optional[List[ResponsableAbsentResponse]] = []
+    responsables_absents_participants: Optional[List[ResponsableAbsentResponse]] = []
+    responsables_absents_non_surveillants: Optional[List[ResponsableAbsentResponse]] = []
     depassements_max_jour: Optional[List[DepassementMaxJourResponse]] = []
     
     class Config:
@@ -228,6 +243,7 @@ def obtenir_statistiques_generations(
             'nb_responsables_total': gen.nb_responsables_total,
             'nb_responsables_presents': gen.nb_responsables_presents,
             'nb_responsables_absents': gen.nb_responsables_absents,
+            'nb_responsables_non_participants': gen.nb_responsables_non_participants,
             'taux_responsables_presents': gen.taux_responsables_presents,
             
             'nb_contraintes_seances_total': gen.nb_contraintes_seances_total,
@@ -250,7 +266,8 @@ def obtenir_statistiques_generations(
                 for s in gen.souhaits_violes
             ]
             
-            gen_dict['responsables_absents'] = [
+            # Séparer les responsables absents en deux listes selon la raison
+            tous_responsables_absents = [
                 {
                     'id': r.id,
                     'enseignant_nom': r.enseignant_nom,
@@ -258,9 +275,21 @@ def obtenir_statistiques_generations(
                     'code_smartex': r.code_smartex,
                     'date_exam': r.date_exam.strftime('%Y-%m-%d'),
                     'seance': r.seance,
-                    'salle': r.salle
+                    'salle': r.salle,
+                    'nb_examens': r.nb_examens,
+                    'raison': r.raison or 'autre'
                 }
                 for r in gen.responsables_absents
+            ]
+            
+            # Liste des responsables absents avec participe_surveillance=True (raison='autre')
+            gen_dict['responsables_absents_participants'] = [
+                r for r in tous_responsables_absents if r['raison'] == 'autre'
+            ]
+            
+            # Liste des responsables absents avec participe_surveillance=False (raison='non_surveillant')
+            gen_dict['responsables_absents_non_surveillants'] = [
+                r for r in tous_responsables_absents if r['raison'] == 'non_surveillant'
             ]
             
             gen_dict['depassements_max_jour'] = [
@@ -324,6 +353,7 @@ def obtenir_derniere_statistique_generation(
         'nb_responsables_total': gen.nb_responsables_total,
         'nb_responsables_presents': gen.nb_responsables_presents,
         'nb_responsables_absents': gen.nb_responsables_absents,
+        'nb_responsables_non_participants': gen.nb_responsables_non_participants,
         'taux_responsables_presents': gen.taux_responsables_presents,
         
         'nb_contraintes_seances_total': gen.nb_contraintes_seances_total,
@@ -346,7 +376,8 @@ def obtenir_derniere_statistique_generation(
             for s in gen.souhaits_violes
         ]
         
-        gen_dict['responsables_absents'] = [
+        # Séparer les responsables absents en deux listes selon la raison
+        tous_responsables_absents = [
             {
                 'id': r.id,
                 'enseignant_nom': r.enseignant_nom,
@@ -354,9 +385,21 @@ def obtenir_derniere_statistique_generation(
                 'code_smartex': r.code_smartex,
                 'date_exam': r.date_exam.strftime('%Y-%m-%d'),
                 'seance': r.seance,
-                'salle': r.salle
+                'salle': r.salle,
+                'nb_examens': r.nb_examens,
+                'raison': r.raison or 'autre'
             }
             for r in gen.responsables_absents
+        ]
+        
+        # Liste des responsables absents avec participe_surveillance=True (raison='autre')
+        gen_dict['responsables_absents_participants'] = [
+            r for r in tous_responsables_absents if r['raison'] == 'autre'
+        ]
+        
+        # Liste des responsables absents avec participe_surveillance=False (raison='non_surveillant')
+        gen_dict['responsables_absents_non_surveillants'] = [
+            r for r in tous_responsables_absents if r['raison'] == 'non_surveillant'
         ]
         
         gen_dict['depassements_max_jour'] = [

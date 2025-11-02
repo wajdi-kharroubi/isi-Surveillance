@@ -154,7 +154,15 @@ export const planningAPI = {
 // ========== Statistiques ==========
 export const statistiquesAPI = {
   getGlobal: () => api.get('/statistiques/'),
-  getChargeEnseignants: () => api.get('/statistiques/charge-enseignants')
+  getChargeEnseignants: () => api.get('/statistiques/charge-enseignants'),
+  getDerniereGeneration: (includeDetails = true) => 
+    api.get('/statistiques/generations/derniere', { 
+      params: { include_details: includeDetails } 
+    }),
+  getGenerations: (limit = 10, includeDetails = false) =>
+    api.get('/statistiques/generations', {
+      params: { limit, include_details: includeDetails }
+    })
 };
 
 // ========== Grades Configuration ==========

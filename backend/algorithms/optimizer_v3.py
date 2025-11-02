@@ -36,7 +36,7 @@ class SurveillanceOptimizerV3:
 
     RÈGLES DE PRÉFÉRENCE (Contraintes souples - SOFT):
     1. Respect des vœux de NON-disponibilité (vœux = créneaux où l'enseignant NE VEUT PAS surveiller)
-    2. Présence obligatoire des responsables d'examen
+    2. Présence des responsables d'examen (favorisée mais non obligatoire)
     3. Équilibre entre séances de taille similaire
     4. Interdiction première + dernière séance isolées
     5. Regroupement des séances
@@ -46,8 +46,8 @@ class SurveillanceOptimizerV3:
     2. Quota Maximum Strict par Grade (PRIORITÉ 1 - OBLIGATOIRE)
     3. Nombre d'Enseignants par Séance (PRIORITÉ 2 - OBLIGATOIRE)
     4. Nombre Maximum de Séances par Jour (PRIORITÉ 2.5 - OBLIGATOIRE)
-    5. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3)
-    6. Présence Obligatoire des Responsables (PRIORITÉ 4)
+    5. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3 - SOUPLE)
+    6. Présence des Responsables d'Examens (PRIORITÉ 4 - SOUPLE)
     7. Équilibre entre Séances de Taille Similaire (PRIORITÉ 5)
     8. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 6)
     9. Regroupement des Séances (PRIORITÉ 7)
@@ -201,8 +201,8 @@ class SurveillanceOptimizerV3:
         else:
             pass
 
-        # CONTRAINTE 4: Présence obligatoire des responsables (PRIORITÉ 4)
-        nb_contraintes_responsables = self._contrainte_responsables(
+        # CONTRAINTE 4: Favoriser la présence des responsables (PRIORITÉ 4 - SOUPLE)
+        preferences_responsables = self._contrainte_responsables(
             responsables_examens, seances, affectations_vars, enseignants
         )
 
@@ -249,6 +249,7 @@ class SurveillanceOptimizerV3:
             activer_regroupement_temporel,
             mode_adaptatif,
             penalite_max_seances,
+            preferences_responsables,
         )
 
         # ===== PHASE 8: RÉSOLUTION =====
@@ -372,94 +373,43 @@ class SurveillanceOptimizerV3:
         seances: Dict,
         affectations_vars: Dict,
         enseignants: List[Enseignant],
-    ) -> int:
+    ) -> Dict:
         """
-        CONTRAINTE 4 (PRIORITÉ 4): Le responsable d'un examen doit être présent.
+        CONTRAINTE 4 (PRIORITÉ 4 - SOUPLE): Favoriser la présence des responsables d'examens.
+        
+        Cette contrainte est maintenant SOUPLE pour éviter les problèmes d'infaisabilité.
         Le responsable PEUT surveiller d'autres examens pendant le même créneau.
         Il COMPTE dans les quotas de surveillance.
+        
+        Retourne un dictionnaire avec les variables d'affectation des responsables
+        pour maximiser leur présence dans la fonction objectif.
         """
-        nb_responsables_contraints = 0
+        responsables_vars = []
+        nb_responsables_possibles = 0
 
         # Pour chaque séance et chaque examen de la séance
         for seance_key, examens_seance in seances.items():
             for examen in examens_seance:
                 if examen.id in responsables_examens:
                     responsable_id = responsables_examens[examen.id]
-                    # Trouver l'objet enseignant correspondant pour avoir son code_smartex
+                    # Trouver l'objet enseignant correspondant
                     responsable_obj = next(
                         (ens for ens in enseignants if ens.id == responsable_id), None
                     )
 
-                    # Préparer les informations de l'examen pour l'affichage
-                    date_exam_str = (
-                        examen.dateExam.strftime("%d/%m/%Y")
-                        if examen.dateExam
-                        else "Date inconnue"
-                    )
-                    heure_exam_str = (
-                        examen.h_debut.strftime("%H:%M")
-                        if examen.h_debut
-                        else "Heure inconnue"
-                    )
-                    salle_exam = (
-                        examen.cod_salle
-                        if hasattr(examen, "cod_salle")
-                        else "Salle inconnue"
-                    )
-
                     # Vérifier que le responsable fait partie des enseignants disponibles
                     if responsable_obj:
-                        # Ajouter la contrainte : le responsable doit être affecté à la séance de cet examen
                         var = affectations_vars.get((seance_key, responsable_id))
                         if var is not None:
-                            self.model.Add(var == 1)
-                            nb_responsables_contraints += 1
-                        else:
-                            code_smartex = (
-                                responsable_obj.code_smartex
-                                if responsable_obj.code_smartex
-                                else f"ID_{responsable_id}"
-                            )
-                            nom_complet = (
-                                f"{responsable_obj.nom} {responsable_obj.prenom}".strip()
-                                if hasattr(responsable_obj, "prenom")
-                                else responsable_obj.nom
-                            )
-                    else:
-                        # Si l'enseignant n'est pas dans la liste des disponibles, chercher dans la BDD
-                        code_smartex = (
-                            examen.enseignant
-                            if hasattr(examen, "enseignant") and examen.enseignant
-                            else f"ID_{responsable_id}"
-                        )
+                            # Au lieu d'une contrainte forte, on stocke la variable
+                            # pour l'ajouter à la fonction objectif
+                            responsables_vars.append(var)
+                            nb_responsables_possibles += 1
 
-                        # Tenter de récupérer l'enseignant depuis la BDD pour avoir son nom complet
-                        try:
-                            from models.models import Enseignant
-
-                            responsable_bdd = (
-                                self.db.query(Enseignant)
-                                .filter(Enseignant.id == responsable_id)
-                                .first()
-                            )
-                            if responsable_bdd:
-                                nom_complet = (
-                                    f"{responsable_bdd.nom} {responsable_bdd.prenom}".strip()
-                                    if hasattr(responsable_bdd, "prenom")
-                                    and responsable_bdd.prenom
-                                    else responsable_bdd.nom
-                                )
-                                code_smartex = (
-                                    responsable_bdd.code_smartex
-                                    if responsable_bdd.code_smartex
-                                    else code_smartex
-                                )
-                            else:
-                                pass
-                        except Exception as e:
-                            pass
-
-        return nb_responsables_contraints
+        return {
+            'variables': responsables_vars,
+            'count': nb_responsables_possibles
+        }
 
     def _contrainte_nombre_minimal(
         self,
@@ -810,12 +760,15 @@ class SurveillanceOptimizerV3:
         }
 
         # Construire un set de tuples (enseignant_id, date_voeu, seance) pour recherche rapide
+        # Et un dictionnaire pour stocker les informations complètes des voeux
         voeux_set = set()
+        voeux_details = {}  # {(enseignant_id, date_voeu, seance): {'jour': ...}}
         voeux_rejetes = []
         for voeu_dict in list_voeux:
             code_smartex = voeu_dict.get("id")
             date_voeu = voeu_dict.get("date_voeu")
             seance_val = voeu_dict.get("seance")
+            jour = voeu_dict.get("jour", "")  # Récupérer le nom du jour
 
             # Debug: pourquoi certains vœux sont rejetés
             raison_rejet = []
@@ -834,7 +787,9 @@ class SurveillanceOptimizerV3:
                 enseignant_id = code_to_id[code_smartex]
                 # Normaliser la séance
                 seance = str(seance_val).upper().strip()
-                voeux_set.add((enseignant_id, date_voeu, seance))
+                voeux_key = (enseignant_id, date_voeu, seance)
+                voeux_set.add(voeux_key)
+                voeux_details[voeux_key] = {'jour': jour}
             else:
                 voeux_rejetes.append((voeu_dict, raison_rejet))
 
@@ -851,10 +806,13 @@ class SurveillanceOptimizerV3:
                 if lookup_key in voeux_set:
                     # PÉNALITÉ: Enseignant a exprimé un vœu de NON-disponibilité pour ce créneau
                     # Il faut ÉVITER de l'affecter ici (mais c'est possible si nécessaire)
-                    preferences["avec_voeu"].append((seance_key, enseignant.id))
+                    jour_nom = voeux_details[lookup_key].get('jour', '')
+                    preferences["avec_voeu"].append((seance_key, enseignant.id, jour_nom))
                 else:
                     # NEUTRE: Pas de vœu de non-disponibilité pour ce créneau (affectation sans pénalité)
                     preferences["sans_voeu"].append((seance_key, enseignant.id))
+        
+        preferences["voeux_details"] = voeux_details  # Stocker pour utilisation ultérieure
 
         return preferences
 
@@ -1164,6 +1122,7 @@ class SurveillanceOptimizerV3:
         activer_regroupement_temporel: bool = False,
         mode_adaptatif: bool = False,
         penalite_max_seances=None,
+        preferences_responsables: Dict = None,
     ) -> cp_model.IntVar:
         """
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
@@ -1171,7 +1130,7 @@ class SurveillanceOptimizerV3:
         ORDRE DES PRIORITÉS (selon les contraintes définies):
         - PRIORITÉ 1-2: ÉGALITÉ par grade + Quota maximum + Nombre d'enseignants (CONTRAINTES FORTES - garanties)
         - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ - SOUPLE)
-        - PRIORITÉ 4: Responsables (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 4: Présence des responsables (POIDS TRÈS ÉLEVÉ - SOUPLE)
         - PRIORITÉ 5: Respect du nombre max de séances/jour (POIDS MOYEN - SOUPLE)
         - PRIORITÉ 6: Équilibre entre séances (CONTRAINTE FORTE - garantie)
         - PRIORITÉ 7: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
@@ -1182,13 +1141,13 @@ class SurveillanceOptimizerV3:
         MODE NORMAL (quotas suffisants):
         - Les quotas sont DÉJÀ maximisés par la CONTRAINTE 1 (égalité stricte)
         - Pas besoin d'optimiser l'utilisation des quotas (redondant)
-        - Avec regroupement: Vœux (50%) + Dispersion (30%) + Regroupement (20%)
-        - Sans regroupement: Vœux (60%) + Dispersion (40%)
+        - Avec regroupement: Vœux (40%) + Responsables (30%) + Dispersion (20%) + Regroupement (10%)
+        - Sans regroupement: Vœux (50%) + Responsables (30%) + Dispersion (20%)
         
         MODE ADAPTATIF (quotas insuffisants):
         - Les enseignants peuvent avoir MOINS que leur quota maximum
         - Important d'optimiser l'utilisation des quotas disponibles
-        - Avec regroupement: Vœux (40%) + Dispersion (20%) + Quotas (20%) + Regroupement (20%)
+        - Avec regroupement: Vœux (35%) + Responsables (25%) + Dispersion (15%) + Quotas (15%) + Regroupement (10%)
         - Sans regroupement: Vœux (50%) + Dispersion (30%) + Quotas (20%)
         
         NOTE: L'équilibre par grade (dispersion intra-grade) est déjà garanti par la CONTRAINTE 1
@@ -1250,7 +1209,7 @@ class SurveillanceOptimizerV3:
             # Compter le nombre d'affectations sur créneaux avec vœu de non-disponibilité
             affectations_avec_voeu = [
                 affectations_vars[(seance_key, ens_id)]
-                for seance_key, ens_id in preferences_voeux["avec_voeu"]
+                for seance_key, ens_id, _ in preferences_voeux["avec_voeu"]  # Ajout du _ pour ignorer jour_nom
                 if (seance_key, ens_id) in affectations_vars
             ]
 
@@ -1294,9 +1253,30 @@ class SurveillanceOptimizerV3:
             # MODE ADAPTATIF: Poids ajusté selon si regroupement temporel activé
             # MODE NORMAL: Poids plus élevé car pas besoin d'optimiser les quotas
             if mode_adaptatif:
-                poids.append(-50 if not activer_regroupement_temporel else -40)
+                poids.append(-50 if not activer_regroupement_temporel else -35)
             else:
-                poids.append(-60 if not activer_regroupement_temporel else -50)
+                poids.append(-50 if not activer_regroupement_temporel else -40)
+
+        # PRIORITÉ 4: MAXIMISER la présence des responsables (POIDS TRÈS ÉLEVÉ - SOUPLE)
+        bonus_responsables = None
+        if preferences_responsables and preferences_responsables.get('variables'):
+            responsables_vars = preferences_responsables['variables']
+            nb_responsables = preferences_responsables['count']
+            
+            if responsables_vars:
+                # Créer une variable pour compter le nombre de responsables présents
+                bonus_responsables = self.model.NewIntVar(
+                    0, nb_responsables, "bonus_responsables_presents"
+                )
+                self.model.Add(bonus_responsables == sum(responsables_vars))
+                
+                composantes.append(bonus_responsables)
+                # Poids très élevé pour favoriser la présence des responsables
+                # Juste après les vœux dans l'ordre de priorité
+                if mode_adaptatif:
+                    poids.append(40 if not activer_regroupement_temporel else 25)
+                else:
+                    poids.append(50 if not activer_regroupement_temporel else 30)
 
         # PRIORITÉ 5: Pénalité dépassement nombre max séances/jour (POIDS MOYEN - SOUPLE)
         if penalite_max_seances is not None:
@@ -1749,7 +1729,15 @@ class SurveillanceOptimizerV3:
         
         voeux_violes_details = []
         
-        for seance_key, enseignant_id in affectations_avec_voeu:
+        for item in affectations_avec_voeu:
+            # Récupérer seance_key, enseignant_id et jour_nom du tuple
+            if len(item) == 3:
+                seance_key, enseignant_id, jour_nom = item
+            else:
+                # Fallback pour compatibilité (ne devrait pas arriver)
+                seance_key, enseignant_id = item[0], item[1]
+                jour_nom = ""
+                
             var = affectations_vars.get((seance_key, enseignant_id))
             if var is not None:
                 if self.solver.Value(var) == 1:
@@ -1760,6 +1748,12 @@ class SurveillanceOptimizerV3:
                     enseignant = next((e for e in enseignants if e.id == enseignant_id), None)
                     if enseignant:
                         date_exam, seance_code, semestre, session, jour_index = seance_key
+                        
+                        # Utiliser le jour_nom du voeu si disponible, sinon calculer depuis la date
+                        if not jour_nom:
+                            jours_semaine = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
+                            jour_nom = jours_semaine[date_exam.weekday()]
+                        
                         voeux_violes_details.append({
                             'enseignant_id': enseignant.id,
                             'enseignant_nom': enseignant.nom,
@@ -1771,7 +1765,7 @@ class SurveillanceOptimizerV3:
                             'seance': seance_code,
                             'semestre': semestre,
                             'session': session,
-                            'jour': jour_index
+                            'jour': jour_nom
                         })
                 else:
                     # Le vœu a été respecté (enseignant non affecté sur ce créneau)
@@ -1862,12 +1856,14 @@ class SurveillanceOptimizerV3:
                 'details_absents': []
             }
         
-        nb_responsables_total = 0
+        nb_responsables_total = 0  # Total des responsables PARTICIPANTS (participe_surveillance=True)
         nb_responsables_presents = 0
-        nb_responsables_absents = 0
+        nb_responsables_absents = 0  # Absents parmi les PARTICIPANTS uniquement
+        nb_responsables_absents_participants = 0  # Compteur pour responsables pouvant surveiller mais absents
         nb_responsables_non_participants = 0  # Compteur pour les responsables qui ne participent pas
         
-        responsables_absents_details = []
+        responsables_absents_participants_details = []  # Liste pour responsables participants mais absents
+        responsables_non_participants_details = []  # Liste pour les non-participants
         
         # Pour chaque séance et chaque examen de la séance
         for seance_key, examens_seance in seances.items():
@@ -1875,53 +1871,74 @@ class SurveillanceOptimizerV3:
                 if examen.id in responsables_examens:
                     responsable_id = responsables_examens[examen.id]
                     
-                    # Récupérer les informations de l'enseignant
-                    enseignant = next((e for e in enseignants if e.id == responsable_id), None)
+                    # Récupérer les informations de l'enseignant DIRECTEMENT depuis la BDD
+                    # pour avoir accès à tous les enseignants, même ceux avec participe_surveillance=False
+                    enseignant = self.db.query(Enseignant).filter(Enseignant.id == responsable_id).first()
+                    
                     if not enseignant:
-                        # Chercher dans la BDD
-                        enseignant = self.db.query(Enseignant).filter(Enseignant.id == responsable_id).first()
-                    
-                    # Vérifier si l'enseignant participe aux surveillances
-                    participe = getattr(enseignant, 'participe_surveillance', True) if enseignant else True
-                    
-                    # Si l'enseignant ne participe pas aux surveillances, on ne le compte pas dans les statistiques
-                    if not participe:
-                        nb_responsables_non_participants += 1
+                        # Si l'enseignant n'existe pas, on ignore
                         continue
                     
-                    # Compter uniquement les responsables qui participent aux surveillances
-                    nb_responsables_total += 1
+                    # Vérifier si l'enseignant participe aux surveillances
+                    participe = enseignant.participe_surveillance
+                    
+                    date_exam, seance_code, semestre, session, jour_index = seance_key
                     
                     # Vérifier si le responsable est affecté à cette séance
                     var = affectations_vars.get((seance_key, responsable_id))
                     
-                    if var is not None and self.solver.Value(var) == 1:
-                        # Le responsable est présent
-                        nb_responsables_presents += 1
+                    # Déterminer si le responsable est présent ou absent
+                    is_present = var is not None and self.solver.Value(var) == 1
+                    
+                    # Séparer les responsables selon leur statut de participation
+                    if not participe:
+                        # Responsable qui ne participe pas aux surveillances
+                        nb_responsables_non_participants += 1
+                        raison = 'non_surveillant'
                     else:
-                        # Le responsable est absent
-                        nb_responsables_absents += 1
+                        # Responsable qui PEUT surveiller (participe=True)
+                        nb_responsables_total += 1  # Compter uniquement les participants
                         
-                        if enseignant:
-                            date_exam, seance_code, semestre, session, jour_index = seance_key
-                            responsables_absents_details.append({
-                                'enseignant_id': enseignant.id,
-                                'enseignant_nom': enseignant.nom,
-                                'enseignant_prenom': enseignant.prenom,
-                                'enseignant': f"{enseignant.nom} {enseignant.prenom}",
-                                'code': enseignant.code_smartex or f"ID_{responsable_id}",
-                                'date': date_exam.strftime('%d/%m/%Y'),
-                                'date_obj': date_exam,
-                                'seance': seance_code,
-                                'semestre': semestre,
-                                'session': session,
-                                'module': examen.nomModule if hasattr(examen, 'nomModule') else 'Module inconnu',
-                                'salle': examen.cod_salle if hasattr(examen, 'cod_salle') else 'Salle inconnue'
-                            })
+                        if is_present:
+                            # Le responsable est présent
+                            nb_responsables_presents += 1
+                        else:
+                            # Le responsable PEUT surveiller mais est absent
+                            nb_responsables_absents += 1  # Compter uniquement les participants absents
+                            nb_responsables_absents_participants += 1
+                            raison = 'autre'
+                    
+                    # Enregistrer les détails si absent (participant ou non)
+                    if not is_present:
+                        # Enregistrer dans les détails
+                        detail = {
+                            'enseignant_id': enseignant.id,
+                            'enseignant_nom': enseignant.nom,
+                            'enseignant_prenom': enseignant.prenom,
+                            'enseignant': f"{enseignant.nom} {enseignant.prenom}",
+                            'code': enseignant.code_smartex or f"ID_{responsable_id}",
+                            'date': date_exam.strftime('%d/%m/%Y'),
+                            'date_obj': date_exam,
+                            'seance': seance_code,
+                            'semestre': semestre,
+                            'session': session,
+                            'module': examen.nomModule if hasattr(examen, 'nomModule') else 'Module inconnu',
+                            'salle': examen.cod_salle if hasattr(examen, 'cod_salle') else 'Salle inconnue',
+                            'raison': raison
+                        }
+                        
+                        if raison == 'non_surveillant':
+                            responsables_non_participants_details.append(detail)
+                        else:
+                            responsables_absents_participants_details.append(detail)
         
-        # Calculer les pourcentages
+        # Calculer les statistiques
+        # nb_responsables_total contient déjà uniquement les responsables PARTICIPANTS
+        
+        # Pourcentages calculés sur les responsables pouvant surveiller
         pourcentage_presents = (nb_responsables_presents / nb_responsables_total * 100) if nb_responsables_total > 0 else 0
-        pourcentage_absents = (nb_responsables_absents / nb_responsables_total * 100) if nb_responsables_total > 0 else 0
+        # Absents participants uniquement
+        pourcentage_absents_participants = (nb_responsables_absents / nb_responsables_total * 100) if nb_responsables_total > 0 else 0
         
         # Affichage détaillé
         self.infos.append("\n" + "=" * 80)
@@ -1929,47 +1946,166 @@ class SurveillanceOptimizerV3:
         self.infos.append("=" * 80)
         self.infos.append("")
         
-        # Note sur les enseignants exclus
-        if nb_responsables_non_participants > 0:
-            self.infos.append(
-                f"ℹ️ Remarque : {nb_responsables_non_participants} responsable(s) ont été exclus des statistiques car leur participation est désactivée.")
-            self.infos.append("")
-        
         # Résultats avec emoji
-        self.infos.append("📈 RÉSULTATS:")
+        self.infos.append("📈 RÉSULTATS (Responsables pouvant surveiller):")
         self.infos.append(f"   ✅ Responsables présents: {nb_responsables_presents} ({pourcentage_presents:.1f}%)")
-        self.infos.append(f"   ❌ Responsables absents: {nb_responsables_absents} ({pourcentage_absents:.1f}%)")
-        self.infos.append(f"   📊 Total analysé: {nb_responsables_total} responsables participants")
+        self.infos.append(f"   ❌ Responsables absents: {nb_responsables_absents} ({pourcentage_absents_participants:.1f}%)")
         self.infos.append("")
-        
-        # Si des responsables sont absents, afficher les détails
+        if nb_responsables_non_participants > 0:
+            self.infos.append(f"ℹ️  Responsables exclus (participe_surveillance=False): {nb_responsables_non_participants}")
+        self.infos.append("")
+        # Si des responsables participants sont absents, afficher les détails
         if nb_responsables_absents > 0:
             self.infos.append("-" * 80)
-            self.infos.append(f"❌ LISTE DES {nb_responsables_absents} RESPONSABLES ABSENTS:")
+            self.infos.append(f"❌  DÉTAILS DES RESPONSABLES ABSENTS:")
             self.infos.append("-" * 80)
             self.infos.append("")
-            self.infos.append("Ces responsables ne sont pas affectés à la surveillance de leur propre examen:")
+            
+            # Grouper par enseignant, date et séance
+            groupes = {}
+            for detail in responsables_absents_participants_details:
+                key = (detail['enseignant_id'], detail['date'], detail['seance'])
+                if key not in groupes:
+                    groupes[key] = {
+                        'enseignant': detail['enseignant'],
+                        'code': detail['code'],
+                        'date': detail['date'],
+                        'date_obj': detail['date_obj'],
+                        'seance': detail['seance'],
+                        'count': 0
+                    }
+                groupes[key]['count'] += 1
+            
+            # Nombre d'entrées uniques après regroupement
+            nb_groupes_participants = len(groupes)
+            
+            self.infos.append(f"   {nb_groupes_participants} enseignants absents (peuvent surveiller mais ne sont pas à leur examen)")
             self.infos.append("")
             
-            # Trier par date, puis par séance, puis par nom
-            responsables_absents_details.sort(key=lambda x: (x['date'], x['seance'], x['enseignant']))
+            # Trier par date, séance, puis nom
+            groupes_tries = sorted(groupes.values(), key=lambda x: (x['date_obj'], x['seance'], x['enseignant']))
             
-            for i, detail in enumerate(responsables_absents_details, 1):
-                self.infos.append(
-                    f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
-                    f"Date: {detail['date']:10s} | Séance: {detail['seance']:3s} | "
-                    f"Salle: {detail['salle']}"
-                )
+            for i, groupe in enumerate(groupes_tries, 1):
+                if groupe['count'] > 1:
+                    self.infos.append(
+                        f"   {i:3d}. {groupe['enseignant']:35s} | Code: {groupe['code']:12s} | "
+                        f"Date: {groupe['date']:10s} | Séance: {groupe['seance']:3s} | "
+                        f"({groupe['count']} examens)"
+                    )
+                else:
+                    self.infos.append(
+                        f"   {i:3d}. {groupe['enseignant']:35s} | Code: {groupe['code']:12s} | "
+                        f"Date: {groupe['date']:10s} | Séance: {groupe['seance']:3s}"
+                    )
+            self.infos.append("")
+        
+        # Afficher les responsables non-participants séparément (information uniquement)
+        if nb_responsables_non_participants > 0:
+            self.infos.append("-" * 80)
+            self.infos.append(f"ℹ️  RESPONSABLES EXCLUS (participe_surveillance=False):")
+            self.infos.append("-" * 80)
+            self.infos.append("")
+            
+            # Grouper par enseignant, date et séance
+            groupes_np = {}
+            for detail in responsables_non_participants_details:
+                key = (detail['enseignant_id'], detail['date'], detail['seance'])
+                if key not in groupes_np:
+                    groupes_np[key] = {
+                        'enseignant': detail['enseignant'],
+                        'code': detail['code'],
+                        'date': detail['date'],
+                        'date_obj': detail['date_obj'],
+                        'seance': detail['seance'],
+                        'count': 0
+                    }
+                groupes_np[key]['count'] += 1
+            
+            # Nombre d'entrées uniques après regroupement
+            nb_groupes_non_participants = len(groupes_np)
+            
+            self.infos.append(f"   {nb_groupes_non_participants} enseignants exclus (ne peuvent pas surveiller)")
+            self.infos.append("")
+            
+            # Trier par date, séance, puis nom
+            groupes_np_tries = sorted(groupes_np.values(), key=lambda x: (x['date_obj'], x['seance'], x['enseignant']))
+            
+            for i, groupe in enumerate(groupes_np_tries, 1):
+                if groupe['count'] > 1:
+                    self.infos.append(
+                        f"   {i:3d}. {groupe['enseignant']:35s} | Code: {groupe['code']:12s} | "
+                        f"Date: {groupe['date']:10s} | Séance: {groupe['seance']:3s} | "
+                        f"({groupe['count']} examens)"
+                    )
+                else:
+                    self.infos.append(
+                        f"   {i:3d}. {groupe['enseignant']:35s} | Code: {groupe['code']:12s} | "
+                        f"Date: {groupe['date']:10s} | Séance: {groupe['seance']:3s}"
+                        f"({groupe['count']} examen)"
+
+                    )
             self.infos.append("")
         
         self.infos.append("=" * 80)
         
-        # Retourner les statistiques pour la base de données
+        # Préparer les listes groupées pour le retour des statistiques
+        # Grouper les responsables participants absents
+        groupes_participants = {}
+        for detail in responsables_absents_participants_details:
+            key = (detail['enseignant_id'], detail['date'], detail['seance'])
+            if key not in groupes_participants:
+                groupes_participants[key] = {
+                    'enseignant_id': detail['enseignant_id'],
+                    'enseignant_nom': detail['enseignant_nom'],
+                    'enseignant_prenom': detail['enseignant_prenom'],
+                    'enseignant': detail['enseignant'],
+                    'code': detail['code'],
+                    'date': detail['date'],
+                    'date_obj': detail['date_obj'],
+                    'seance': detail['seance'],
+                    'semestre': detail['semestre'],
+                    'session': detail['session'],
+                    'raison': detail['raison'],
+                    'nb_examens': 0
+                }
+            groupes_participants[key]['nb_examens'] += 1
+        
+        # Grouper les responsables non-participants
+        groupes_non_participants = {}
+        for detail in responsables_non_participants_details:
+            key = (detail['enseignant_id'], detail['date'], detail['seance'])
+            if key not in groupes_non_participants:
+                groupes_non_participants[key] = {
+                    'enseignant_id': detail['enseignant_id'],
+                    'enseignant_nom': detail['enseignant_nom'],
+                    'enseignant_prenom': detail['enseignant_prenom'],
+                    'enseignant': detail['enseignant'],
+                    'code': detail['code'],
+                    'date': detail['date'],
+                    'date_obj': detail['date_obj'],
+                    'seance': detail['seance'],
+                    'semestre': detail['semestre'],
+                    'session': detail['session'],
+                    'raison': detail['raison'],
+                    'nb_examens': 0
+                }
+            groupes_non_participants[key]['nb_examens'] += 1
+        
+        # Convertir les dictionnaires en listes
+        responsables_participants_groupes = list(groupes_participants.values())
+        responsables_non_participants_groupes = list(groupes_non_participants.values())
+        
+        # Combiner les deux listes groupées pour enregistrer tous les responsables absents
+        tous_responsables_absents_groupes = responsables_participants_groupes + responsables_non_participants_groupes
+        
         return {
             'total': nb_responsables_total,
             'presents': nb_responsables_presents,
-            'absents': nb_responsables_absents,
-            'details_absents': responsables_absents_details
+            'absents': nb_responsables_absents,  # Total des absents participants (avant regroupement)
+            'absents_participants': len(responsables_participants_groupes),  # Nombre après regroupement
+            'absents_non_participants': len(responsables_non_participants_groupes),  # Nombre après regroupement
+            'non_participants': nb_responsables_non_participants,  # Total des non-participants (avant regroupement)
+            'details_absents': tous_responsables_absents_groupes  # Liste groupée avec nb_examens
         }
 
 
