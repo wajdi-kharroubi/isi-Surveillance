@@ -32,7 +32,9 @@ export default function AideDecision() {
   const [parametres, setParametres] = useState({
     min_surveillants_par_salle: 2,
     majoration_absences: 1.05,
-    difference_min_grades: 1,
+    difference_min_pr_ma: 1,      // Différence PR/MC/V → MA
+    difference_min_ma_as: 1,      // Différence MA → AS
+    difference_min_as_ac: 1,      // Différence AS → AC/PES/PTC
     expert_quota: 3,
   });
 
@@ -204,17 +206,47 @@ export default function AideDecision() {
             </div>
           </div>
 
-          {/* Différence min grades */}
+          {/* Différence PR/MC/V → MA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Différence minimale entre PR/MC/V et MA
+              Différence minimale PR/MC/V → MA
             </label>
             <input
               type="number"
               min="1"
               max="5"
-              value={parametres.difference_min_grades}
-              onChange={(e) => setParametres({ ...parametres, difference_min_grades: parseInt(e.target.value) })}
+              value={parametres.difference_min_pr_ma}
+              onChange={(e) => setParametres({ ...parametres, difference_min_pr_ma: parseInt(e.target.value) })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+
+          {/* Différence MA → AS */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Différence minimale MA → AS
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="5"
+              value={parametres.difference_min_ma_as}
+              onChange={(e) => setParametres({ ...parametres, difference_min_ma_as: parseInt(e.target.value) })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+
+          {/* Différence AS → AC/PES/PTC */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Différence minimale AS → AC/PES/PTC
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="5"
+              value={parametres.difference_min_as_ac}
+              onChange={(e) => setParametres({ ...parametres, difference_min_as_ac: parseInt(e.target.value) })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
             />
           </div>

@@ -41,7 +41,12 @@ export default function GestionEnseignantsSeanceInline({ seance, onUpdate }) {
     return enseignants?.map(ens => {
       const charge = chargeEnseignants.find(c => c.enseignant_id === ens.id);
       const gradeInfo = gradesConfig.find(g => g.grade_code === ens.grade_code);
-      const quota_max = gradeInfo?.nb_surveillances || 0;
+      
+      // Utiliser quota_Exception si is_Exception est true, sinon utiliser le quota du grade
+      const quota_max = ens.is_Exception && ens.quota_Exception != null
+        ? ens.quota_Exception
+        : (gradeInfo?.nb_surveillances || 0);
+      
       const nb_surveillances_affectees = charge?.nb_surveillances || 0;
       const pourcentage_quota = quota_max > 0 
         ? Math.round((nb_surveillances_affectees / quota_max) * 100)

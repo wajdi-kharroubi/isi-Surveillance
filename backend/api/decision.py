@@ -61,11 +61,23 @@ class DecisionRequest(BaseModel):
         le=1.5,
         description="Coefficient de majoration pour absences (1.1 = +10%)",
     )
-    difference_min_grades: int = Field(
+    difference_min_pr_ma: int = Field(
         default=1,
         ge=1,
         le=5,
-        description="Différence minimale entre grades consécutifs",
+        description="Différence minimale entre PR/MC/V et MA",
+    )
+    difference_min_ma_as: int = Field(
+        default=1,
+        ge=1,
+        le=5,
+        description="Différence minimale entre MA et AS",
+    )
+    difference_min_as_ac: int = Field(
+        default=1,
+        ge=1,
+        le=5,
+        description="Différence minimale entre AS et AC/PES/PTC",
     )
     expert_quota: int = Field(
         default=3, ge=1, le=10, description="Quota fixe pour les experts"
@@ -116,7 +128,9 @@ def calculer_recommandations(
     **Paramètres configurables:**
     - `min_surveillants_par_salle`: Nombre minimum de surveillants par salle (1-5)
     - `majoration_absences`: Coefficient pour absences (1.0-1.5, ex: 1.1 = +10%)
-    - `difference_min_grades`: Écart minimal entre grades (1-5)
+    - `difference_min_pr_ma`: Écart minimal entre PR/MC/V et MA (1-5)
+    - `difference_min_ma_as`: Écart minimal entre MA et AS (1-5)
+    - `difference_min_as_ac`: Écart minimal entre AS et AC/PES/PTC (1-5)
     - `expert_quota`: Quota fixe pour les experts (1-10)
 
     **Exemple d'utilisation:**
@@ -124,7 +138,9 @@ def calculer_recommandations(
     {
       "min_surveillants_par_salle": 2,
       "majoration_absences": 1.1,
-      "difference_min_grades": 1,
+      "difference_min_pr_ma": 1,
+      "difference_min_ma_as": 1,
+      "difference_min_as_ac": 1,
       "expert_quota": 3
     }
     ```
@@ -142,7 +158,9 @@ def calculer_recommandations(
         recommandations = decision_service.calculer_recommandations(
             min_surveillants_par_salle=request.min_surveillants_par_salle,
             majoration_absences=request.majoration_absences,
-            difference_min_grades=request.difference_min_grades,
+            difference_min_pr_ma=request.difference_min_pr_ma,
+            difference_min_ma_as=request.difference_min_ma_as,
+            difference_min_as_ac=request.difference_min_as_ac,
             expert_quota=request.expert_quota,
         )
 

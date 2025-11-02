@@ -69,7 +69,13 @@ def emploi_enseignant(enseignant_id: int, db: Session = Depends(get_db)):
         .filter(GradeConfig.grade_code == enseignant.grade_code)
         .first()
     )
-    quota_max = grade_config.nb_surveillances if grade_config else 0
+    
+    # Utiliser quota_Exception si is_Exception est true, sinon utiliser le quota du grade
+    if enseignant.is_Exception and enseignant.quota_Exception is not None:
+        quota_max = enseignant.quota_Exception
+    else:
+        quota_max = grade_config.nb_surveillances if grade_config else 0
+    
     nb_surveillances_affectees = len(result)
     pourcentage_quota = (
         round((nb_surveillances_affectees / quota_max * 100), 2) if quota_max > 0 else 0
@@ -84,6 +90,8 @@ def emploi_enseignant(enseignant_id: int, db: Session = Depends(get_db)):
             "quota_max": quota_max,
             "nb_surveillances_affectees": nb_surveillances_affectees,
             "pourcentage_quota": pourcentage_quota,
+            "is_Exception": enseignant.is_Exception,
+            "quota_Exception": enseignant.quota_Exception,
         },
         "emplois": result,
     }

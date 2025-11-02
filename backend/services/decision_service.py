@@ -157,7 +157,9 @@ class DecisionService:
         self,
         min_surveillants_par_salle: int = 2,
         majoration_absences: float = 1.1,  # 10% de majoration pour absences
-        difference_min_grades: int = 1,  # Différence minimale entre grades consécutifs
+        difference_min_pr_ma: int = 1,  # Différence minimale PR/MC/V → MA
+        difference_min_ma_as: int = 1,  # Différence minimale MA → AS
+        difference_min_as_ac: int = 1,  # Différence minimale AS → AC/PES/PTC
         expert_quota: int = 3,  # Quota fixe pour les experts
     ) -> Dict:
         """
@@ -166,7 +168,9 @@ class DecisionService:
         Args:
             min_surveillants_par_salle: Nombre minimum de surveillants par salle
             majoration_absences: Coefficient de majoration pour tenir compte des absences (1.1 = +10%)
-            difference_min_grades: Différence minimale entre grades consécutifs
+            difference_min_pr_ma: Différence minimale entre PR/MC/V et MA
+            difference_min_ma_as: Différence minimale entre MA et AS
+            difference_min_as_ac: Différence minimale entre AS et AC/PES/PTC
             expert_quota: Nombre de surveillances pour les experts
 
         Returns:
@@ -195,7 +199,9 @@ class DecisionService:
             enseignants_par_grade,
             stats_examens["total_surveillances_necessaires"],
             majoration_absences,
-            difference_min_grades,
+            difference_min_pr_ma,
+            difference_min_ma_as,
+            difference_min_as_ac,
             expert_quota,
         )
 
@@ -255,7 +261,9 @@ class DecisionService:
             "parametres": {
                 "min_surveillants_par_salle": min_surveillants_par_salle,
                 "majoration_absences": majoration_absences,
-                "difference_min_grades": difference_min_grades,
+                "difference_min_pr_ma": difference_min_pr_ma,
+                "difference_min_ma_as": difference_min_ma_as,
+                "difference_min_as_ac": difference_min_as_ac,
                 "expert_quota": expert_quota,
             },
         }
@@ -327,7 +335,9 @@ class DecisionService:
         enseignants_par_grade: Dict[str, List[Enseignant]],
         total_surveillances: int,
         majoration: float,
-        difference_min: int,
+        difference_min_pr_ma: int,
+        difference_min_ma_as: int,
+        difference_min_as_ac: int,
         expert_quota: int,
     ) -> Dict[str, Dict]:
         """
@@ -337,22 +347,22 @@ class DecisionService:
         - PR, MC, V: EXACTEMENT le même quota (le plus bas de la hiérarchie)
         - AC, PES, PTC: EXACTEMENT le même quota (le plus élevé de la hiérarchie)
         
-        CONTRAINTE DE DIFFÉRENCE MINIMALE:
-        - Entre PR/MC/V et MA: difference_min imposé par l'utilisateur
-        - Entre MA et AS: différence calculée automatiquement (1 à 3)
-        - Entre AS et AC/PES/PTC: différence calculée automatiquement (1 à 3)
+        CONTRAINTES DE DIFFÉRENCE MINIMALE (CONFIGURABLES INDÉPENDAMMENT):
+        - Entre PR/MC/V et MA: difference_min_pr_ma
+        - Entre MA et AS: difference_min_ma_as
+        - Entre AS et AC/PES/PTC: difference_min_as_ac
         
         CONTRAINTE DE DIFFÉRENCE MAXIMALE:
         - Aucune différence entre grades consécutifs ne dépasse 3
         
         Hiérarchie STRICTE des quotas:
         - PR = MC = V (quota le plus bas)
-        - MA > PR/MC/V (avec difference_min, max +3)
-        - AS > MA (différence de 1 à 3)
-        - AC = PES = PTC > AS (différence de 1 à 3)
+        - MA > PR/MC/V (avec difference_min_pr_ma, max +3)
+        - AS > MA (avec difference_min_ma_as, max +3)
+        - AC = PES = PTC > AS (avec difference_min_as_ac, max +3)
         - EX: quota fixe indépendant (3 par défaut)
         
-        L'algorithme trouve automatiquement les différences optimales entre chaque niveau.
+        L'utilisateur contrôle chaque différence minimale indépendamment.
         
         Ces contraintes garantissent l'équité au sein de chaque groupe de grades équivalents.
         """
@@ -394,7 +404,9 @@ class DecisionService:
             enseignants_par_grade,
             hierarchie_groupes,
             total_pour_autres,
-            difference_min,
+            difference_min_pr_ma,
+            difference_min_ma_as,
+            difference_min_as_ac,
         )
 
         # Appliquer les quotas selon la hiérarchie
@@ -429,18 +441,22 @@ class DecisionService:
         enseignants_par_grade: Dict[str, List[Enseignant]],
         hierarchie_groupes: List[List[str]],
         total_surveillances_requis: int,
-        difference_min: int,
+        difference_min_pr_ma: int,
+        difference_min_ma_as: int,
+        difference_min_as_ac: int,
     ) -> List[int]:
         """
         Calcule les quotas optimaux pour chaque groupe en respectant l'ordre strict.
         
         Retourne une liste de quotas [q0, q1, q2, q3] où:
         - q0: quota pour PR/MC/V
-        - q1: quota pour MA (= q0 + difference_min)
-        - q2: quota pour AS (> q1, calculé automatiquement)
-        - q3: quota pour AC/PES/PTC (> q2, calculé automatiquement)
+        - q1: quota pour MA (= q0 + difference_min_pr_ma, max q0 + 3)
+        - q2: quota pour AS (= q1 + difference_min_ma_as, max q1 + 3)
+        - q3: quota pour AC/PES/PTC (= q2 + difference_min_as_ac, max q2 + 3)
         
         Garantit: q0 < q1 < q2 < q3 (ordre strict)
+        
+        Chaque différence minimale est configurable indépendamment.
         """
 
         def calculer_total_avec_quotas(quotas: List[int]) -> int:
@@ -456,8 +472,9 @@ class DecisionService:
             return total
 
         # Recherche des quotas optimaux avec contraintes:
-        # - q1 (MA) - q0 >= difference_min
-        # - chaque différence entre groupes adjacents > 0
+        # - q1 (MA) - q0 >= difference_min_pr_ma
+        # - q2 (AS) - q1 >= difference_min_ma_as
+        # - q3 (AC/PES/PTC) - q2 >= difference_min_as_ac
         # - chaque différence entre groupes adjacents <= 3
         quota_min = 3
         quota_max = 20
@@ -466,23 +483,23 @@ class DecisionService:
         best_total = None
 
         for q0 in range(quota_min, quota_max + 1):
-            # q1 must satisfy difference_min and max step 3
-            q1_min = q0 + difference_min
+            # q1 must satisfy difference_min_pr_ma and max step 3
+            q1_min = q0 + difference_min_pr_ma
             q1_max = min(quota_max, q0 + 3)
             if q1_min > q1_max:
-                # cannot satisfy both difference_min and max-step constraint
+                # cannot satisfy both difference_min_pr_ma and max-step constraint
                 continue
 
             for q1 in range(q1_min, q1_max + 1):
-                # q2 must be > q1 and not more than q1+3
-                q2_min = q1 + 1
+                # q2 must be >= q1 + difference_min_ma_as and not more than q1+3
+                q2_min = q1 + difference_min_ma_as
                 q2_max = min(quota_max, q1 + 3)
                 if q2_min > q2_max:
                     continue
 
                 for q2 in range(q2_min, q2_max + 1):
-                    # q3 must be > q2 and not more than q2+3
-                    q3_min = q2 + 1
+                    # q3 must be >= q2 + difference_min_as_ac and not more than q2+3
+                    q3_min = q2 + difference_min_as_ac
                     q3_max = min(quota_max, q2 + 3)
                     if q3_min > q3_max:
                         continue
@@ -511,9 +528,9 @@ class DecisionService:
         if best_quotas is None:
             # fallback: respect minimal pattern
             q0 = min(10, quota_max)
-            q1 = min(q0 + difference_min, quota_max)
-            q2 = min(q1 + 1, quota_max)
-            q3 = min(q2 + 1, quota_max)
+            q1 = min(q0 + difference_min_pr_ma, quota_max)
+            q2 = min(q1 + difference_min_ma_as, quota_max)
+            q3 = min(q2 + difference_min_as_ac, quota_max)
             best_quotas = [q0, q1, q2, q3]
 
         return best_quotas

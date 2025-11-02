@@ -66,7 +66,12 @@ export default function Planning() {
     return enseignants.map(ens => {
       const charge = chargeEnseignants.find(c => c.enseignant_id === ens.id);
       const gradeInfo = gradesConfig.find(g => g.grade_code === ens.grade_code);
-      const quota_max = gradeInfo?.nb_surveillances || 0;
+      
+      // Utiliser quota_Exception si is_Exception est true, sinon utiliser le quota du grade
+      const quota_max = ens.is_Exception && ens.quota_Exception != null
+        ? ens.quota_Exception
+        : (gradeInfo?.nb_surveillances || 0);
+      
       const nb_surveillances_affectees = charge?.nb_surveillances || 0;
       const pourcentage_quota = quota_max > 0 
         ? Math.round((nb_surveillances_affectees / quota_max) * 100)
@@ -837,9 +842,16 @@ export default function Planning() {
                                       <Users className="w-5 h-5 text-green-600" />
                                     </div>
                                     <div>
-                                      <p className="font-bold text-gray-900 text-sm">
-                                        {ens.nom.charAt(0).toUpperCase() + ens.nom.slice(1).toLowerCase()} {ens.prenom}
-                                      </p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="font-bold text-gray-900 text-sm">
+                                          {ens.nom.charAt(0).toUpperCase() + ens.nom.slice(1).toLowerCase()} {ens.prenom}
+                                        </p>
+                                        {ens.is_Exception && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-sm">
+                                            EXCEPTION
+                                          </span>
+                                        )}
+                                      </div>
                                       <p className="text-xs text-gray-500 font-medium">
                                         {ens.code_smartex || 'N/A'}
                                       </p>
@@ -931,9 +943,16 @@ export default function Planning() {
                             <Users className="w-6 h-6 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h2 className="text-xl font-bold text-gray-900 mb-1">
-                              {emploiEnseignant.enseignant.nom.charAt(0).toUpperCase() + emploiEnseignant.enseignant.nom.slice(1).toLowerCase()} {emploiEnseignant.enseignant.prenom}
-                            </h2>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h2 className="text-xl font-bold text-gray-900">
+                                {emploiEnseignant.enseignant.nom.charAt(0).toUpperCase() + emploiEnseignant.enseignant.nom.slice(1).toLowerCase()} {emploiEnseignant.enseignant.prenom}
+                              </h2>
+                              {emploiEnseignant.enseignant.is_Exception && (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md">
+                                  EXCEPTION
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-3 text-sm text-gray-600">
                               <span className="px-2 py-1 bg-green-100 rounded-md font-semibold text-xs text-green-700 border border-green-200">
                                 {emploiEnseignant.enseignant.grade}
