@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon,
   PlayIcon,
   ChartBarIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 export default function Generation() {
@@ -23,6 +24,18 @@ export default function Generation() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const queryClient = useQueryClient();
+
+  // Load result from localStorage on mount
+  useEffect(() => {
+    const savedResult = localStorage.getItem('generation_result');
+    if (savedResult) {
+      try {
+        setResult(JSON.parse(savedResult));
+      } catch (error) {
+        console.error('Error loading saved result:', error);
+      }
+    }
+  }, []);
 
   // Chronomètre pendant la génération
   useEffect(() => {
@@ -47,10 +60,14 @@ export default function Generation() {
     onMutate: () => {
       setIsGenerating(true);
       setResult(null);
+      // Clear previous result from localStorage
+      localStorage.removeItem('generation_result');
     },
     onSuccess: (response) => {
       setIsGenerating(false);
       setResult(response.data);
+      // Save result to localStorage
+      localStorage.setItem('generation_result', JSON.stringify(response.data));
       if (response.data.success) {
         toast.success(response.data.message);
         queryClient.invalidateQueries(['statistiques']);
@@ -315,8 +332,8 @@ export default function Generation() {
 
 
       {/* Generate Button */}
-      {!isGenerating && !result && (
-        <div className="flex justify-center pt-2">
+      {!isGenerating && (
+        <div className="flex justify-center gap-4 pt-2">
           <button
             onClick={() => {
               handleGenerate();
@@ -334,6 +351,21 @@ export default function Generation() {
             <PlayIcon className="w-6 h-6 relative z-10" />
             <span className="relative z-10 text-lg">Lancer la Génération</span>
           </button>
+          
+          {result && (
+            <button
+              onClick={() => {
+                setResult(null);
+                localStorage.removeItem('generation_result');
+                toast.success('Logs effacés');
+              }}
+              className="group relative overflow-hidden flex items-center gap-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+            >
+              <div className="absolute inset-0 bg-white/10 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              <TrashIcon className="w-6 h-6 relative z-10" />
+              <span className="relative z-10 text-lg">Effacer les Logs</span>
+            </button>
+          )}
         </div>
       )}
 

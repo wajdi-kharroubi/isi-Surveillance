@@ -11,6 +11,10 @@ import {
   FolderOpenIcon,
   ArrowDownTrayIcon,
   RocketLaunchIcon,
+  DocumentCheckIcon,
+  CalendarDaysIcon,
+  ChartBarIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 
 export default function Dashboard() {
@@ -19,6 +23,13 @@ export default function Dashboard() {
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['statistiques'],
     queryFn: () => statistiquesAPI.getGlobal().then(res => res.data),
+  });
+
+  // Fetch dernière génération stats
+  const { data: generationStats } = useQuery({
+    queryKey: ['generation-stats'],
+    queryFn: () => statistiquesAPI.getDerniereGeneration(false).then(res => res.data),
+    enabled: (stats?.nb_affectations || 0) > 0,
   });
 
   const { data: grades } = useQuery({
@@ -198,10 +209,10 @@ export default function Dashboard() {
               <div className="w-px h-12 bg-white/20"></div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-white">
-                  {(stats?.nb_affectations || 0) === 0 ? "-" : (stats?.nb_affectations || 0)}
+                  {generationStats?.nb_affectations || stats?.nb_affectations || 0}
                 </div>
                 <div className="text-xs text-blue-100 uppercase tracking-wide">
-                  Affectations
+                  Surveillances
                 </div>
               </div>
             </div>
@@ -234,7 +245,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {/* <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <div key={card.title} className={`stat-card bg-gradient-to-br ${card.bgGradient} border-2 border-white shadow-xl`}>
             <div className="flex items-start justify-between mb-4">
@@ -255,7 +266,157 @@ export default function Dashboard() {
             </p>
           </div>
         ))}
-      </div>
+      </div> */}
+
+      {/* Statistics Preview - Only show if generation exists */}
+      {generationStats && (
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200">
+          <div className="px-8 py-6">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <ChartBarIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Résultats de génération</h2>
+                  <p className="text-gray-600 text-sm font-medium">
+                    Dernière génération : {generationStats.date_generation}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => navigate('/statistiques')}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+              >
+                Voir tout
+                <ArrowRightIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Souhaits Card */}
+              <div 
+                onClick={() => navigate('/statistiques', { state: { activeTab: 'souhaits' } })}
+                className="bg-blue-50 rounded-xl p-4 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <DocumentCheckIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                    generationStats.taux_souhaits_respectes >= 90 
+                      ? 'bg-green-100 text-green-700' 
+                      : generationStats.taux_souhaits_respectes >= 70
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {generationStats.taux_souhaits_respectes}%
+                  </div>
+                </div>
+                <h3 className="text-gray-900 font-bold text-lg mb-1">Souhaits respectés</h3>
+                <p className="text-gray-600 text-sm">
+                  {generationStats.nb_souhaits_respectes} / {generationStats.nb_souhaits_total}
+                </p>
+                {generationStats.nb_souhaits_violes > 0 && (
+                  <div className="mt-2 flex items-center gap-1 text-red-600 text-xs font-medium">
+                    <ExclamationTriangleIcon className="w-3 h-3" />
+                    {generationStats.nb_souhaits_violes} violation{generationStats.nb_souhaits_violes > 1 ? 's' : ''}
+                  </div>
+                )}
+                <div className="mt-3 pt-3 border-t border-blue-200 flex items-center justify-end text-blue-600 text-xs font-medium">
+                  Voir détails <ArrowRightIcon className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+
+              {/* Responsables Card */}
+              <div 
+                onClick={() => navigate('/statistiques', { state: { activeTab: 'responsables' } })}
+                className="bg-green-50 rounded-xl p-4 border-2 border-green-100 hover:border-green-300 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <UserGroupIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                    generationStats.taux_responsables_presents >= 90 
+                      ? 'bg-green-100 text-green-700' 
+                      : generationStats.taux_responsables_presents >= 70
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {generationStats.taux_responsables_presents}%
+                  </div>
+                </div>
+                <h3 className="text-gray-900 font-bold text-lg mb-1">Responsables présents</h3>
+                <p className="text-gray-600 text-sm">
+                  {generationStats.nb_responsables_presents} / {generationStats.nb_responsables_total}
+                </p>
+                {generationStats.nb_responsables_absents > 0 && (
+                  <div className="mt-2 flex items-center gap-1 text-orange-600 text-xs font-medium">
+                    <ExclamationTriangleIcon className="w-3 h-3" />
+                    {generationStats.nb_responsables_absents} absent{generationStats.nb_responsables_absents > 1 ? 's' : ''}
+                  </div>
+                )}
+                <div className="mt-3 pt-3 border-t border-green-200 flex items-center justify-end text-green-600 text-xs font-medium">
+                  Voir détails <ArrowRightIcon className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+
+              {/* Contraintes Card */}
+              <div 
+                onClick={() => navigate('/statistiques', { state: { activeTab: 'contraintes' } })}
+                className="bg-purple-50 rounded-xl p-4 border-2 border-purple-100 hover:border-purple-300 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <CalendarDaysIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                    generationStats.taux_contraintes_seances_respectees >= 90 
+                      ? 'bg-green-100 text-green-700' 
+                      : generationStats.taux_contraintes_seances_respectees >= 70
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {generationStats.taux_contraintes_seances_respectees}%
+                  </div>
+                </div>
+                <h3 className="text-gray-900 font-bold text-lg mb-1">Contraintes respectées</h3>
+                <p className="text-gray-600 text-sm">
+                  {generationStats.nb_contraintes_seances_respectees} / {generationStats.nb_contraintes_seances_total}
+                </p>
+                {generationStats.nb_contraintes_seances_violees > 0 && (
+                  <div className="mt-2 flex items-center gap-1 text-red-600 text-xs font-medium">
+                    <ExclamationTriangleIcon className="w-3 h-3" />
+                    {generationStats.nb_contraintes_seances_violees} dépassement{generationStats.nb_contraintes_seances_violees > 1 ? 's' : ''}
+                  </div>
+                )}
+                <div className="mt-3 pt-3 border-t border-purple-200 flex items-center justify-end text-purple-600 text-xs font-medium">
+                  Voir détails <ArrowRightIcon className="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Info */}
+            <div className="mt-6 pt-4 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-900">{generationStats.nb_affectations}</span> affectations créées
+                {' • '}
+                <span className="font-semibold text-gray-900">{generationStats.temps_generation}ms</span> de génération
+              </div>
+              <button 
+                onClick={() => navigate('/statistiques')}
+                className="flex items-center gap-2 text-purple-600 hover:text-purple-700 text-sm font-medium transition-colors group"
+              >
+                <span>Cliquez pour voir tous les détails</span>
+                <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div>

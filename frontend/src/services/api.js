@@ -149,6 +149,18 @@ export const planningAPI = {
   supprimerEnseignantSeance: (data) => api.delete('/planning/supprimer-enseignant-seance', { data }),
   ajouterEnseignantSeance: (data) => api.post('/planning/ajouter-enseignant-seance', data),
   ajouterEnseignantParDateHeure: (data) => api.post('/planning/ajouter-enseignant-par-date-heure', data),
+  exchangeEnseignants: (data) => api.post('/planning/exchange-enseignants', data),
+};
+
+// ========== Absences (Présences) ==========
+export const absenceAPI = {
+  getSeances: () => api.get('/planning/absences/seances'),
+  markPresence: (data) => api.post('/planning/absences/mark', data),
+  getStats: () => api.get('/planning/absences/stats'),
+  exportExcel: () => 
+    api.get('/planning/absences/export-excel', { 
+      responseType: 'blob' 
+    }),
 };
 
 // ========== Statistiques ==========

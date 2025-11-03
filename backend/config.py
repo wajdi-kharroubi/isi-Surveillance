@@ -43,11 +43,14 @@ GRADES = {
     "AS": {"nom": "Assistant", "code": "AS", "nb_surveillances": 8},
     "AC": {"nom": "Assistant Contractuel", "code": "AC", "nb_surveillances": 9},
     "PTC": {"nom": "Professeur Tronc Commun", "code": "PTC", "nb_surveillances": 9},
-    "PES": {"nom": "Professeur de l'Enseignement Secondaire", "code": "PES", "nb_surveillances": 9},
+    "PES": {
+        "nom": "Professeur de l'Enseignement Secondaire",
+        "code": "PES",
+        "nb_surveillances": 9,
+    },
     "EX": {"nom": "Expert", "code": "EX", "nb_surveillances": 3},
     "V": {"nom": "Vacataire", "code": "V", "nb_surveillances": 4},
-    #"VA": {"nom": "Vacataire", "code": "VA", "nb_surveillances": 4},
-
+    # "VA": {"nom": "Vacataire", "code": "VA", "nb_surveillances": 4},
 }
 
 # CORS Settings

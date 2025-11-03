@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +8,7 @@ import uvicorn
 import logging
 
 from database import init_db
-from config import HOST, PORT, RELOAD, CORS_ORIGINS, LOG_LEVEL, LOG_FORMAT
+from config import HOST, PORT, RELOAD, CORS_ORIGINS, LOG_LEVEL, LOG_FORMAT, DEBUG
 
 # Configuration du logging
 logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT)
@@ -25,7 +26,9 @@ app = FastAPI(
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    # In development allow all origins to avoid CORS issues with local dev servers.
+    # In production this should be restricted to trusted origins only.
+    allow_origins=(CORS_ORIGINS if not DEBUG else ["*"]),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

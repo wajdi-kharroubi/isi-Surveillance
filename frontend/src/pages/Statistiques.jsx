@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { statistiquesAPI, enseignantsAPI } from '../services/api';
 import { 
   CheckCircleIcon, 
@@ -12,17 +13,31 @@ import {
   ChevronUpIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
+import { 
+  BarChart3, 
+  TrendingUp, 
+  AlertCircle,
+  Clock as ClockLucide
+} from 'lucide-react';
 
 export default function Statistiques() {
+  const location = useLocation();
   const [stats, setStats] = useState(null);
   const [chargeEnseignants, setChargeEnseignants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, souhaits, responsables, contraintes, grades
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'overview'); // overview, souhaits, responsables, contraintes, grades
 
   useEffect(() => {
     chargerStatistiques();
   }, []);
+
+  // Update activeTab when location state changes
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state?.activeTab]);
 
   const chargerStatistiques = async () => {
     try {
@@ -46,22 +61,72 @@ export default function Statistiques() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="space-y-6 animate-fadeIn">
+        {/* Hero Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl shadow-lg">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+          
+          <div className="relative px-6 py-5">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center shadow-lg border border-white/30">
+                <BarChart3 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white drop-shadow-md">
+                  Statistiques & Résultats
+                </h1>
+                <p className="text-purple-100 text-sm font-medium">
+                  Chargement des données...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-center py-16">
+          <div className="relative w-20 h-20 mx-auto mb-6">
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-ping opacity-20"></div>
+            <div className="relative w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+              <ClockLucide className="w-10 h-10 text-white animate-pulse" />
+            </div>
+          </div>
+          <p className="text-xl text-gray-700 font-bold">Chargement des statistiques...</p>
+          <p className="text-sm text-gray-500 mt-2">Veuillez patienter</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-gray-900">Tableau de bord - Résultats de génération</h1>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <XCircleIcon className="h-5 w-5 text-red-600" />
-            <p className="text-red-800">{error}</p>
+      <div className="space-y-6 animate-fadeIn">
+        {/* Hero Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl shadow-lg">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+          
+          <div className="relative px-6 py-5">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center shadow-lg border border-white/30">
+                <BarChart3 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white drop-shadow-md">
+                  Statistiques & Résultats
+                </h1>
+                <p className="text-purple-100 text-sm font-medium">
+                  Analyse détaillée de la génération
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-red-600 mt-2">
+        </div>
+
+        <div className="text-center py-20 bg-gradient-to-br from-red-50 via-orange-50 to-red-50 rounded-2xl border-3 border-dashed border-red-300">
+          <div className="w-24 h-24 bg-gradient-to-br from-red-200 to-orange-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <AlertCircle className="w-14 h-14 text-red-600" />
+          </div>
+          <p className="text-red-700 text-2xl font-bold mb-2">{error}</p>
+          <p className="text-red-600 text-base max-w-md mx-auto">
             Veuillez d'abord générer un planning pour voir les statistiques.
           </p>
         </div>
@@ -75,95 +140,168 @@ export default function Statistiques() {
   const statsParGrade = calculerStatsParGrade(chargeEnseignants);
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Tableau de bord - Résultats de génération</h1>
-      </div>
-
-      {/* Informations générales */}
-      <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-600">Dernière génération</p>
-            <p className="text-lg font-semibold text-gray-900">{stats.date_generation}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-600">Temps de génération</p>
-            <p className="text-lg font-semibold text-gray-900">{stats.temps_generation} ms</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-600">Affectations créées</p>
-            <p className="text-lg font-semibold text-blue-600">{stats.nb_affectations}</p>
+    <div className="space-y-6 animate-fadeIn">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl shadow-lg">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+        
+        <div className="relative px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-xl flex items-center justify-center shadow-lg border border-white/30">
+                <BarChart3 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white drop-shadow-md">
+                  Statistiques & Résultats
+                </h1>
+                <p className="text-purple-100 text-sm font-medium">
+                  Analyse détaillée de la génération du planning
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Onglets */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+      {/* Informations générales - Compact Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-4 hover:shadow-lg transition-all duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+              <CalendarDaysIcon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-600 font-medium">Dernière génération</p>
+              <p className="text-base font-bold text-gray-900">{stats.date_generation}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-4 hover:shadow-lg transition-all duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+              <ClockIcon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-600 font-medium">Temps de génération</p>
+              <p className="text-base font-bold text-gray-900">{stats.temps_generation} ms</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-4 hover:shadow-lg transition-all duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-600 font-medium">Affectations créées</p>
+              <p className="text-base font-bold text-purple-600">{stats.nb_affectations}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Navigation - Modern Style */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+        <nav className="flex border-b border-gray-200">
           <button
             onClick={() => setActiveTab('overview')}
             className={`${
               activeTab === 'overview'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
             <ChartBarIcon className="h-5 w-5" />
-            Vue d'ensemble
+            <span>Vue d'ensemble</span>
+            {activeTab === 'overview' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('souhaits')}
             className={`${
               activeTab === 'souhaits'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
             <DocumentCheckIcon className="h-5 w-5" />
-            Souhaits ({stats.nb_souhaits_violes} violations)
+            <span>Souhaits</span>
+            {stats.nb_souhaits_violes > 0 && (
+              <span className="ml-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-bold">
+                {stats.nb_souhaits_violes}
+              </span>
+            )}
+            {activeTab === 'souhaits' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('responsables')}
             className={`${
               activeTab === 'responsables'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
             <UserGroupIcon className="h-5 w-5" />
-            Responsables ({stats.nb_responsables_absents} absents)
+            <span>Responsables</span>
+            {stats.nb_responsables_absents > 0 && (
+              <span className="ml-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">
+                {stats.nb_responsables_absents}
+              </span>
+            )}
+            {activeTab === 'responsables' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('contraintes')}
             className={`${
               activeTab === 'contraintes'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2`}
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
             <CalendarDaysIcon className="h-5 w-5" />
-            Contraintes jour ({stats.nb_contraintes_seances_violees} dépassements)
+            <span>Contraintes</span>
+            {stats.nb_contraintes_seances_violees > 0 && (
+              <span className="ml-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-bold">
+                {stats.nb_contraintes_seances_violees}
+              </span>
+            )}
+            {activeTab === 'contraintes' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('grades')}
             className={`${
               activeTab === 'grades'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
-            Quotas par grade
+            <TrendingUp className="h-5 w-5" />
+            <span>Quotas par grade</span>
+            {activeTab === 'grades' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
+            )}
           </button>
         </nav>
-      </div>
 
-      {/* Contenu des onglets */}
-      {activeTab === 'overview' && <VueEnsemble stats={stats} />}
-      {activeTab === 'souhaits' && <VueSouhaits stats={stats} />}
-      {activeTab === 'responsables' && <VueResponsables stats={stats} />}
-      {activeTab === 'contraintes' && <VueContraintes stats={stats} />}
-      {activeTab === 'grades' && <VueGrades statsParGrade={statsParGrade} />}
+        <div className="p-8">
+          {/* Contenu des onglets */}
+          {activeTab === 'overview' && <VueEnsemble stats={stats} />}
+          {activeTab === 'souhaits' && <VueSouhaits stats={stats} />}
+          {activeTab === 'responsables' && <VueResponsables stats={stats} />}
+          {activeTab === 'contraintes' && <VueContraintes stats={stats} />}
+          {activeTab === 'grades' && <VueGrades statsParGrade={statsParGrade} />}
+        </div>
+      </div>
     </div>
   );
 }
@@ -179,123 +317,113 @@ function VueEnsemble({ stats }) {
       {/* Cartes de statistiques principales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Carte Souhaits */}
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Respect des souhaits</h3>
-            <DocumentCheckIcon className="h-8 w-8 text-blue-500" />
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Total souhaits</span>
-              <span className="font-semibold text-gray-900">{stats.nb_souhaits_total}</span>
+        <div className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-blue-400 transition-all duration-300">
+          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600"></div>
+          
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Respect des souhaits</h3>
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
+                <DocumentCheckIcon className="h-6 w-6 text-white" />
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-600">Respectés</span>
-              <span className="font-semibold text-green-600">{stats.nb_souhaits_respectes}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-red-600">Violés</span>
-              <span className="font-semibold text-red-600">{stats.nb_souhaits_violes}</span>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <CircularProgress 
-                percentage={stats.taux_souhaits_respectes} 
-                label="Taux de respect"
-                color="blue"
-              />
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 font-medium">Total souhaits</span>
+                <span className="font-bold text-gray-900">{stats.nb_souhaits_total}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-green-600 font-medium">Respectés</span>
+                <span className="font-bold text-green-600">{stats.nb_souhaits_respectes}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-red-600 font-medium">Violés</span>
+                <span className="font-bold text-red-600">{stats.nb_souhaits_violes}</span>
+              </div>
+              <div className="mt-4 pt-4 border-t-2 border-gray-200">
+                <CircularProgress 
+                  percentage={stats.taux_souhaits_respectes} 
+                  label="Taux de respect"
+                  color="blue"
+                />
+              </div>
             </div>
           </div>
         </div>
 
         {/* Carte Responsables */}
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Responsables présents</h3>
-            <UserGroupIcon className="h-8 w-8 text-green-500" />
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Examens</span>
-              <span className="font-semibold text-gray-900">{stats.nb_responsables_total}</span>
+        <div className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-green-400 transition-all duration-300">
+          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-emerald-500 to-green-600"></div>
+          
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Responsables présents</h3>
+              <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
+                <UserGroupIcon className="h-6 w-6 text-white" />
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-600">Responsables présents</span>
-              <span className="font-semibold text-green-600">{stats.nb_responsables_presents}</span>
-            </div>
-            <div>
+            <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-red-600">Responsables absents</span>
-                <span className="font-semibold text-red-600">{stats.nb_responsables_absents || 0}</span>
+                <span className="text-sm text-gray-600 font-medium">Examens</span>
+                <span className="font-bold text-gray-900">{stats.nb_responsables_total}</span>
               </div>
-              <div className="text-xs text-orange-600 mt-1">
-                • Dispensés {stats.nb_responsables_non_participants || 0} (Enseignants ne surveillant pas)
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-green-600 font-medium">Responsables présents</span>
+                <span className="font-bold text-green-600">{stats.nb_responsables_presents}</span>
               </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <CircularProgress 
-                percentage={stats.taux_responsables_presents} 
-                label="Taux de présence"
-                color="green"
-              />
+              <div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-red-600 font-medium">Responsables absents</span>
+                  <span className="font-bold text-red-600">{stats.nb_responsables_absents || 0}</span>
+                </div>
+                <div className="text-xs text-orange-600 mt-1 font-medium">
+                  • Dispensés {stats.nb_responsables_non_participants || 0} (Ne surveillent pas)
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t-2 border-gray-200">
+                <CircularProgress 
+                  percentage={stats.taux_responsables_presents} 
+                  label="Taux de présence"
+                  color="green"
+                />
+              </div>
             </div>
           </div>
         </div>
 
         {/* Carte Contraintes séances/jour */}
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Contraintes séances/jour</h3>
-            <CalendarDaysIcon className="h-8 w-8 text-purple-500" />
+        <div className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-purple-400 transition-all duration-300">
+          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600"></div>
+          
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Contraintes séances/jour</h3>
+              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+                <CalendarDaysIcon className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 font-medium">Total contraintes</span>
+                <span className="font-bold text-gray-900">{stats.nb_contraintes_seances_total}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-green-600 font-medium">Respectées</span>
+                <span className="font-bold text-green-600">{stats.nb_contraintes_seances_respectees}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-red-600 font-medium">Dépassements</span>
+                <span className="font-bold text-red-600">{stats.nb_contraintes_seances_violees}</span>
+              </div>
+              <div className="mt-4 pt-4 border-t-2 border-gray-200">
+                <CircularProgress 
+                  percentage={stats.taux_contraintes_seances_respectees} 
+                  label="Taux de respect"
+                  color="purple"
+                />
+              </div>
+            </div>
           </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Total contraintes</span>
-              <span className="font-semibold text-gray-900">{stats.nb_contraintes_seances_total}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-600">Respectées</span>
-              <span className="font-semibold text-green-600">{stats.nb_contraintes_seances_respectees}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-red-600">Dépassements</span>
-              <span className="font-semibold text-red-600">{stats.nb_contraintes_seances_violees}</span>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <CircularProgress 
-                percentage={stats.taux_contraintes_seances_respectees} 
-                label="Taux de respect"
-                color="purple"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Résumé global */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Résumé de la qualité de génération</h3>
-        <div className="space-y-4">
-          <BarreProgression
-            label="Respect des souhaits"
-            valeur={stats.nb_souhaits_respectes}
-            total={stats.nb_souhaits_total}
-            pourcentage={stats.taux_souhaits_respectes}
-            couleur="blue"
-          />
-          <BarreProgression
-            label="Présence des responsables"
-            valeur={stats.nb_responsables_presents}
-            total={stats.nb_responsables_total}
-            pourcentage={stats.taux_responsables_presents}
-            couleur="green"
-          />
-          <BarreProgression
-            label="Respect contraintes séances/jour"
-            valeur={stats.nb_contraintes_seances_respectees}
-            total={stats.nb_contraintes_seances_total}
-            pourcentage={stats.taux_contraintes_seances_respectees}
-            couleur="purple"
-          />
         </div>
       </div>
     </div>
@@ -339,7 +467,7 @@ function VueSouhaits({ stats }) {
 
   const SortableHeader = ({ label, sortKey }) => (
     <th 
-      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+      className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
       onClick={() => requestSort(sortKey)}
     >
       <div className="flex items-center gap-1">
@@ -355,38 +483,44 @@ function VueSouhaits({ stats }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+      {/* Statistiques résumées */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-md border-2 border-blue-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Statistiques des souhaits</h3>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Taux de respect</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.taux_souhaits_respectes}%</p>
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+              <DocumentCheckIcon className="h-5 w-5 text-white" />
             </div>
+            Statistiques des souhaits
+          </h3>
+          <div className="text-right">
+            <p className="text-sm text-gray-600 font-medium">Taux de respect</p>
+            <p className="text-3xl font-bold text-blue-600">{stats.taux_souhaits_respectes}%</p>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">Total</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.nb_souhaits_total}</p>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-gray-200">
+            <p className="text-sm text-gray-600 font-medium">Total</p>
+            <p className="text-3xl font-bold text-gray-900">{stats.nb_souhaits_total}</p>
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <p className="text-sm text-green-600">Respectés</p>
-            <p className="text-2xl font-bold text-green-600">{stats.nb_souhaits_respectes}</p>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-green-200">
+            <p className="text-sm text-green-600 font-medium">Respectés</p>
+            <p className="text-3xl font-bold text-green-600">{stats.nb_souhaits_respectes}</p>
           </div>
-          <div className="text-center p-4 bg-red-50 rounded-lg">
-            <p className="text-sm text-red-600">Violés</p>
-            <p className="text-2xl font-bold text-red-600">{stats.nb_souhaits_violes}</p>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-red-200">
+            <p className="text-sm text-red-600 font-medium">Violés</p>
+            <p className="text-3xl font-bold text-red-600">{stats.nb_souhaits_violes}</p>
           </div>
         </div>
       </div>
 
       {/* Liste des souhaits violés */}
       {sortedSouhaits.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
+        <div className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden">
+          <div className="p-6 border-b-2 border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+              </div>
               Liste des souhaits non respectés ({sortedSouhaits.length})
             </h3>
           </div>
@@ -402,9 +536,9 @@ function VueSouhaits({ stats }) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedSouhaits.map((souhait) => (
-                  <tr key={souhait.id} className="hover:bg-gray-50">
+                  <tr key={souhait.id} className="hover:bg-blue-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-bold text-gray-900">
                         {souhait.enseignant_nom} {souhait.enseignant_prenom}
                       </div>
                     </td>
@@ -415,7 +549,7 @@ function VueSouhaits({ stats }) {
                       <div className="text-sm text-gray-900">{souhait.jour}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{souhait.seance}</div>
+                      <div className="text-sm font-semibold text-blue-600">{souhait.seance}</div>
                     </td>
                   </tr>
                 ))}
@@ -426,9 +560,12 @@ function VueSouhaits({ stats }) {
       )}
 
       {sortedSouhaits.length === 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <CheckCircleIcon className="h-12 w-12 text-green-600 mx-auto mb-2" />
-          <p className="text-green-800 font-semibold">Excellent ! Tous les souhaits ont été respectés.</p>
+        <div className="text-center py-20 bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 rounded-2xl border-3 border-dashed border-green-300">
+          <div className="w-24 h-24 bg-gradient-to-br from-green-200 to-emerald-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <CheckCircleIcon className="w-14 h-14 text-green-600" />
+          </div>
+          <p className="text-green-700 text-2xl font-bold mb-2">Excellent !</p>
+          <p className="text-green-600 text-base">Tous les souhaits ont été respectés.</p>
         </div>
       )}
     </div>
@@ -491,7 +628,7 @@ function VueResponsables({ stats }) {
 
   const SortableHeader = ({ label, sortKey, sortConfig, setSortConfig }) => (
     <th 
-      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+      className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
       onClick={() => requestSort(sortKey, setSortConfig, sortConfig)}
     >
       <div className="flex items-center gap-1">
@@ -507,50 +644,56 @@ function VueResponsables({ stats }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+      {/* Statistiques résumées */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl shadow-md border-2 border-green-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Statistiques des responsables de salle</h3>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Taux de présence</p>
-              <p className="text-2xl font-bold text-green-600">{stats.taux_responsables_presents}%</p>
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+              <UserGroupIcon className="h-5 w-5 text-white" />
             </div>
+            Statistiques des responsables de salle
+          </h3>
+          <div className="text-right">
+            <p className="text-sm text-gray-600 font-medium">Taux de présence</p>
+            <p className="text-3xl font-bold text-green-600">{stats.taux_responsables_presents}%</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">Examens </p>
-            <p className="text-2xl font-bold text-gray-900">{stats.nb_responsables_total}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-gray-200">
+            <p className="text-sm text-gray-600 font-medium">Examens</p>
+            <p className="text-3xl font-bold text-gray-900">{stats.nb_responsables_total}</p>
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <p className="text-sm text-green-600">Responsables présents</p>
-            <p className="text-2xl font-bold text-green-600">{stats.nb_responsables_presents}</p>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-green-200">
+            <p className="text-sm text-green-600 font-medium">Responsables présents</p>
+            <p className="text-3xl font-bold text-green-600">{stats.nb_responsables_presents}</p>
           </div>
-          <div className="text-center p-4 bg-red-50 rounded-lg">
-            <p className="text-sm text-red-600">Responsables absents</p>
-            <p className="text-2xl font-bold text-red-600">{stats.nb_responsables_absents}</p>
-            <div className="mt-2 pt-2 border-t border-red-200">
-              <p className="text-xs text-orange-600">Dispensés: {stats.nb_responsables_non_participants || 0}</p>
-              <p className="text-xs text-gray-600">(Enseignants ne surveillant pas)</p>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-red-200">
+            <p className="text-sm text-red-600 font-medium">Responsables absents</p>
+            <p className="text-3xl font-bold text-red-600">{stats.nb_responsables_absents}</p>
+            <div className="mt-2 pt-2 border-t-2 border-red-200">
+              <p className="text-xs text-orange-600 font-semibold">Dispensés: {stats.nb_responsables_non_participants || 0}</p>
+              <p className="text-xs text-gray-600">(Ne surveillant pas)</p>
             </div>
           </div>
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-600">Taux de présence</p>
-            <p className="text-2xl font-bold text-blue-600">{stats.taux_responsables_presents}%</p>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-blue-200">
+            <p className="text-sm text-blue-600 font-medium">Taux de présence</p>
+            <p className="text-3xl font-bold text-blue-600">{stats.taux_responsables_presents}%</p>
           </div>
         </div>
       </div>
 
       {/* Liste des responsables absents - Autres raisons (PRIORITÉ 1) */}
       {sortedAutres.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
-              Examens sans responsable assigné - Problèmes de satisfaction de contraintes ({sortedAutres.length} séances)
+        <div className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden">
+          <div className="p-6 border-b-2 border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+              </div>
+              Examens sans responsable assigné ({sortedAutres.length} séances)
             </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Ces responsables de cours n'ont pas pu être affectés malgré leur participation aux surveillances.
+            <p className="text-sm text-gray-600 mt-2 font-medium">
+              Problèmes de satisfaction de contraintes - Ces responsables de cours n'ont pas pu être affectés malgré leur participation aux surveillances.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -566,9 +709,9 @@ function VueResponsables({ stats }) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedAutres.map((resp) => (
-                  <tr key={resp.id} className="hover:bg-gray-50">
+                  <tr key={resp.id} className="hover:bg-red-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-bold text-gray-900">
                         {resp.enseignant_nom} {resp.enseignant_prenom}
                       </div>
                     </td>
@@ -579,7 +722,7 @@ function VueResponsables({ stats }) {
                       <div className="text-sm text-gray-900">{resp.date_exam}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{resp.seance}</div>
+                      <div className="text-sm font-semibold text-red-600">{resp.seance}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -597,13 +740,15 @@ function VueResponsables({ stats }) {
 
       {/* Liste des responsables absents - Non surveillants (PRIORITÉ 2) */}
       {sortedNonSurv.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-5 w-5 text-orange-600" />
-              Responsables absents - Ne participent pas aux surveillances ({sortedNonSurv.length} séances)
+        <div className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden">
+          <div className="p-6 border-b-2 border-gray-200 bg-gradient-to-r from-orange-50 to-yellow-50">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-lg flex items-center justify-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+              </div>
+              Responsables absents - Ne participent pas ({sortedNonSurv.length} séances)
             </h3>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 mt-2 font-medium">
               Ces enseignants sont les responsables de cours mais n'ont pas été affectés car ils ne participent pas aux surveillances.
             </p>
           </div>
@@ -620,9 +765,9 @@ function VueResponsables({ stats }) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedNonSurv.map((resp) => (
-                  <tr key={resp.id} className="hover:bg-gray-50">
+                  <tr key={resp.id} className="hover:bg-orange-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-bold text-gray-900">
                         {resp.enseignant_nom} {resp.enseignant_prenom}
                       </div>
                     </td>
@@ -633,7 +778,7 @@ function VueResponsables({ stats }) {
                       <div className="text-sm text-gray-900">{resp.date_exam}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{resp.seance}</div>
+                      <div className="text-sm font-semibold text-orange-600">{resp.seance}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
@@ -651,9 +796,12 @@ function VueResponsables({ stats }) {
 
       {/* Vérifier si tous les responsables sont présents */}
       {sortedNonSurv.length === 0 && sortedAutres.length === 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <CheckCircleIcon className="h-12 w-12 text-green-600 mx-auto mb-2" />
-          <p className="text-green-800 font-semibold">Parfait ! Tous les responsables de salle sont présents.</p>
+        <div className="text-center py-20 bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 rounded-2xl border-3 border-dashed border-green-300">
+          <div className="w-24 h-24 bg-gradient-to-br from-green-200 to-emerald-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <CheckCircleIcon className="w-14 h-14 text-green-600" />
+          </div>
+          <p className="text-green-700 text-2xl font-bold mb-2">Parfait !</p>
+          <p className="text-green-600 text-base">Tous les responsables de salle sont présents.</p>
         </div>
       )}
     </div>
@@ -703,7 +851,7 @@ function VueContraintes({ stats }) {
 
   const SortableHeader = ({ label, sortKey }) => (
     <th 
-      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+      className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
       onClick={() => requestSort(sortKey)}
     >
       <div className="flex items-center gap-1">
@@ -719,38 +867,44 @@ function VueContraintes({ stats }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
+      {/* Statistiques résumées */}
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl shadow-md border-2 border-purple-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Contraintes de séances par jour</h3>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Taux de respect</p>
-              <p className="text-2xl font-bold text-purple-600">{stats.taux_contraintes_seances_respectees}%</p>
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+              <CalendarDaysIcon className="h-5 w-5 text-white" />
             </div>
+            Contraintes de séances par jour
+          </h3>
+          <div className="text-right">
+            <p className="text-sm text-gray-600 font-medium">Taux de respect</p>
+            <p className="text-3xl font-bold text-purple-600">{stats.taux_contraintes_seances_respectees}%</p>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">Total vérifications</p>
-            <p className="text-2xl font-bold text-gray-900">{stats.nb_contraintes_seances_total}</p>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-gray-200">
+            <p className="text-sm text-gray-600 font-medium">Total vérifications</p>
+            <p className="text-3xl font-bold text-gray-900">{stats.nb_contraintes_seances_total}</p>
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <p className="text-sm text-green-600">Respectées</p>
-            <p className="text-2xl font-bold text-green-600">{stats.nb_contraintes_seances_respectees}</p>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-green-200">
+            <p className="text-sm text-green-600 font-medium">Respectées</p>
+            <p className="text-3xl font-bold text-green-600">{stats.nb_contraintes_seances_respectees}</p>
           </div>
-          <div className="text-center p-4 bg-red-50 rounded-lg">
-            <p className="text-sm text-red-600">Dépassements</p>
-            <p className="text-2xl font-bold text-red-600">{stats.nb_contraintes_seances_violees}</p>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-red-200">
+            <p className="text-sm text-red-600 font-medium">Dépassements</p>
+            <p className="text-3xl font-bold text-red-600">{stats.nb_contraintes_seances_violees}</p>
           </div>
         </div>
       </div>
 
       {/* Liste des dépassements */}
       {sortedDepassements.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
+        <div className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden">
+          <div className="p-6 border-b-2 border-gray-200 bg-gradient-to-r from-red-50 to-orange-50">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+              </div>
               Dépassements du nombre maximum de séances par jour ({sortedDepassements.length})
             </h3>
           </div>
@@ -763,31 +917,31 @@ function VueContraintes({ stats }) {
                   <SortableHeader label="Nb séances" sortKey="nb_seances" />
                   <SortableHeader label="Maximum autorisé" sortKey="max_autorise" />
                   <SortableHeader label="Dépassement" sortKey="depassement" />
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                     Séances
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedDepassements.map((dep) => (
-                  <tr key={dep.id} className="hover:bg-gray-50">
+                  <tr key={dep.id} className="hover:bg-red-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-bold text-gray-900">
                         {dep.enseignant_nom} {dep.enseignant_prenom}
                       </div>
-                      <div className="text-sm text-gray-500">{dep.code_smartex}</div>
+                      <div className="text-sm text-gray-500 font-medium">{dep.code_smartex}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{dep.date_exam}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-semibold text-red-600">{dep.nb_seances}</div>
+                      <div className="text-sm font-bold text-red-600">{dep.nb_seances}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{dep.max_autorise}</div>
+                      <div className="text-sm text-gray-900 font-semibold">{dep.max_autorise}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                      <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-red-100 text-red-800">
                         +{dep.depassement}
                       </span>
                     </td>
@@ -803,9 +957,12 @@ function VueContraintes({ stats }) {
       )}
 
       {(!stats.depassements_max_jour || stats.depassements_max_jour.length === 0) && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <CheckCircleIcon className="h-12 w-12 text-green-600 mx-auto mb-2" />
-          <p className="text-green-800 font-semibold">Excellent ! Toutes les contraintes de séances par jour sont respectées.</p>
+        <div className="text-center py-20 bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 rounded-2xl border-3 border-dashed border-green-300">
+          <div className="w-24 h-24 bg-gradient-to-br from-green-200 to-emerald-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <CheckCircleIcon className="w-14 h-14 text-green-600" />
+          </div>
+          <p className="text-green-700 text-2xl font-bold mb-2">Excellent !</p>
+          <p className="text-green-600 text-base">Toutes les contraintes de séances par jour sont respectées.</p>
         </div>
       )}
     </div>
@@ -864,7 +1021,7 @@ function VueGrades({ statsParGrade }) {
 
   const SortableHeader = ({ label, sortKey }) => (
     <th 
-      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+      className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
       onClick={() => requestSort(sortKey)}
     >
       <div className="flex items-center gap-1">
@@ -880,10 +1037,15 @@ function VueGrades({ statsParGrade }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Répartition des surveillances par grade</h3>
-          <p className="text-sm text-gray-600 mt-1">
+      <div className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden">
+        <div className="p-6 border-b-2 border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
+              <ChartBarIcon className="h-5 w-5 text-white" />
+            </div>
+            Répartition des surveillances par grade
+          </h3>
+          <p className="text-sm text-gray-600 mt-2 font-medium">
             Analyse de la charge de travail et respect des quotas par grade
           </p>
         </div>
@@ -905,22 +1067,22 @@ function VueGrades({ statsParGrade }) {
                 const estDansLimites = stats.max <= stats.quotaInitial;
                 
                 return (
-                  <tr key={grade} className="hover:bg-gray-50">
+                  <tr key={grade} className="hover:bg-indigo-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{grade || 'Non défini'}</div>
+                      <div className="text-sm font-bold text-gray-900">{grade || 'Non défini'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{stats.quotaInitial}</div>
+                      <div className="text-sm font-semibold text-gray-900">{stats.quotaInitial}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-semibold text-indigo-600">{stats.max}</div>
+                      <div className="text-sm font-bold text-indigo-600">{stats.max}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <div className="text-sm font-semibold">
+                        <div className="text-sm font-bold">
                           {stats.max} / {stats.quotaInitial}
                         </div>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${
                           estDansLimites 
                             ? 'bg-green-100 text-green-800' 
                             : 'bg-red-100 text-red-800'
@@ -936,8 +1098,6 @@ function VueGrades({ statsParGrade }) {
           </table>
         </div>
       </div>
-
-
     </div>
   );
 }

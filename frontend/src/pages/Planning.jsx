@@ -19,6 +19,7 @@ import {
   Grid3x3,
   List,
   Trash2,
+  ArrowLeftRight,
 } from 'lucide-react';
 import GestionEnseignantsSeanceInline from '../components/GestionEnseignantsSeanceInline';
 
@@ -38,6 +39,11 @@ export default function Planning() {
   const [selectedSeanceKey, setSelectedSeanceKey] = useState(''); // Clé de la séance sélectionnée (date|h_debut|h_fin)
   const [sortBy, setSortBy] = useState('pourcentage'); // 'pourcentage', 'grade', 'nom'
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
+  const [expandedSalles, setExpandedSalles] = useState({}); // Pour gérer l'affichage des salles
+  
+  // États pour l'échange d'enseignants
+  const [exchangeMode, setExchangeMode] = useState(false);
+  const [selectedForExchange, setSelectedForExchange] = useState(null); // { enseignant, seance }
 
   const { data: enseignants = [] } = useQuery({
     queryKey: ['enseignants'],
@@ -136,6 +142,29 @@ export default function Planning() {
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de l\'ajout de la séance');
+    },
+  });
+
+  // Mutation pour échanger deux enseignants entre séances
+  const exchangeEnseignantsMutation = useMutation({
+    mutationFn: planningAPI.exchangeEnseignants,
+    onSuccess: (response) => {
+      // Recharger les données
+      queryClient.invalidateQueries(['emploi-enseignant']);
+      queryClient.invalidateQueries(['emploi-seances']);
+      queryClient.invalidateQueries(['statistiques']);
+      queryClient.invalidateQueries(['charge-enseignants']);
+      
+      // Réinitialiser le mode échange
+      setExchangeMode(false);
+      setSelectedForExchange(null);
+      
+      // Afficher un message de succès
+      toast.success(response.data?.message || 'Enseignants échangés avec succès');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Erreur lors de l\'échange des enseignants');
+      // Ne pas réinitialiser le mode échange en cas d'erreur
     },
   });
 
@@ -311,6 +340,71 @@ export default function Planning() {
     }
   };
 
+  // Fonction pour activer/désactiver le mode échange
+  const handleToggleExchangeMode = () => {
+    setExchangeMode(!exchangeMode);
+    setSelectedForExchange(null);
+  };
+
+  // Fonction pour sélectionner un enseignant pour l'échange
+  const handleSelectForExchange = (enseignant, seance) => {
+    if (!selectedForExchange) {
+      // Premier enseignant sélectionné
+      setSelectedForExchange({ enseignant, seance });
+      toast.success(`${enseignant.nom} ${enseignant.prenom} sélectionné - Choisissez maintenant le second enseignant à échanger`);
+    } else {
+      // Deuxième enseignant sélectionné - vérifier qu'ils sont différents
+      if (selectedForExchange.enseignant.id === enseignant.id && 
+          selectedForExchange.seance.date === seance.date &&
+          selectedForExchange.seance.h_debut === seance.h_debut) {
+        // Même enseignant dans la même séance - désélectionner
+        setSelectedForExchange(null);
+        toast.info('Sélection annulée');
+        return;
+      }
+
+      // Vérifier que le premier enseignant n'est pas déjà dans la séance 2
+      const ens1DejaSeance2 = seance.enseignants?.some(e => e.id === selectedForExchange.enseignant.id);
+      if (ens1DejaSeance2) {
+        toast.error(`${selectedForExchange.enseignant.nom} ${selectedForExchange.enseignant.prenom} est déjà dans la séance du ${formatDate(seance.date)} ${seance.h_debut}. Échange impossible.`);
+        return;
+      }
+
+      // Vérifier que le deuxième enseignant n'est pas déjà dans la séance 1
+      const ens2DejaSeance1 = selectedForExchange.seance.enseignants?.some(e => e.id === enseignant.id);
+      if (ens2DejaSeance1) {
+        toast.error(`${enseignant.nom} ${enseignant.prenom} est déjà dans la séance du ${formatDate(selectedForExchange.seance.date)} ${selectedForExchange.seance.h_debut}. Échange impossible.`);
+        return;
+      }
+
+      // Confirmer l'échange
+      const message = `Voulez-vous échanger :\n\n` +
+        `${selectedForExchange.enseignant.nom} ${selectedForExchange.enseignant.prenom}\n` +
+        `(${formatDate(selectedForExchange.seance.date)} ${selectedForExchange.seance.h_debut}-${selectedForExchange.seance.h_fin})\n\n` +
+        `avec\n\n` +
+        `${enseignant.nom} ${enseignant.prenom}\n` +
+        `(${formatDate(seance.date)} ${seance.h_debut}-${seance.h_fin}) ?`;
+
+      if (confirm(message)) {
+        // Effectuer l'échange
+        exchangeEnseignantsMutation.mutate({
+          enseignant1_id: selectedForExchange.enseignant.id,
+          date1: selectedForExchange.seance.date,
+          h_debut1: selectedForExchange.seance.h_debut,
+          h_fin1: selectedForExchange.seance.h_fin,
+          session1: selectedForExchange.seance.session,
+          semestre1: selectedForExchange.seance.semestre,
+          enseignant2_id: enseignant.id,
+          date2: seance.date,
+          h_debut2: seance.h_debut,
+          h_fin2: seance.h_fin,
+          session2: seance.session,
+          semestre2: seance.semestre,
+        });
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Hero Header - Compact */}
@@ -383,102 +477,103 @@ export default function Planning() {
           {activeTab === 'seances' && (
             <div className="space-y-6">
               {/* Barre de filtres et contrôles */}
-              <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl border-2 border-gray-200">
-                <div className="flex-1 flex flex-wrap gap-3">
-                  {/* Filtre Date */}
-                  <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
-                    <Calendar className="w-5 h-5 text-green-600" />
-                    <select
-                      value={dateFilter}
-                      onChange={(e) => setDateFilter(e.target.value)}
-                      className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
-                    >
-                      <option value="all">Toutes les dates</option>
-                      {datesUniques.map(date => (
-                        <option key={date} value={date}>
-                          {new Date(date).toLocaleDateString('fr-FR', { 
-                            weekday: 'short', 
-                            day: '2-digit', 
-                            month: 'short' 
-                          })}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Filtre Heure */}
-                  <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
-                    <Clock className="w-5 h-5 text-orange-600" />
-                    <select
-                      value={heureFilter}
-                      onChange={(e) => setHeureFilter(e.target.value)}
-                      className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
-                    >
-                      <option value="all">Toutes les heures</option>
-                      {heuresUniques.map(heure => (
-                        <option key={heure} value={heure}>
-                          {formatTime(heure)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Filtre Session */}
-                  <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
-                    <Filter className="w-5 h-5 text-blue-600" />
-                    <select
-                      value={sessionFilter}
-                      onChange={(e) => setSessionFilter(e.target.value)}
-                      className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
-                    >
-                      <option value="all">Toutes les sessions</option>
-                      <option value="P">Principale</option>
-                      <option value="R">Rattrapage</option>
-                    </select>
-                  </div>
-
-                  {/* Filtre Semestre */}
-                  <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
-                    <Filter className="w-5 h-5 text-blue-600" />
-                    <select
-                      value={semestreFilter}
-                      onChange={(e) => setSemestreFilter(e.target.value)}
-                      className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
-                    >
-                      <option value="all">Tous les semestres</option>
-                      <option value="SEMESTRE 1">Semestre 1</option>
-                      <option value="SEMESTRE 2">Semestre 2</option>
-                    </select>
-                  </div>
-
-                  {/* Bouton reset filtres */}
-                  {(sessionFilter !== 'all' || semestreFilter !== 'all' || dateFilter !== 'all' || heureFilter !== 'all') && (
-                    <button
-                      onClick={() => {
-                        setSessionFilter('all');
-                        setSemestreFilter('all');
-                        setDateFilter('all');
-                        setHeureFilter('all');
-                      }}
-                      className="px-4 py-2.5 bg-red-100 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-200 transition-colors border-2 border-red-200"
-                    >
-                      Réinitialiser filtres
-                    </button>
-                  )}
+              <div className="flex flex-row flex-wrap gap-3 items-center justify-between bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-2xl border-2 border-gray-200">
+                {/* Filtre Date */}
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border-2 border-gray-200 shadow-sm">
+                  <Calendar className="w-4 h-4 text-green-600" />
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
+                  >
+                    <option value="all">Toutes les dates</option>
+                    {datesUniques.map(date => (
+                      <option key={date} value={date}>
+                        {new Date(date).toLocaleDateString('fr-FR', { 
+                          weekday: 'short', 
+                          day: '2-digit', 
+                          month: 'short' 
+                        })}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
+                {/* Filtre Heure */}
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border-2 border-gray-200 shadow-sm">
+                  <Clock className="w-4 h-4 text-orange-600" />
+                  <select
+                    value={heureFilter}
+                    onChange={(e) => setHeureFilter(e.target.value)}
+                    className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
+                  >
+                    <option value="all">Toutes les heures</option>
+                    {heuresUniques.map(heure => (
+                      <option key={heure} value={heure}>
+                        {formatTime(heure)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtre Session */}
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border-2 border-gray-200 shadow-sm">
+                  <Filter className="w-4 h-4 text-blue-600" />
+                  <select
+                    value={sessionFilter}
+                    onChange={(e) => setSessionFilter(e.target.value)}
+                    className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
+                  >
+                    <option value="all">Toutes les sessions</option>
+                    <option value="P">Principale</option>
+                    <option value="R">Rattrapage</option>
+                  </select>
+                </div>
+
+                {/* Filtre Semestre */}
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border-2 border-gray-200 shadow-sm">
+                  <Filter className="w-4 h-4 text-blue-600" />
+                  <select
+                    value={semestreFilter}
+                    onChange={(e) => setSemestreFilter(e.target.value)}
+                    className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
+                  >
+                    <option value="all">Tous les semestres</option>
+                    <option value="SEMESTRE 1">Semestre 1</option>
+                    <option value="SEMESTRE 2">Semestre 2</option>
+                  </select>
+                </div>
+
+                {/* Bouton reset filtres */}
+                {(sessionFilter !== 'all' || semestreFilter !== 'all' || dateFilter !== 'all' || heureFilter !== 'all') && (
+                  <button
+                    onClick={() => {
+                      setSessionFilter('all');
+                      setSemestreFilter('all');
+                      setDateFilter('all');
+                      setHeureFilter('all');
+                    }}
+                    className="px-3 py-2 bg-red-100 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-200 transition-colors border-2 border-red-200"
+                  >
+                    Réinitialiser
+                  </button>
+                )}
+
+                {/* Spacer pour pousser les contrôles à droite */}
+                <div className="flex-grow"></div>
+
                 {/* Toggle View Mode */}
-                <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border-2 border-gray-200 shadow-sm">
+                <div className="flex items-center gap-2 bg-white p-1 rounded-xl border-2 border-gray-200 shadow-sm">
                   <button
                     onClick={() => setViewMode('grid')}
                     className={`${
                       viewMode === 'grid'
                         ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md'
                         : 'text-gray-600 hover:bg-gray-100'
-                    } p-2.5 rounded-lg transition-all duration-200`}
+                    } p-2 rounded-lg transition-all duration-200`}
                     title="Vue Grille"
                   >
-                    <Grid3x3 className="w-5 h-5" />
+                    <Grid3x3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
@@ -486,12 +581,31 @@ export default function Planning() {
                       viewMode === 'list'
                         ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md'
                         : 'text-gray-600 hover:bg-gray-100'
-                    } p-2.5 rounded-lg transition-all duration-200`}
+                    } p-2 rounded-lg transition-all duration-200`}
                     title="Vue Liste"
                   >
-                    <List className="w-5 h-5" />
+                    <List className="w-4 h-4" />
                   </button>
                 </div>
+
+                {/* Toggle Exchange Mode */}
+                <button
+                  onClick={handleToggleExchangeMode}
+                  className={`${
+                    exchangeMode
+                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg border-orange-400'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                  } px-3 py-2 rounded-xl border-2 transition-all duration-200 flex items-center gap-2 font-semibold text-sm shadow-sm`}
+                  title={exchangeMode ? "Désactiver le mode échange" : "Activer le mode échange"}
+                >
+                  <ArrowLeftRight className="w-4 h-4" />
+                  {exchangeMode ? 'Annuler échange' : 'Échanger'}
+                  {selectedForExchange && (
+                    <span className="ml-1 px-2 py-0.5 bg-white text-orange-600 rounded-full text-xs font-bold">
+                      1/2
+                    </span>
+                  )}
+                </button>
               </div>
 
               {loadingSeances ? (
@@ -595,6 +709,9 @@ export default function Planning() {
                             <GestionEnseignantsSeanceInline 
                               seance={seance}
                               onEnseignantClick={handleEnseignantClick}
+                              exchangeMode={exchangeMode}
+                              selectedForExchange={selectedForExchange}
+                              onSelectForExchange={handleSelectForExchange}
                             />
                           </div>
                         </div>
@@ -680,6 +797,9 @@ export default function Planning() {
                             <GestionEnseignantsSeanceInline 
                               seance={seance}
                               onEnseignantClick={handleEnseignantClick}
+                              exchangeMode={exchangeMode}
+                              selectedForExchange={selectedForExchange}
+                              onSelectForExchange={handleSelectForExchange}
                             />
                           </div>
                         )}
@@ -1027,9 +1147,14 @@ export default function Planning() {
                                 <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
                                   <Calendar className="w-6 h-6 text-white" />
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-900">
-                                  Ajouter une séance
-                                </h3>
+                                <div>
+                                  <h3 className="text-lg font-bold text-gray-900">
+                                    Ajouter une séance de surveillance
+                                  </h3>
+                                  <p className="text-xs text-gray-600 font-medium mt-0.5">
+                                    {seancesDisponibles.length} séance{seancesDisponibles.length > 1 ? 's' : ''} disponible{seancesDisponibles.length > 1 ? 's' : ''}
+                                  </p>
+                                </div>
                               </div>
                               <button
                                 onClick={() => {
@@ -1044,73 +1169,203 @@ export default function Planning() {
                             </div>
 
                             <form onSubmit={handleAjouterSeance} className="space-y-4">
-                              {/* Sélecteur de séance */}
+                              {/* Sélecteur de séance avec détails */}
                               <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className="block text-sm font-bold text-gray-700 mb-3">
                                   <Calendar className="w-4 h-4 inline mr-2" />
-                                  Sélectionner une séance disponible
+                                  Sélectionner une séance
                                 </label>
-                                <select
-                                  value={selectedSeanceKey}
-                                  onChange={(e) => setSelectedSeanceKey(e.target.value)}
-                                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 font-medium"
-                                  required
-                                >
-                                  <option value="">-- Choisir une séance --</option>
-                                  {seancesDisponibles
-                                    .sort((a, b) => {
-                                      // Trier par date puis par heure
-                                      if (a.date !== b.date) return a.date.localeCompare(b.date);
-                                      return a.h_debut.localeCompare(b.h_debut);
-                                    })
-                                    .map((seance) => {
-                                      const key = `${seance.date}|${seance.h_debut}|${seance.h_fin}`;
-                                      const dateFormatee = new Date(seance.date).toLocaleDateString('fr-FR', {
-                                        weekday: 'short',
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric'
-                                      });
-                                      const nbExamens = seance.nb_examens || seance.examens?.length || 0;
-                                      return (
-                                        <option key={key} value={key}>
-                                          {dateFormatee} • {formatTime(seance.h_debut)} - {formatTime(seance.h_fin)} • {seance.session} {seance.semestre} • {nbExamens} examen{nbExamens > 1 ? 's' : ''} • {seance.nb_enseignants} surveillant{seance.nb_enseignants > 1 ? 's' : ''}
-                                        </option>
-                                      );
-                                    })
-                                  }
-                                </select>
+                                
+                                {seancesDisponibles.length === 0 ? (
+                                  <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                                    <AlertCircle className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                                    <p className="text-sm text-gray-600 font-medium">Aucune séance disponible</p>
+                                    <p className="text-xs text-gray-500 mt-1">Toutes les séances ont déjà été attribuées</p>
+                                  </div>
+                                ) : (
+                                  <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm max-h-[500px] overflow-y-auto">
+                                    <table className="w-full">
+                                      <thead className="bg-gradient-to-r from-green-50 to-emerald-50 sticky top-0 z-10">
+                                        <tr className="border-b-2 border-green-200">
+                                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-12">
+                                            <span className="sr-only">Sélection</span>
+                                          </th>
+                                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                            Date
+                                          </th>
+                                          <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                            Horaire
+                                          </th>
+                                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                            Session
+                                          </th>
+                                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                            Semestre
+                                          </th>
+                                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                            Salles
+                                          </th>
+                                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                            Surveillants
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-200">
+                                        {seancesDisponibles
+                                          .sort((a, b) => {
+                                            if (a.date !== b.date) return a.date.localeCompare(b.date);
+                                            return a.h_debut.localeCompare(b.h_debut);
+                                          })
+                                          .map((seance) => {
+                                            const key = `${seance.date}|${seance.h_debut}|${seance.h_fin}`;
+                                            const dateFormatee = new Date(seance.date).toLocaleDateString('fr-FR', {
+                                              weekday: 'short',
+                                              day: '2-digit',
+                                              month: 'short',
+                                              year: 'numeric'
+                                            });
+                                            const nbExamens = seance.nb_examens || seance.examens?.length || 0;
+                                            const isSelected = selectedSeanceKey === key;
+                                            
+                                            return (
+                                              <tr
+                                                key={key}
+                                                onClick={() => setSelectedSeanceKey(key)}
+                                                className={`cursor-pointer transition-all duration-200 ${
+                                                  isSelected
+                                                    ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-l-green-500'
+                                                    : 'hover:bg-gray-50'
+                                                }`}
+                                              >
+                                                {/* Colonne sélection */}
+                                                <td className="px-4 py-3">
+                                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                                    isSelected 
+                                                      ? 'bg-green-500 border-green-500' 
+                                                      : 'border-gray-300 bg-white'
+                                                  }`}>
+                                                    {isSelected && (
+                                                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                      </svg>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                                
+                                                {/* Date */}
+                                                <td className="px-4 py-3">
+                                                  <div className="flex items-center gap-2">
+                                                    <Calendar className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                                    <span className="font-bold text-gray-900 text-sm capitalize">{dateFormatee}</span>
+                                                  </div>
+                                                </td>
+                                                
+                                                {/* Horaire */}
+                                                <td className="px-4 py-3">
+                                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm">
+                                                    <Clock className="w-3.5 h-3.5" />
+                                                    {formatTime(seance.h_debut)} - {formatTime(seance.h_fin)}
+                                                  </span>
+                                                </td>
+                                                
+                                                {/* Session */}
+                                                <td className="px-4 py-3 text-center">
+                                                  <span className="px-2.5 py-1 bg-cyan-100 text-cyan-800 rounded-lg text-xs font-bold border border-cyan-200">
+                                                    {seance.session === 'P' ? '📝 Principale' : '🔄 Rattrapage'}
+                                                  </span>
+                                                </td>
+                                                
+                                                {/* Semestre */}
+                                                <td className="px-4 py-3 text-center">
+                                                  <span className="px-2.5 py-1 bg-green-100 text-green-800 rounded-lg text-xs font-bold border border-green-200">
+                                                    {seance.semestre}
+                                                  </span>
+                                                </td>
+                                                
+                                                {/* Salles */}
+                                                <td className="px-4 py-3 text-center">
+                                                  <div className="flex items-center justify-center gap-1.5">
+                                                    <MapPin className="w-4 h-4 text-purple-600" />
+                                                    <span className="font-bold text-purple-700 text-sm">{nbExamens}</span>
+                                                  </div>
+                                                </td>
+                                                
+                                                {/* Surveillants */}
+                                                <td className="px-4 py-3 text-center">
+                                                  <div className="flex items-center justify-center gap-1.5">
+                                                    <Users className="w-4 h-4 text-orange-600" />
+                                                    <span className="font-bold text-orange-700 text-sm">{seance.nb_enseignants}</span>
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                            );
+                                          })
+                                        }
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
                               </div>
 
-                              {/* Info */}
-                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                <p className="text-xs text-blue-800">
-                                  <strong>💡 Astuce :</strong> Sélectionnez une séance dans la liste des séances disponibles.
-                                  {emploiEnseignant.enseignant.nb_surveillances_affectees >= emploiEnseignant.enseignant.quota_max && (
-                                    <span className="block mt-1 text-amber-700 font-bold">
-                                      ⚠️ Attention : Le quota de cet enseignant est déjà atteint ({emploiEnseignant.enseignant.pourcentage_quota}%)
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
+                              {/* Info et avertissement */}
+                              {selectedSeanceKey && (
+                                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <span className="text-white font-bold text-lg">💡</span>
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-sm text-blue-900 font-semibold mb-1">Séance sélectionnée</p>
+                                      <p className="text-xs text-blue-800">
+                                        L'enseignant sera ajouté à cette séance de surveillance.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {emploiEnseignant.enseignant.nb_surveillances_affectees >= emploiEnseignant.enseignant.quota_max && (
+                                <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                      <span className="text-white font-bold text-lg">⚠️</span>
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-sm text-amber-900 font-bold mb-1">Quota atteint</p>
+                                      <p className="text-xs text-amber-800">
+                                        Cet enseignant a déjà atteint son quota ({emploiEnseignant.enseignant.nb_surveillances_affectees}/{emploiEnseignant.enseignant.quota_max} = {emploiEnseignant.enseignant.pourcentage_quota}%).
+                                        L'ajout d'une nouvelle séance dépassera le quota recommandé.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Boutons */}
                               <div className="flex gap-3 pt-2">
                                 <button
                                   type="submit"
-                                  disabled={ajouterSeanceMutation.isPending}
-                                  className="flex-1 px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg font-semibold"
+                                  disabled={ajouterSeanceMutation.isPending || !selectedSeanceKey}
+                                  className="flex-1 px-5 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg font-bold text-sm"
                                 >
                                   {ajouterSeanceMutation.isPending ? (
                                     <span className="flex items-center justify-center gap-2">
-                                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                       </svg>
                                       Ajout en cours...
                                     </span>
+                                  ) : !selectedSeanceKey ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                      <Calendar className="w-4 h-4" />
+                                      Sélectionnez d'abord une séance
+                                    </span>
                                   ) : (
-                                    'Ajouter la séance'
+                                    <span className="flex items-center justify-center gap-2">
+                                      <Calendar className="w-4 h-4" />
+                                      Confirmer l'ajout
+                                    </span>
                                   )}
                                 </button>
                                 <button
@@ -1119,7 +1374,7 @@ export default function Planning() {
                                     setShowAddSeanceForm(false);
                                     setSelectedSeanceKey('');
                                   }}
-                                  className="px-5 py-2.5 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-semibold"
+                                  className="px-5 py-3 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-bold text-sm"
                                 >
                                   Annuler
                                 </button>
@@ -1159,68 +1414,91 @@ export default function Planning() {
                               .map((emploi, index) => (
                                 <div
                                   key={index}
-                                  className={`group relative bg-white border-2 rounded-xl p-4 hover:shadow-lg transition-all duration-200 ${
+                                  className={`group relative bg-white border-2 rounded-xl p-5 hover:shadow-xl transition-all duration-200 ${
                                     emploi.est_responsable 
                                       ? 'border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50' 
-                                      : 'border-gray-200 hover:border-green-300'
+                                      : 'border-gray-200 hover:border-green-400'
                                   }`}
                                 >
                                   {/* Badge responsable */}
                                   {emploi.est_responsable && (
-                                    <div className="absolute -top-2 -right-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md">
-                                      RESPONSABLE
+                                    <div className="absolute -top-3 -right-3 bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow-lg">
+                                      ⭐ RESPONSABLE
                                     </div>
                                   )}
 
-                                  <div className="flex items-center justify-between gap-3">
-                                    {/* Numéro de séance */}
-                                    <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-lg border border-gray-200 flex-shrink-0">
-                                      <span className="text-lg font-black text-gray-700">#{index + 1}</span>
-                                    </div>
-
-                                    {/* Date et heure */}
-                                    <div className="flex items-center gap-3 flex-1">
-                                      <div className={`w-10 h-10 ${
-                                        emploi.est_responsable 
-                                          ? 'bg-gradient-to-br from-orange-500 to-red-600' 
-                                          : 'bg-gradient-to-br from-green-500 to-emerald-600'
-                                      } rounded-lg flex items-center justify-center shadow-md flex-shrink-0`}>
-                                        <Calendar className="w-5 h-5 text-white" />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-gray-900">{formatDate(emploi.date)}</p>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                          <Clock className="w-3 h-3 text-gray-500" />
-                                          <span className="text-xs text-gray-600 font-semibold">{formatTime(emploi.h_debut)} - {formatTime(emploi.h_fin)}</span>
+                                  <div className="space-y-4">
+                                    {/* En-tête avec toutes les infos sur une ligne */}
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                      {/* Numéro et Date */}
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl border-2 border-gray-300 shadow-sm">
+                                          <span className="text-xl font-black text-gray-700">#{index + 1}</span>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-gray-500 font-semibold">Surveillance</p>
+                                          <p className="text-sm font-bold text-gray-900">{formatDate(emploi.date)}</p>
                                         </div>
                                       </div>
-                                    </div>
 
-                                    {/* Badges compacts */}
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="px-2 py-1 bg-cyan-100 text-cyan-800 rounded-md font-bold text-xs border border-cyan-200">
-                                        {emploi.session === 'P' ? 'Principale' : 'Rattrapage'}
-                                      </span>
-                                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-md font-bold text-xs border border-green-200">
-                                        {emploi.semestre.replace('SEMESTRE ', 'Semestre ')}
-                                      </span>
-                                      {emploi.salles && (
-                                        <div className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200">
-                                          <MapPin className="w-3 h-3" />
-                                          <span className="text-xs font-bold">{emploi.salles}</span>
+                                      {/* Horaire, Salles, Session et Semestre */}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {/* Horaire */}
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                                          <Clock className="w-4 h-4 text-blue-600" />
+                                          <span className="text-sm font-bold text-blue-900">{formatTime(emploi.h_debut)} - {formatTime(emploi.h_fin)}</span>
                                         </div>
-                                      )}
+
+                                        {/* Session */}
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-800 rounded-lg font-bold text-xs border-2 border-cyan-200 shadow-sm">
+                                          <span className="w-2 h-2 bg-cyan-600 rounded-full"></span>
+                                          {emploi.session === 'P' ? 'Session Principale' : 'Session Rattrapage'}
+                                        </span>
+
+                                        {/* Semestre */}
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 rounded-lg font-bold text-xs border-2 border-green-200 shadow-sm">
+                                          <span className="w-2 h-2 bg-green-600 rounded-full"></span>
+                                          {emploi.semestre.replace('SEMESTRE ', 'Semestre ')}
+                                        </span>
+
+                                        {/* Bouton Salles - en dernier avec indication cliquable */}
+                                        {emploi.salles && (
+                                          <button
+                                            onClick={() => setExpandedSalles(prev => ({ ...prev, [index]: !prev[index] }))}
+                                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 rounded-lg hover:from-purple-200 hover:to-indigo-200 transition-all border border-purple-300 shadow-sm hover:shadow-md cursor-pointer"
+                                            title={expandedSalles[index] ? "Masquer les salles" : "Afficher les salles"}
+                                          >
+                                            <MapPin className="w-4 h-4" />
+                                            <span className="text-xs font-semibold">
+                                              {expandedSalles[index] ? 'Masquer' : 'Voir Salles'}
+                                            </span>
+                                            <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedSalles[index] ? 'rotate-90' : ''}`} />
+                                          </button>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Bouton supprimer */}
+                                      <button
+                                        onClick={() => handleSupprimerSeance(emploi)}
+                                        disabled={supprimerSeanceMutation.isPending}
+                                        className="flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:bg-gray-200 disabled:text-gray-400 transition-all border-2 border-red-200 hover:border-red-300"
+                                        title="Retirer de cette séance"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                        <span className="text-xs font-semibold">Retirer</span>
+                                      </button>
                                     </div>
 
-                                    {/* Bouton supprimer */}
-                                    <button
-                                      onClick={() => handleSupprimerSeance(emploi)}
-                                      disabled={supprimerSeanceMutation.isPending}
-                                      className="flex items-center justify-center w-8 h-8 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:bg-gray-200 disabled:text-gray-400 transition-all border border-red-200 hover:border-red-300 group flex-shrink-0"
-                                      title="Retirer de cette séance"
-                                    >
-                                      <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                    </button>
+                                    {/* Affichage des salles (conditionnel) */}
+                                    {expandedSalles[index] && emploi.salles && (
+                                      <div className="flex items-center gap-3 p-3 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
+                                        <MapPin className="w-5 h-5 text-purple-600" />
+                                        <div>
+                                          <p className="text-xs text-purple-600 font-semibold">Salle(s)</p>
+                                          <p className="text-sm font-bold text-purple-900">{emploi.salles}</p>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               ))}

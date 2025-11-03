@@ -5,6 +5,7 @@ import {
   UserGroupIcon,
   AcademicCapIcon,
   CalendarDaysIcon,
+  ClockIcon,
   SparklesIcon,
   DocumentTextIcon,
   ArrowDownTrayIcon,
@@ -41,21 +42,31 @@ const navigation = [
   { 
     name: 'Planning', 
     icon: SparklesIcon, 
-    description: 'Génération & Consultation',
+    description: 'Générer et consulter',
     highlight: true,
     subItems: [
-      { name: 'Aide à la Décision', href: '/aide-decision', description: '🧮 Calculer quotas', icon: ChartBarIcon },
       { name: 'Génération', href: '/generation', description: 'Créer le planning', icon: SparklesIcon },
       { name: 'Consulter Planning', href: '/planning', description: 'Voir le planning', icon: DocumentTextIcon },
-      { name: 'Statistiques', href: '/statistiques', description: '📊 Résultats génération', icon: ChartBarIcon },
+      { name: 'Statistiques', href: '/statistiques', description: 'Voir les résultats de génération', icon: ChartBarIcon },
       { name: 'Export', href: '/export', description: 'Télécharger', icon: ArrowDownTrayIcon },
     ]
   },
   { 
     name: 'Configuration', 
-    href: '/config-grades', 
     icon: Cog6ToothIcon, 
-    description: 'Paramètres' 
+    description: 'Configurer les quotas',
+    highlight: true,
+    subItems: [
+      { name: 'Aide à la Décision', href: '/aide-decision', description: 'Calculer quotas', icon: ChartBarIcon },
+      { name: 'Quotas', href: '/config-grades', description: 'Configurer les quotas', icon: Cog6ToothIcon },
+    ]
+  },
+    { 
+    name: 'Absences (beta)', 
+    href: '/absences', 
+    icon: ClockIcon, 
+    description: 'Marquer présences/absences',
+    highlight: true
   },
 ];
 

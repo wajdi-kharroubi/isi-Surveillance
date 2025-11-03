@@ -148,16 +148,23 @@ export default function AideDecision() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Calculator className="w-8 h-8 text-purple-600" />
-          <h1 className="text-3xl font-bold text-gray-900">Aide à la Décision</h1>
+      <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-700 rounded-2xl shadow-2xl p-8 text-white">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+        <div className="relative flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center">
+              <Calculator className="w-10 h-10 text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold drop-shadow-lg">Aide à la Décision</h1>
+              <p className="text-purple-100 text-lg mt-1">
+                Calculez les quotas optimaux et analysez la faisabilité du planning avant la génération
+              </p>
+            </div>
+          </div>
         </div>
-        <p className="text-gray-600">
-          Calculez les quotas optimaux et analysez la faisabilité du planning avant la génération
-        </p>
       </div>
 
       {/* Paramètres de Configuration */}
@@ -310,7 +317,7 @@ export default function AideDecision() {
               <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
                 <div className="flex items-center gap-2 text-orange-600 mb-1">
                   <TrendingUp className="w-5 h-5" />
-                  <span className="font-bold text-sm">Besoins</span>
+                  <span className="font-bold text-sm">Besoins (heures)</span>
                 </div>
                 <p className="text-2xl font-black text-orange-900">{recommandations.statistiques_globales.total_surveillances_necessaires}</p>
               </div>
@@ -340,16 +347,23 @@ export default function AideDecision() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   <p className="text-sm text-gray-600 mb-1">Disponible</p>
-                  <p className="text-2xl font-bold text-green-600">{recommandations.faisabilite.total_surveillances_disponibles}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {recommandations.faisabilite.total_surveillances_disponibles} 
+                    <span className="text-sm text-gray-400 font-normal ml-1">heures</span>
+                  </p>
                 </div>
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   <p className="text-sm text-gray-600 mb-1">Nécessaire</p>
-                  <p className="text-2xl font-bold text-blue-600">{recommandations.statistiques_globales.total_surveillances_necessaires}</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {recommandations.statistiques_globales.total_surveillances_necessaires} 
+                    <span className="text-sm text-gray-400 font-normal ml-1">heures</span>
+                  </p>
                 </div>
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   <p className="text-sm text-gray-600 mb-1">Marge</p>
                   <p className={`text-2xl font-bold ${calculerMarge() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {calculerMarge() >= 0 ? '+' : ''}{calculerMarge()}
+                    {calculerMarge() >= 0 ? '+' : ''}{calculerMarge()} 
+                    <span className="text-sm text-gray-400 font-normal ml-1">heures</span>
                   </p>
                   <p className="text-xs text-gray-400">
                     Majoration: {pourcentageMajoration}%
@@ -425,26 +439,62 @@ export default function AideDecision() {
 
           {/* Créneaux de Non-Souhaits Autorisés */}
           <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">🗓️ Créneaux de Non-Souhaits Autorisés</h2>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Créneaux de Non-Souhaits Autorisés</h2>
+                <p className="text-sm text-gray-500">Nombre maximum de créneaux de non-surveillance par grade</p>
+              </div>
+            </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(recommandations.voeux_autorises).map(([gradeCode, info]) => (
-                <div key={gradeCode} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-gray-900">{gradeCode}</span>
-                    <span className="text-xs text-gray-500">{info.grade_nom}</span>
-                  </div>
-                  <div className="text-2xl font-black text-purple-600 mb-1">
-                    {info.nb_voeux_max_recommande} / {info.nb_total_seances}
-                  </div>
-                  <div className="text-sm text-gray-600 mb-2">
-                    {info.pourcentage_voeux_autorises}% autorisés
-                  </div>
-                  <div className="text-xs">
-                    {info.message}
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b-2 border-purple-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Grade</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Nom</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Autorisés</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Total</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Pourcentage</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Recommandation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(recommandations.voeux_autorises).map(([gradeCode, info], index) => (
+                    <tr 
+                      key={gradeCode} 
+                      className={`border-b border-gray-100 hover:bg-purple-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}
+                    >
+                      <td className="py-3 px-4">
+                        <span className="font-bold text-purple-900">{gradeCode}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-gray-700">{info.grade_nom}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="text-2xl font-black text-purple-600">
+                          {info.nb_voeux_max_recommande}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="text-lg font-semibold text-gray-500">
+                          {info.nb_total_seances}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="text-lg font-semibold text-purple-600">
+                          {info.pourcentage_voeux_autorises}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs text-gray-600">{info.message}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 

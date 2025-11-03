@@ -476,8 +476,10 @@ export default function Voeux() {
                 <td>
                   <span className="text-sm text-gray-700 font-medium">{voeu.jour}</span>
                 </td>
-                <td className="text-sm text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded inline-block">
-                  {getSeanceLabel(voeu.seance)}
+                <td>
+                  <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded inline-block">
+                    {getSeanceLabel(voeu.seance)}
+                  </div>
                 </td>
                 <td>
                   <span className="badge badge-secondary">{voeu.seance}</span>

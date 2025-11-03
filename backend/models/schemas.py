@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime, date, time
 
+
 # ============ Enseignant Schemas ============
 class EnseignantBase(BaseModel):
     nom: str = Field(..., min_length=1, max_length=100)
@@ -10,14 +11,22 @@ class EnseignantBase(BaseModel):
     grade: str = Field(..., min_length=1, max_length=50)
     grade_code: str = Field(..., min_length=1, max_length=10)
     code_smartex: str = Field(..., min_length=1, max_length=50)
-    abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant (ex: P.NOM)
+    abrv_ens: Optional[str] = Field(
+        None, max_length=50
+    )  # Abréviation de l'enseignant (ex: P.NOM)
     participe_surveillance: bool = True
-    nombre_max: int = Field(default=4, ge=0, le=10)  # Nombre max de séances par jour (0-10)
+    nombre_max: int = Field(
+        default=4, ge=0, le=10
+    )  # Nombre max de séances par jour (0-10)
     is_Exception: bool = False  # Si l'enseignant a un quota exceptionnel
-    quota_Exception: Optional[int] = Field(None, ge=0)  # Quota de surveillances exceptionnel
+    quota_Exception: Optional[int] = Field(
+        None, ge=0
+    )  # Quota de surveillances exceptionnel
+
 
 class EnseignantCreate(EnseignantBase):
     pass
+
 
 class EnseignantUpdate(BaseModel):
     nom: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -27,42 +36,63 @@ class EnseignantUpdate(BaseModel):
     grade_code: Optional[str] = Field(None, min_length=1, max_length=10)
     abrv_ens: Optional[str] = Field(None, max_length=50)  # Abréviation de l'enseignant
     participe_surveillance: Optional[bool] = None
-    nombre_max: Optional[int] = Field(None, ge=0, le=10)  # Nombre max de séances par jour
+    nombre_max: Optional[int] = Field(
+        None, ge=0, le=10
+    )  # Nombre max de séances par jour
     is_Exception: Optional[bool] = None  # Si l'enseignant a un quota exceptionnel
-    quota_Exception: Optional[int] = Field(None, ge=0)  # Quota de surveillances exceptionnel
+    quota_Exception: Optional[int] = Field(
+        None, ge=0
+    )  # Quota de surveillances exceptionnel
+
 
 class EnseignantExceptionUpdate(BaseModel):
     """Schéma pour mettre à jour le statut d'exception d'un enseignant"""
-    is_Exception: bool = Field(..., description="Définir si l'enseignant a un quota exceptionnel")
-    quota_Exception: int = Field(..., ge=0, description="Quota de surveillances exceptionnel (doit être >= 0)")
+
+    is_Exception: bool = Field(
+        ..., description="Définir si l'enseignant a un quota exceptionnel"
+    )
+    quota_Exception: int = Field(
+        ..., ge=0, description="Quota de surveillances exceptionnel (doit être >= 0)"
+    )
+
 
 class EnseignantResponse(EnseignantBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
+
 # ============ Voeu Schemas ============
 class VoeuBase(BaseModel):
-    jour: str = Field(..., pattern="^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi)$")  # Nom du jour
+    jour: str = Field(
+        ..., pattern="^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi)$"
+    )  # Nom du jour
     seance: str = Field(..., pattern="^(S1|S2|S3|S4)$")  # S1, S2, S3, S4
     semestre_code_libelle: str = Field(..., max_length=50)  # Semestre1 ou Semestre2
     session_libelle: str = Field(..., max_length=50)  # Partiel, Examen ou Rattrapage
     date_voeu: Optional[date] = None  # Date du vœu (optionnel)
 
+
 class VoeuCreate(VoeuBase):
     enseignant_id: int
-    code_smartex_ens: Optional[str] = Field(None, max_length=50)  # Optionnel lors de la création
+    code_smartex_ens: Optional[str] = Field(
+        None, max_length=50
+    )  # Optionnel lors de la création
+
 
 class VoeuUpdate(BaseModel):
-    jour: Optional[str] = Field(None, pattern="^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi)$")
+    jour: Optional[str] = Field(
+        None, pattern="^(Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi)$"
+    )
     seance: Optional[str] = Field(None, pattern="^(S1|S2|S3|S4)$")
     semestre_code_libelle: Optional[str] = Field(None, max_length=50)
     session_libelle: Optional[str] = Field(None, max_length=50)
     code_smartex_ens: Optional[str] = Field(None, max_length=50)
     date_voeu: Optional[date] = None
+
 
 class VoeuResponse(VoeuBase):
     id: int
@@ -71,9 +101,10 @@ class VoeuResponse(VoeuBase):
     enseignant_nom: Optional[str] = None  # Nom de l'enseignant
     enseignant_prenom: Optional[str] = None  # Prénom de l'enseignant
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
+
 
 # ============ Examen Schemas ============
 class ExamenBase(BaseModel):
@@ -86,8 +117,10 @@ class ExamenBase(BaseModel):
     enseignant: str = Field(..., max_length=50)  # code_smartex
     cod_salle: str = Field(..., max_length=50)
 
+
 class ExamenCreate(ExamenBase):
     pass
+
 
 class ExamenUpdate(BaseModel):
     dateExam: Optional[date] = None
@@ -99,13 +132,14 @@ class ExamenUpdate(BaseModel):
     enseignant: Optional[str] = Field(None, max_length=50)
     cod_salle: Optional[str] = Field(None, max_length=50)
 
+
 class ExamenResponse(ExamenBase):
     id: int
     created_at: datetime
     updated_at: datetime
     responsable_nom: Optional[str] = None  # Nom du responsable d'examen
     responsable_prenom: Optional[str] = None  # Prénom du responsable d'examen
-    
+
     class Config:
         from_attributes = True
 
@@ -115,8 +149,19 @@ class GenerationRequest(BaseModel):
     min_surveillants_par_salle: int = Field(default=2, ge=1)
     allow_single_surveillant: bool = True
     priorite_grade: bool = True
-    max_time_in_seconds: int = Field(default=600, ge=1, le=36000, description="Temps maximum de résolution en secondes (1s - 10h)")
-    relative_gap_limit: float = Field(default=0.05, ge=0.0, le=1.0, description="Gap relatif accepté pour arrêter l'optimisation (0.05 = 5%)")
+    max_time_in_seconds: int = Field(
+        default=600,
+        ge=1,
+        le=36000,
+        description="Temps maximum de résolution en secondes (1s - 10h)",
+    )
+    relative_gap_limit: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="Gap relatif accepté pour arrêter l'optimisation (0.05 = 5%)",
+    )
+
 
 class GenerationResponse(BaseModel):
     success: bool
@@ -124,6 +169,7 @@ class GenerationResponse(BaseModel):
     nb_affectations: int
     temps_generation: float
     warnings: List[str] = []
+
 
 # ============ Statistics Schemas ============
 class StatistiquesResponse(BaseModel):
@@ -135,6 +181,7 @@ class StatistiquesResponse(BaseModel):
     nb_voeux: int
     taux_couverture: float
 
+
 # ============ GradeConfig Schemas ============
 class GradeConfigBase(BaseModel):
     grade_code: str = Field(..., min_length=1, max_length=10)
@@ -143,8 +190,10 @@ class GradeConfigBase(BaseModel):
     nb_obligatoire: int = Field(default=0, ge=0, le=20)
     nb_max: Optional[int] = Field(default=None, ge=0, le=20)
 
+
 class GradeConfigCreate(GradeConfigBase):
     pass
+
 
 class GradeConfigUpdate(BaseModel):
     grade_nom: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -152,13 +201,15 @@ class GradeConfigUpdate(BaseModel):
     nb_obligatoire: Optional[int] = Field(None, ge=0, le=20)
     nb_max: Optional[int] = Field(None, ge=0, le=20)
 
+
 class GradeConfigResponse(GradeConfigBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
+
 
 # ============ Affectation Schemas ============
 class AjouterEnseignantSeanceRequest(BaseModel):
@@ -167,12 +218,14 @@ class AjouterEnseignantSeanceRequest(BaseModel):
     Le backend détermine automatiquement si l'enseignant doit être responsable
     en vérifiant s'il est déjà responsable dans un autre examen de cette séance.
     """
+
     enseignant_id: int = Field(..., description="ID de l'enseignant à ajouter")
     date_examen: date = Field(..., description="Date de la séance")
     h_debut: time = Field(..., description="Heure de début de la séance")
     h_fin: time = Field(..., description="Heure de fin de la séance")
     session: str = Field(..., description="Session (P=Principale, R=Rattrapage)")
     semestre: str = Field(..., description="Semestre (SEMESTRE 1 ou SEMESTRE 2)")
+
 
 class SupprimerEnseignantSeanceRequest(BaseModel):
     enseignant_id: int = Field(..., description="ID de l'enseignant à supprimer")
@@ -182,17 +235,76 @@ class SupprimerEnseignantSeanceRequest(BaseModel):
     session: str = Field(..., description="Session (P=Principale, R=Rattrapage)")
     semestre: str = Field(..., description="Semestre (SEMESTRE 1 ou SEMESTRE 2)")
 
+
 class AjouterEnseignantParDateHeureRequest(BaseModel):
     """
     Requête pour ajouter un enseignant à une séance en spécifiant uniquement la date et l'heure.
     Le backend recherchera automatiquement la séance correspondante.
     """
+
     enseignant_id: int = Field(..., description="ID de l'enseignant à ajouter")
     date_examen: date = Field(..., description="Date de la séance")
     h_debut: time = Field(..., description="Heure de début de la séance")
+
+
+class ExchangeEnseignantsRequest(BaseModel):
+    """
+    Requête pour échanger deux enseignants entre deux séances.
+    """
+
+    enseignant1_id: int = Field(..., description="ID du premier enseignant")
+    date1: date = Field(..., description="Date de la séance du premier enseignant")
+    h_debut1: time = Field(
+        ..., description="Heure de début de la séance du premier enseignant"
+    )
+    h_fin1: time = Field(
+        ..., description="Heure de fin de la séance du premier enseignant"
+    )
+    session1: str = Field(..., description="Session de la première séance")
+    semestre1: str = Field(..., description="Semestre de la première séance")
+
+    enseignant2_id: int = Field(..., description="ID du deuxième enseignant")
+    date2: date = Field(..., description="Date de la séance du deuxième enseignant")
+    h_debut2: time = Field(
+        ..., description="Heure de début de la séance du deuxième enseignant"
+    )
+    h_fin2: time = Field(
+        ..., description="Heure de fin de la séance du deuxième enseignant"
+    )
+    session2: str = Field(..., description="Session de la deuxième séance")
+    semestre2: str = Field(..., description="Semestre de la deuxième séance")
+
 
 class AffectationOperationResponse(BaseModel):
     success: bool
     message: str
     nb_affectations_modifiees: int
-    est_responsable: Optional[bool] = Field(None, description="Indique si l'enseignant a été marqué comme responsable")
+    est_responsable: Optional[bool] = Field(
+        None, description="Indique si l'enseignant a été marqué comme responsable"
+    )
+
+
+# ============ Presence / Absence Schemas ============
+class PresenceMarkRequest(BaseModel):
+    enseignant_id: int
+    date_exam: date
+    h_debut: time
+    h_fin: time
+    session: str
+    semestre: str
+    present: bool
+
+
+class PresenceResponse(BaseModel):
+    id: int
+    enseignant_id: int
+    date_exam: date
+    h_debut: time
+    h_fin: time
+    session: str
+    semestre: str
+    present: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

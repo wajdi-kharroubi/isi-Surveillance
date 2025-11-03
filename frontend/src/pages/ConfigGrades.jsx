@@ -16,6 +16,10 @@ import {
   ShieldAlert,
   Trash2,
 } from 'lucide-react';
+import {
+  MagnifyingGlassIcon,
+  FunnelIcon,
+} from '@heroicons/react/24/outline';
 
 export default function ConfigGrades() {
   const [activeTab, setActiveTab] = useState('grades'); // 'grades' ou 'exceptions'
@@ -402,51 +406,52 @@ export default function ConfigGrades() {
             </div>
 
             {/* Filtres */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-gray-200">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  🔍 Rechercher par nom
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nom ou prénom..."
-                  value={filterNom}
-                  onChange={(e) => setFilterNom(e.target.value)}
-                  className="input w-full"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  🎓 Filtrer par grade
-                </label>
-                <select
-                  value={filterGrade}
-                  onChange={(e) => setFilterGrade(e.target.value)}
-                  className="input w-full"
-                >
-                  <option value="">Tous les grades</option>
-                  {grades?.map(grade => (
-                    <option key={grade.grade_code} value={grade.grade_code}>
-                      {grade.grade_code} - {grade.grade_nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  ⚠️ Statut d'exception
-                </label>
-                <select
-                  value={filterException}
-                  onChange={(e) => setFilterException(e.target.value)}
-                  className="input w-full"
-                >
-                  <option value="all">Tous</option>
-                  <option value="with">Avec exception</option>
-                  <option value="without">Sans exception</option>
-                </select>
+            <div className="bg-gradient-to-r from-gray-50 to-orange-50 p-6 rounded-2xl border-2 border-gray-200 shadow-lg mb-6">
+              <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                <div className="flex-1 flex flex-wrap gap-3">
+                  {/* Search Filter */}
+                  <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+                    <MagnifyingGlassIcon className="w-5 h-5 text-orange-600" />
+                    <input
+                      type="text"
+                      placeholder="Rechercher par nom..."
+                      value={filterNom}
+                      onChange={(e) => setFilterNom(e.target.value)}
+                      className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Grade Filter */}
+                  <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+                    <FunnelIcon className="w-5 h-5 text-green-600" />
+                    <select
+                      value={filterGrade}
+                      onChange={(e) => setFilterGrade(e.target.value)}
+                      className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+                    >
+                      <option value="">Tous les grades</option>
+                      {grades?.map(grade => (
+                        <option key={grade.grade_code} value={grade.grade_code}>
+                          {grade.grade_code} - {grade.grade_nom}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Exception Filter */}
+                  <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border-2 border-gray-200 shadow-sm">
+                    <FunnelIcon className="w-5 h-5 text-red-600" />
+                    <select
+                      value={filterException}
+                      onChange={(e) => setFilterException(e.target.value)}
+                      className="border-none focus:ring-0 outline-none focus:outline-none font-semibold text-sm bg-transparent cursor-pointer"
+                    >
+                      <option value="all">Tous les enseignants</option>
+                      <option value="with">Avec exception</option>
+                      <option value="without">Sans exception</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
 
