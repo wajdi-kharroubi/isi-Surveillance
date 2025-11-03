@@ -200,7 +200,7 @@ export default function Dashboard() {
               <div className="w-px h-12 bg-white/20"></div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-white">
-                  {(stats?.nb_examens || 0) === 0 ? "-" : (stats?.nb_examens || 0)}
+                  {stats?.nb_examens || 0}
                 </div>
                 <div className="text-xs text-blue-100 uppercase tracking-wide">
                   Examens
