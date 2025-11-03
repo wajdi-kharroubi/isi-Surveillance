@@ -31,16 +31,16 @@ export default function AideDecision() {
   // Paramètres configurables
   const [parametres, setParametres] = useState({
     min_surveillants_par_salle: 2,
-    majoration_absences: 1.05,
+    majoration_absences: 1.20,
     quota_min_groupe1: 4,         // Quota minimal pour PR/MC/V
-    difference_min_pr_ma: 1,      // Différence PR/MC/V → MA
+    difference_min_pr_ma: 2,      // Différence PR/MC/V → MA
     difference_min_ma_as: 1,      // Différence MA → AS
     difference_min_as_ac: 1,      // Différence AS → AC/PES/PTC
     expert_quota: 3,
   });
 
   // Pourcentage de majoration (pour l'affichage)
-  const [pourcentageMajoration, setPourcentageMajoration] = useState(5); // 5%
+  const [pourcentageMajoration, setPourcentageMajoration] = useState(20); // 20%
 
   // Quotas modifiés manuellement
   const [quotasModifies, setQuotasModifies] = useState({});
@@ -362,7 +362,7 @@ export default function AideDecision() {
               <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
                 <div className="flex items-center gap-2 text-orange-600 mb-1">
                   <TrendingUp className="w-5 h-5" />
-                  <span className="font-bold text-sm">Besoins (heures)</span>
+                  <span className="font-bold text-sm">Besoins (surveillances)</span>
                 </div>
                 <p className="text-2xl font-black text-orange-900">{recommandations.statistiques_globales.total_surveillances_necessaires}</p>
               </div>
@@ -394,21 +394,21 @@ export default function AideDecision() {
                   <p className="text-sm text-gray-600 mb-1">Disponible</p>
                   <p className="text-2xl font-bold text-green-600">
                     {calculerTotalDisponible()} 
-                    <span className="text-sm text-gray-400 font-normal ml-1">heures</span>
+                    <span className="text-sm text-gray-400 font-normal ml-1">surveillances</span>
                   </p>
                 </div>
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   <p className="text-sm text-gray-600 mb-1">Nécessaire</p>
                   <p className="text-2xl font-bold text-blue-600">
                     {recommandations.statistiques_globales.total_surveillances_necessaires} 
-                    <span className="text-sm text-gray-400 font-normal ml-1">heures</span>
+                    <span className="text-sm text-gray-400 font-normal ml-1">surveillances</span>
                   </p>
                 </div>
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   <p className="text-sm text-gray-600 mb-1">Marge</p>
                   <p className={`text-2xl font-bold ${calculerMarge() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {calculerMarge() >= 0 ? '+' : ''}{calculerMarge()} 
-                    <span className="text-sm text-gray-400 font-normal ml-1">heures</span>
+                    <span className="text-sm text-gray-400 font-normal ml-1">surveillances</span>
                   </p>
                   <p className="text-xs text-gray-400">
                     Majoration: {pourcentageMajoration}%

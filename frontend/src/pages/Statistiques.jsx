@@ -651,14 +651,14 @@ function VueResponsables({ stats }) {
             <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
               <UserGroupIcon className="h-5 w-5 text-white" />
             </div>
-            Statistiques des responsables de salle
+            Statistiques des responsables d'examen
           </h3>
           <div className="text-right">
             <p className="text-sm text-gray-600 font-medium">Taux de présence</p>
             <p className="text-3xl font-bold text-green-600">{stats.taux_responsables_presents}%</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-gray-200">
             <p className="text-sm text-gray-600 font-medium">Examens</p>
             <p className="text-3xl font-bold text-gray-900">{stats.nb_responsables_total}</p>
@@ -675,10 +675,7 @@ function VueResponsables({ stats }) {
               <p className="text-xs text-gray-600">(Ne surveillant pas)</p>
             </div>
           </div>
-          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-blue-200">
-            <p className="text-sm text-blue-600 font-medium">Taux de présence</p>
-            <p className="text-3xl font-bold text-blue-600">{stats.taux_responsables_presents}%</p>
-          </div>
+
         </div>
       </div>
 

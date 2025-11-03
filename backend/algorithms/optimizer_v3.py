@@ -1933,7 +1933,6 @@ class SurveillanceOptimizerV3:
      
         
         # Résultats avec emoji et couleurs
-        self.infos.append("📈 RÉSULTATS:")
         self.infos.append(f"   ✅ Souhait respectés: {nb_voeux_respectes} ({pourcentage_respectes:.1f}%)")
         self.infos.append(f"   ⚠️ Souhait violés: {nb_voeux_violes} ({pourcentage_violes:.1f}%)")
         self.infos.append("")
@@ -2092,9 +2091,8 @@ class SurveillanceOptimizerV3:
         self.infos.append("")
         
         # Résultats avec emoji
-        self.infos.append("📈 RÉSULTATS (Responsables pouvant surveiller):")
         self.infos.append(f"   ✅ Responsables présents: {nb_responsables_presents} ({pourcentage_presents:.1f}%)")
-        self.infos.append(f"   ❌ Responsables absents: {nb_responsables_absents} ({pourcentage_absents_participants:.1f}%)")
+        self.infos.append(f"   ⚠️ Responsables absents: {nb_responsables_absents} ({pourcentage_absents_participants:.1f}%)")
         self.infos.append("")
         if nb_responsables_non_participants > 0:
             self.infos.append(f"ℹ️  Responsables exclus (participe_surveillance=False): {nb_responsables_non_participants}")
@@ -2141,53 +2139,6 @@ class SurveillanceOptimizerV3:
                     self.infos.append(
                         f"   {i:3d}. {groupe['enseignant']:35s} | Code: {groupe['code']:12s} | "
                         f"Date: {groupe['date']:10s} | Séance: {groupe['seance']:3s}"
-                    )
-            self.infos.append("")
-        
-        # Afficher les responsables non-participants séparément (information uniquement)
-        if nb_responsables_non_participants > 0:
-            self.infos.append("-" * 80)
-            self.infos.append(f"ℹ️  RESPONSABLES EXCLUS (participe_surveillance=False):")
-            self.infos.append("-" * 80)
-            self.infos.append("")
-            
-            # Grouper par enseignant, date et séance
-            groupes_np = {}
-            for detail in responsables_non_participants_details:
-                key = (detail['enseignant_id'], detail['date'], detail['seance'])
-                if key not in groupes_np:
-                    groupes_np[key] = {
-                        'enseignant': detail['enseignant'],
-                        'code': detail['code'],
-                        'date': detail['date'],
-                        'date_obj': detail['date_obj'],
-                        'seance': detail['seance'],
-                        'count': 0
-                    }
-                groupes_np[key]['count'] += 1
-            
-            # Nombre d'entrées uniques après regroupement
-            nb_groupes_non_participants = len(groupes_np)
-            
-            self.infos.append(f"   {nb_groupes_non_participants} enseignants exclus (ne peuvent pas surveiller)")
-            self.infos.append("")
-            
-            # Trier par date, séance, puis nom
-            groupes_np_tries = sorted(groupes_np.values(), key=lambda x: (x['date_obj'], x['seance'], x['enseignant']))
-            
-            for i, groupe in enumerate(groupes_np_tries, 1):
-                if groupe['count'] > 1:
-                    self.infos.append(
-                        f"   {i:3d}. {groupe['enseignant']:35s} | Code: {groupe['code']:12s} | "
-                        f"Date: {groupe['date']:10s} | Séance: {groupe['seance']:3s} | "
-                        f"({groupe['count']} examens)"
-                    )
-                else:
-                    self.infos.append(
-                        f"   {i:3d}. {groupe['enseignant']:35s} | Code: {groupe['code']:12s} | "
-                        f"Date: {groupe['date']:10s} | Séance: {groupe['seance']:3s}"
-                        f"({groupe['count']} examen)"
-
                     )
             self.infos.append("")
         
@@ -2335,7 +2286,6 @@ class SurveillanceOptimizerV3:
         self.infos.append("")
         
         # Résultats avec emoji
-        self.infos.append("📈 RÉSULTATS:")
         self.infos.append(f"   ✅ Contraintes respectées: {nb_contraintes_respectees} ({pourcentage_respectees:.1f}%)")
         self.infos.append(f"   ⚠️ Contraintes violées: {nb_contraintes_violees} ({pourcentage_violees:.1f}%)")
         self.infos.append("")
