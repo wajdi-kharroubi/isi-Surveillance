@@ -994,12 +994,12 @@ function VueGrades({ statsParGrade }) {
           bVal = statsB.quotaInitial;
           break;
         case 'quotaUtilise':
-          aVal = statsA.max;
-          bVal = statsB.max;
+          aVal = statsA.moyenne;
+          bVal = statsB.moyenne;
           break;
         case 'taux':
-          aVal = statsA.quotaInitial > 0 ? (statsA.max / statsA.quotaInitial) * 100 : 0;
-          bVal = statsB.quotaInitial > 0 ? (statsB.max / statsB.quotaInitial) * 100 : 0;
+          aVal = statsA.quotaInitial > 0 ? (statsA.moyenne / statsA.quotaInitial) * 100 : 0;
+          bVal = statsB.quotaInitial > 0 ? (statsB.moyenne / statsB.quotaInitial) * 100 : 0;
           break;
         default:
           return 0;
@@ -1062,9 +1062,9 @@ function VueGrades({ statsParGrade }) {
             <tbody className="bg-white divide-y divide-gray-200">
               {sortedGrades.map(([grade, stats]) => {
                 const quotaUtilisePourcentage = stats.quotaInitial > 0 
-                  ? ((stats.max / stats.quotaInitial) * 100).toFixed(1)
+                  ? ((stats.moyenne / stats.quotaInitial) * 100).toFixed(1)
                   : 0;
-                const estDansLimites = stats.max <= stats.quotaInitial;
+                const estDansLimites = stats.moyenne <= stats.quotaInitial;
                 
                 return (
                   <tr key={grade} className="hover:bg-indigo-50 transition-colors">
@@ -1075,12 +1075,12 @@ function VueGrades({ statsParGrade }) {
                       <div className="text-sm font-semibold text-gray-900">{stats.quotaInitial}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-indigo-600">{stats.max}</div>
+                      <div className="text-sm font-bold text-indigo-600">{stats.moyenne.toFixed(1)}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <div className="text-sm font-bold">
-                          {stats.max} / {stats.quotaInitial}
+                          {stats.moyenne.toFixed(1)} / {stats.quotaInitial}
                         </div>
                         <span className={`px-3 py-1 text-xs font-bold rounded-full ${
                           estDansLimites 
@@ -1180,7 +1180,10 @@ function BarreProgression({ label, valeur, total, pourcentage, couleur = 'blue' 
 function calculerStatsParGrade(charges) {
   const statsParGrade = {};
 
-  charges.forEach((charge) => {
+  // Filtrer uniquement les enseignants avec is_exception=false
+  const chargesNonException = charges.filter(charge => charge.is_exception === false);
+
+  chargesNonException.forEach((charge) => {
     const grade = charge.grade || 'Non défini';
     if (!statsParGrade[grade]) {
       statsParGrade[grade] = {

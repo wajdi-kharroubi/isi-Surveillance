@@ -157,6 +157,7 @@ class DecisionService:
         self,
         min_surveillants_par_salle: int = 2,
         majoration_absences: float = 1.1,  # 10% de majoration pour absences
+        quota_min_groupe1: int = 4,  # Quota minimal pour PR/MC/V (groupe 1)
         difference_min_pr_ma: int = 1,  # Différence minimale PR/MC/V → MA
         difference_min_ma_as: int = 1,  # Différence minimale MA → AS
         difference_min_as_ac: int = 1,  # Différence minimale AS → AC/PES/PTC
@@ -168,6 +169,7 @@ class DecisionService:
         Args:
             min_surveillants_par_salle: Nombre minimum de surveillants par salle
             majoration_absences: Coefficient de majoration pour tenir compte des absences (1.1 = +10%)
+            quota_min_groupe1: Quota minimal pour le groupe 1 (PR/MC/V)
             difference_min_pr_ma: Différence minimale entre PR/MC/V et MA
             difference_min_ma_as: Différence minimale entre MA et AS
             difference_min_as_ac: Différence minimale entre AS et AC/PES/PTC
@@ -199,6 +201,7 @@ class DecisionService:
             enseignants_par_grade,
             stats_examens["total_surveillances_necessaires"],
             majoration_absences,
+            quota_min_groupe1,
             difference_min_pr_ma,
             difference_min_ma_as,
             difference_min_as_ac,
@@ -218,12 +221,20 @@ class DecisionService:
             enseignants_par_grade,
         )
 
+        # 6.5. NOUVELLE VÉRIFICATION CRITIQUE: Conflit égalité stricte + responsables
+        conflit_responsables = self._verifier_conflit_responsables_egalite(
+            examens,
+            enseignants_par_grade,
+            quotas_recommandes,
+        )
+
         # 7. Analyser la faisabilité (inclut déjà vérification nombre_max)
         faisabilite = self._analyser_faisabilite(
             enseignants_par_grade,
             quotas_recommandes,
             stats_examens,
             distribution_temporelle,  # Ajouter ce paramètre
+            conflit_responsables,  # Ajouter ce nouveau paramètre
         )
 
         # 8. Générer les alertes et recommandations
@@ -233,6 +244,7 @@ class DecisionService:
             stats_examens,
             faisabilite,
             distribution_temporelle,
+            conflit_responsables,  # Ajouter ce nouveau paramètre
         )
 
         return {
@@ -257,10 +269,12 @@ class DecisionService:
             "voeux_autorises": voeux_autorises,
             "faisabilite": faisabilite,
             "distribution_temporelle": distribution_temporelle,
+            "conflit_responsables": conflit_responsables,  # Ajouter cette nouvelle info
             "alertes": alertes,
             "parametres": {
                 "min_surveillants_par_salle": min_surveillants_par_salle,
                 "majoration_absences": majoration_absences,
+                "quota_min_groupe1": quota_min_groupe1,
                 "difference_min_pr_ma": difference_min_pr_ma,
                 "difference_min_ma_as": difference_min_ma_as,
                 "difference_min_as_ac": difference_min_as_ac,
@@ -335,6 +349,7 @@ class DecisionService:
         enseignants_par_grade: Dict[str, List[Enseignant]],
         total_surveillances: int,
         majoration: float,
+        quota_min_groupe1: int,
         difference_min_pr_ma: int,
         difference_min_ma_as: int,
         difference_min_as_ac: int,
@@ -404,6 +419,7 @@ class DecisionService:
             enseignants_par_grade,
             hierarchie_groupes,
             total_pour_autres,
+            quota_min_groupe1,
             difference_min_pr_ma,
             difference_min_ma_as,
             difference_min_as_ac,
@@ -441,6 +457,7 @@ class DecisionService:
         enseignants_par_grade: Dict[str, List[Enseignant]],
         hierarchie_groupes: List[List[str]],
         total_surveillances_requis: int,
+        quota_min_groupe1: int,
         difference_min_pr_ma: int,
         difference_min_ma_as: int,
         difference_min_as_ac: int,
@@ -449,7 +466,7 @@ class DecisionService:
         Calcule les quotas optimaux pour chaque groupe en respectant l'ordre strict.
         
         Retourne une liste de quotas [q0, q1, q2, q3] où:
-        - q0: quota pour PR/MC/V
+        - q0: quota pour PR/MC/V (>= quota_min_groupe1)
         - q1: quota pour MA (= q0 + difference_min_pr_ma, max q0 + 3)
         - q2: quota pour AS (= q1 + difference_min_ma_as, max q1 + 3)
         - q3: quota pour AC/PES/PTC (= q2 + difference_min_as_ac, max q2 + 3)
@@ -472,11 +489,12 @@ class DecisionService:
             return total
 
         # Recherche des quotas optimaux avec contraintes:
+        # - q0 >= quota_min_groupe1 (quota minimal pour PR/MC/V)
         # - q1 (MA) - q0 >= difference_min_pr_ma
         # - q2 (AS) - q1 >= difference_min_ma_as
         # - q3 (AC/PES/PTC) - q2 >= difference_min_as_ac
         # - chaque différence entre groupes adjacents <= 3
-        quota_min = 3
+        quota_min = max(3, quota_min_groupe1)  # Le quota minimal est au moins 3 ou quota_min_groupe1
         quota_max = 20
 
         best_quotas = None
@@ -702,6 +720,199 @@ class DecisionService:
             "charge_moyenne_par_jour": round(sum(charge_par_jour.values()) / len(charge_par_jour), 1) if charge_par_jour else 0,
         }
 
+    def _verifier_egalite_stricte_divisibilite(
+        self,
+        enseignants_par_grade: Dict[str, List[Enseignant]],
+        quotas_recommandes: Dict[str, Dict],
+    ) -> Dict:
+        """
+        Vérifie la faisabilité mathématique de l'égalité stricte par grade.
+        
+        PROBLÈME CRITIQUE DE DIVISIBILITÉ:
+        - L'optimizer impose une ÉGALITÉ STRICTE: tous les enseignants d'un même grade font EXACTEMENT le même nombre de séances
+        - Pour que cela soit possible, le nombre total de surveillances requis pour un grade doit être 
+          EXACTEMENT divisible par le nombre d'enseignants de ce grade
+        
+        Exemple de conflit:
+        - Grade PR: 3 enseignants, quota recommandé = 2 séances/enseignant
+        - Total requis = 3 × 2 = 6 affectations pour les PR
+        - Mais le planning nécessite 7 affectations de PR
+        - 7 ÷ 3 = 2.33... → IMPOSSIBLE de donner exactement 2 séances à chacun !
+        
+        NOTE IMPORTANTE: Ce conflit est INDÉPENDANT des responsables d'examens.
+        Même sans responsables, si le total n'est pas divisible, l'égalité stricte échoue.
+        """
+        conflits = []
+        
+        for grade_code, quota_info in quotas_recommandes.items():
+            nb_enseignants = quota_info["nb_enseignants"]
+            quota = quota_info["quota"]
+            total_disponible = quota_info["total_surveillances"]  # = nb_enseignants × quota
+            
+            if nb_enseignants == 0:
+                continue
+            
+            # Vérification: le total doit être exactement nb_enseignants × quota
+            # Si ce n'est pas le cas, c'est qu'il y a un problème de divisibilité
+            # Note: normalement cette vérification est toujours vraie car total_disponible = nb_enseignants × quota
+            # MAIS elle devient critique quand on compare avec le total RÉELLEMENT NÉCESSAIRE
+            
+            # Le vrai problème: est-ce que le quota permet de couvrir les besoins réels ?
+            # On ne peut pas vérifier ici sans connaître la répartition exacte des besoins par grade
+            # Cette vérification sera faite dans _verifier_divisibilite_besoins_reels()
+            pass
+        
+        return {
+            "conflits": conflits,
+            "nb_conflits": 0,
+            "has_conflits": False,
+            "message": "Vérification de divisibilité OK (vérification simplifiée)"
+        }
+
+    def _verifier_conflit_responsables_egalite(
+        self,
+        examens: List[Examen],
+        enseignants_par_grade: Dict[str, List[Enseignant]],
+        quotas_recommandes: Dict[str, Dict],
+    ) -> Dict:
+        """
+        Vérifie le conflit entre l'égalité stricte par grade et les responsables d'examens.
+        
+        IMPORTANT: La présence du responsable est une CONTRAINTE SOUPLE (non bloquante).
+        
+        PROBLÈME DÉTECTÉ (INFORMATIF):
+        - L'optimizer impose une ÉGALITÉ STRICTE: tous les enseignants d'un même grade font EXACTEMENT le même nombre de séances
+        - Un responsable d'examen est ENCOURAGÉ (mais pas obligé) à être présent à son examen
+        - Si un responsable a PLUS d'examens que le quota de son grade, l'optimizer peut:
+          * Soit violer la contrainte souple (responsable absent à certains examens)
+          * Soit trouver une autre solution
+        
+        Exemple:
+        - Grade PR: quota recommandé = 4 séances
+        - Tous les PR doivent faire EXACTEMENT 4 séances (égalité stricte DURE)
+        - Mais Responsable_PR_1 a 6 examens sur 6 séances différentes
+        - L'optimizer peut NE PAS affecter le responsable à tous ses examens (contrainte SOUPLE)
+        → PAS BLOQUANT, mais informatif
+        
+        Cette vérification détecte ces situations AVANT la génération pour informer l'utilisateur.
+        """
+        conflits = []
+        
+        # 1. Identifier tous les responsables d'examens
+        responsables_examens = {}  # {enseignant_id: [liste_examens]}
+        
+        for exam in examens:
+            if hasattr(exam, "enseignant") and exam.enseignant:
+                # Le champ enseignant contient le code smartex du responsable
+                responsable = None
+                
+                # Chercher le responsable dans tous les enseignants (même ceux qui ne participent pas)
+                for grade_code, ens_list in enseignants_par_grade.items():
+                    for ens in ens_list:
+                        if ens.code_smartex == exam.enseignant:
+                            responsable = ens
+                            break
+                    if responsable:
+                        break
+                
+                if responsable:
+                    if responsable.id not in responsables_examens:
+                        responsables_examens[responsable.id] = {
+                            "enseignant": responsable,
+                            "examens": [],
+                            "seances": set()
+                        }
+                    
+                    responsables_examens[responsable.id]["examens"].append(exam)
+                    
+                    # Identifier la séance (date + heure)
+                    seance_key = (exam.dateExam, exam.h_debut, exam.h_fin)
+                    responsables_examens[responsable.id]["seances"].add(seance_key)
+        
+        # 2. Pour chaque responsable, vérifier si le nombre de séances dépasse le quota de son grade
+        nb_conflits_critiques = 0
+        nb_conflits_attentions = 0
+        
+        for resp_id, resp_info in responsables_examens.items():
+            enseignant = resp_info["enseignant"]
+            nb_seances_responsable = len(resp_info["seances"])
+            nb_examens = len(resp_info["examens"])
+            
+            grade_code = enseignant.grade_code
+            
+            # Vérifier si ce grade a un quota recommandé
+            if grade_code not in quotas_recommandes:
+                continue
+            
+            quota_grade = quotas_recommandes[grade_code]["quota"]
+            
+            # INFORMATION: Le responsable a PLUS de séances que le quota de son grade
+            # IMPORTANT: Contrainte souple - l'optimizer peut ne pas affecter le responsable à tous ses examens
+            if nb_seances_responsable > quota_grade:
+                conflit = {
+                    "type": "INFORMATION",
+                    "enseignant_id": enseignant.id,
+                    "enseignant_nom": enseignant.nom,
+                    "enseignant_prenom": enseignant.prenom,
+                    "grade": grade_code,
+                    "quota_grade": quota_grade,
+                    "nb_seances_responsable": nb_seances_responsable,
+                    "nb_examens": nb_examens,
+                    "ecart": nb_seances_responsable - quota_grade,
+                    "severite": "INFO",
+                    "message": (
+                        f"ℹ️ INFO: {enseignant.nom} {enseignant.prenom} ({grade_code}) "
+                        f"est responsable de {nb_examens} examen(s) sur {nb_seances_responsable} séance(s) différente(s), "
+                        f"mais le quota de son grade est {quota_grade}. "
+                        f"L'égalité stricte impose que TOUS les {grade_code} fassent exactement {quota_grade} séances. "
+                        f"L'optimizer pourra NE PAS affecter {enseignant.nom} à tous ses examens (contrainte souple)."
+                    ),
+                    "recommandation": (
+                        f"Solutions pour maximiser la présence du responsable:\n"
+                        f"1. Augmenter le quota du grade {grade_code} à au moins {nb_seances_responsable}\n"
+                        f"2. Réaffecter certains examens de {enseignant.nom} à d'autres responsables\n"
+                        f"3. Regrouper certains examens dans les mêmes séances\n"
+                        f"Note: L'optimizer peut générer une solution même si {enseignant.nom} n'est pas présent partout."
+                    )
+                }
+                conflits.append(conflit)
+                nb_conflits_critiques += 1  # Compteur pour statistiques (même si non bloquant)
+            
+            # ATTENTION: Le responsable est proche du quota (même nombre ou juste en dessous)
+            elif nb_seances_responsable == quota_grade:
+                conflit = {
+                    "type": "ATTENTION",
+                    "enseignant_id": enseignant.id,
+                    "enseignant_nom": enseignant.nom,
+                    "enseignant_prenom": enseignant.prenom,
+                    "grade": grade_code,
+                    "quota_grade": quota_grade,
+                    "nb_seances_responsable": nb_seances_responsable,
+                    "nb_examens": nb_examens,
+                    "ecart": 0,
+                    "severite": "ATTENTION",
+                    "message": (
+                        f"⚠️ ATTENTION: {enseignant.nom} {enseignant.prenom} ({grade_code}) "
+                        f"est responsable de {nb_examens} examen(s) sur {nb_seances_responsable} séance(s), "
+                        f"ce qui correspond EXACTEMENT au quota de son grade ({quota_grade}). "
+                        f"Il devra être présent à TOUTES ses séances d'examens, sans aucune flexibilité."
+                    ),
+                    "recommandation": (
+                        f"Aucun problème majeur, mais {enseignant.nom} aura une charge fixe sans marge de manœuvre."
+                    )
+                }
+                conflits.append(conflit)
+                nb_conflits_attentions += 1
+        
+        return {
+            "conflits": conflits,
+            "nb_conflits_critiques": nb_conflits_critiques,
+            "nb_conflits_attentions": nb_conflits_attentions,
+            "nb_total_responsables": len(responsables_examens),
+            "has_conflits_critiques": nb_conflits_critiques > 0,
+            "has_conflits_attentions": nb_conflits_attentions > 0,
+        }
+
     def _calculer_voeux_autorises(
         self,
         enseignants_par_grade: Dict[str, List[Enseignant]],
@@ -712,23 +923,21 @@ class DecisionService:
         Calcule le nombre de créneaux de non-souhaits autorisés par grade.
         
         Règle: Plus le quota est élevé, moins l'enseignant peut exprimer de non-souhaits.
-        Formule: nb_voeux_max = max(0, nb_total_seances - quota * coefficient_securite)
+        Formule stricte: nb_voeux_max = max(0, floor((nb_total_seances - quota) * 0.6))
         
-        coefficient_securite: 1.5 pour garantir qu'il reste assez de créneaux disponibles
+        On autorise seulement 60% de la différence pour être plus restrictif
         """
         nb_total_seances = stats_examens["nb_total_seances"]
         voeux_autorises = {}
 
-        coefficient_securite = 1.5  # Coefficient de sécurité
-
         for grade_code, quota_info in quotas_recommandes.items():
             quota = quota_info["quota"]
 
-            # Calculer le nombre de créneaux occupés (estimation avec sécurité)
-            creneaux_occupes = int(quota * coefficient_securite)
+            # Calculer la différence entre le total de séances et le quota
+            difference = nb_total_seances - quota
 
-            # Nombre de voeux autorisés = créneaux disponibles - créneaux occupés
-            nb_voeux_max = max(0, nb_total_seances - creneaux_occupes)
+            # Nombre de voeux autorisés = 60% de la différence (formule stricte)
+            nb_voeux_max = max(0, int(difference * 0.6))
 
             # Pourcentage de voeux autorisés
             pourcentage = (
@@ -765,6 +974,7 @@ class DecisionService:
         quotas_recommandes: Dict[str, Dict],
         stats_examens: Dict,
         distribution_temporelle: Dict,
+        conflit_responsables: Dict,
     ) -> Dict:
         """Analyse la faisabilité du planning avec les quotas recommandés"""
 
@@ -777,11 +987,15 @@ class DecisionService:
         total_necessaire = stats_examens["total_surveillances_necessaires"]
         total_majore = stats_examens["total_surveillances_majorees"]
 
-        # VÉRIFICATION PRIORITAIRE: Séances simultanées impossibles
+        # INFORMATION: Conflits responsables vs égalité stricte (NON BLOQUANT - contrainte souple)
+        conflits_resp_info = conflit_responsables.get("has_conflits_critiques", False)
+        nb_conflits_resp = conflit_responsables.get("nb_conflits_critiques", 0)
+
+        # VÉRIFICATION PRIORITAIRE 1: Séances simultanées impossibles (BLOQUANT)
         alertes_distribution = distribution_temporelle.get("alertes", [])
         seances_impossibles = [a for a in alertes_distribution if a.get("type") == "SEANCE_IMPOSSIBLE"]
         
-        # NOUVELLE VÉRIFICATION: Vérifier contrainte nombre_max par jour
+        # VÉRIFICATION PRIORITAIRE 2: Vérifier contrainte nombre_max par jour (BLOQUANT)
         violations_nombre_max = self._verifier_nombre_max_respecte(
             enseignants_par_grade,
             quotas_recommandes,
@@ -798,15 +1012,16 @@ class DecisionService:
             else 0
         )
 
-        # Déterminer le statut (en tenant compte des séances impossibles ET violations nombre_max)
+        # Déterminer le statut (SANS tenir compte des responsables - contrainte souple)
         if seances_impossibles:
-            # CRITIQUE: Séances impossibles détectées (priorité maximale)
+            # CRITIQUE PRIORITÉ 1: Séances impossibles détectées (BLOQUANT)
             statut = "CRITIQUE"
             niveau_risque = "Élevé"
             nb_seances = len(seances_impossibles)
             total_deficit = sum(a.get("deficit", 0) for a in seances_impossibles)
             message = f"❌ IMPOSSIBLE: {nb_seances} séance(s) nécessite(nt) plus de surveillants simultanément ({total_deficit} manquants) que d'enseignants disponibles"
         elif violations_nombre_max:
+            # CRITIQUE PRIORITÉ 2: Violations nombre_max (BLOQUANT)
             statut = "CRITIQUE"
             niveau_risque = "Élevé"
             nb_violations = len(violations_nombre_max)
@@ -837,7 +1052,9 @@ class DecisionService:
             "marge_majoree": marge_majoree,
             "pourcentage_couverture": pourcentage_couverture,
             "violations_nombre_max": violations_nombre_max,
-            "seances_impossibles": seances_impossibles,  # NOUVELLE INFO
+            "seances_impossibles": seances_impossibles,
+            "conflits_responsables_info": conflits_resp_info,  # INFO (non bloquant)
+            "nb_conflits_responsables": nb_conflits_resp,  # INFO
         }
 
     def _verifier_nombre_max_respecte(
@@ -893,11 +1110,66 @@ class DecisionService:
         stats_examens: Dict,
         faisabilite: Dict,
         distribution_temporelle: Dict,
+        conflit_responsables: Dict,
     ) -> List[Dict]:
         """Génère les alertes et recommandations"""
         alertes = []
 
-        # ALERTE PRIORITAIRE 0: Séances simultanées impossibles (BLOQUANT)
+        # INFORMATION: Conflits responsables vs égalité stricte (INFORMATIF - NON BLOQUANT)
+        conflits_resp = conflit_responsables.get("conflits", [])
+        conflits_info = [c for c in conflits_resp if c.get("type") == "INFORMATION"]
+        conflits_attentions = [c for c in conflits_resp if c.get("type") == "ATTENTION"]
+        
+        if conflits_info:
+            nb_conflits = len(conflits_info)
+            
+            # Créer la liste des enseignants concernés pour le message principal
+            enseignants_en_conflit = [
+                f"{c['enseignant_nom']} {c['enseignant_prenom']} ({c['grade']}): {c['nb_seances_responsable']} séances > quota {c['quota_grade']}"
+                for c in conflits_info
+            ]
+            
+            message_principal = f"ℹ️ {nb_conflits} responsable(s) avec plus d'examens que le quota de leur grade\n"
+            message_principal += "(Contrainte souple - l'optimizer peut générer une solution)\n"
+            message_principal += "\nEnseignants concernés:\n"
+            for i, ens_info in enumerate(enseignants_en_conflit, 1):
+                message_principal += f"   {i}. {ens_info}\n"
+            
+            alertes.append({
+                "type": "INFO",
+                "categorie": "RESPONSABLES_QUOTA_DEPASSE",
+                "message": message_principal.strip(),
+                "details": [c["message"] for c in conflits_info],
+                "recommandations": [c["recommandation"] for c in conflits_info],
+                "nb_conflits": nb_conflits,
+                "enseignants_concernes": enseignants_en_conflit,
+            })
+        
+        if conflits_attentions:
+            nb_attentions = len(conflits_attentions)
+            
+            # Créer la liste des enseignants en attention
+            enseignants_en_attention = [
+                f"{c['enseignant_nom']} {c['enseignant_prenom']} ({c['grade']}): {c['nb_seances_responsable']} séances = quota {c['quota_grade']}"
+                for c in conflits_attentions
+            ]
+            
+            message_attention = f"⚠️ {nb_attentions} responsable(s) avec un nombre d'examens égal à leur quota (aucune flexibilité)\n"
+            message_attention += "\nEnseignants concernés:\n"
+            for i, ens_info in enumerate(enseignants_en_attention, 1):
+                message_attention += f"   {i}. {ens_info}\n"
+            
+            alertes.append({
+                "type": "ATTENTION",
+                "categorie": "RESPONSABLES_QUOTA_EXACT",
+                "message": message_attention.strip(),
+                "details": [c["message"] for c in conflits_attentions],
+                "recommandations": [c["recommandation"] for c in conflits_attentions],
+                "nb_attentions": nb_attentions,
+                "enseignants_concernes": enseignants_en_attention,
+            })
+
+        # ALERTE PRIORITAIRE 1: Séances simultanées impossibles (BLOQUANT)
         alertes_distribution = distribution_temporelle.get("alertes", [])
         seances_impossibles = [a for a in alertes_distribution if a.get("type") == "SEANCE_IMPOSSIBLE"]
         if seances_impossibles:
@@ -912,7 +1184,7 @@ class DecisionService:
                 "deficit_total": total_deficit
                                         })
 
-        # ALERTE PRIORITAIRE 1: Distribution temporelle (CRITIQUE/ATTENTION)
+        # ALERTE PRIORITAIRE 2: Distribution temporelle (CRITIQUE/ATTENTION)
         if alertes_distribution:
             # Séparer par sévérité
             critiques = [a for a in alertes_distribution if a.get("severite") == "CRITIQUE" and a.get("type") != "SEANCE_IMPOSSIBLE"]

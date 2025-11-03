@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import GenerationRequest, GenerationResponse
-from models.models import Affectation, Examen, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from models.models import Affectation, Examen, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour, Presence
 from algorithms.optimizer_v3 import SurveillanceOptimizerV3
 from datetime import datetime
 import logging
@@ -59,8 +59,10 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
             db.query(DepassementMaxJour).delete()
             # Puis la table parent
             db.query(GenerationStatistique).delete()
+            # Vider également la table Presence
+            db.query(Presence).delete()
             db.commit()
-            logger.info("Anciennes statistiques de génération supprimées")
+            logger.info("Anciennes statistiques de génération et présences supprimées")
         except Exception as e:
             logger.warning(f"Erreur lors de la suppression des anciennes statistiques: {str(e)}")
             db.rollback()
@@ -232,7 +234,9 @@ def reinitialiser_planning(db: Session = Depends(get_db)):
             db.query(ResponsableAbsent).delete()
             db.query(DepassementMaxJour).delete()
             db.query(GenerationStatistique).delete()
-            logger.info("Statistiques de génération supprimées")
+            # Vider également la table Presence
+            db.query(Presence).delete()
+            logger.info("Statistiques de génération et présences supprimées")
         except Exception as e:
             logger.warning(f"Erreur lors de la suppression des statistiques: {str(e)}")
         
@@ -242,7 +246,7 @@ def reinitialiser_planning(db: Session = Depends(get_db)):
 
         return {
             "success": True,
-            "message": f"{count} affectations supprimées et statistiques vidées",
+            "message": f"{count} affectations supprimées, statistiques et présences vidées",
             "nb_supprimes": count,
         }
 

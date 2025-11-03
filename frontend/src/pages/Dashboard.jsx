@@ -209,10 +209,10 @@ export default function Dashboard() {
               <div className="w-px h-12 bg-white/20"></div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-white">
-                  {generationStats?.nb_affectations || stats?.nb_affectations || 0}
+                  {stats?.nb_voeux || 0}
                 </div>
                 <div className="text-xs text-blue-100 uppercase tracking-wide">
-                  Surveillances
+                  Souhaits
                 </div>
               </div>
             </div>

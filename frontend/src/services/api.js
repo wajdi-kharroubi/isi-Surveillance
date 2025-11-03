@@ -149,6 +149,8 @@ export const planningAPI = {
   supprimerEnseignantSeance: (data) => api.delete('/planning/supprimer-enseignant-seance', { data }),
   ajouterEnseignantSeance: (data) => api.post('/planning/ajouter-enseignant-seance', data),
   ajouterEnseignantParDateHeure: (data) => api.post('/planning/ajouter-enseignant-par-date-heure', data),
+  verifierContraintesAjout: (data) => api.post('/planning/verifier-contraintes-ajout', data),
+  verifierContraintesEchange: (data) => api.post('/planning/verifier-contraintes-echange', data),
   exchangeEnseignants: (data) => api.post('/planning/exchange-enseignants', data),
 };
 

@@ -155,7 +155,7 @@ export default function Voeux() {
     
     // Filter by jour
     if (filterJour !== 'all') {
-      filtered = filtered.filter(v => v.jour === parseInt(filterJour));
+      filtered = filtered.filter(v => v.jour === filterJour);
     }
     
     // Sort

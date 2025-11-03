@@ -32,6 +32,7 @@ export default function AideDecision() {
   const [parametres, setParametres] = useState({
     min_surveillants_par_salle: 2,
     majoration_absences: 1.05,
+    quota_min_groupe1: 4,         // Quota minimal pour PR/MC/V
     difference_min_pr_ma: 1,      // Différence PR/MC/V → MA
     difference_min_ma_as: 1,      // Différence MA → AS
     difference_min_as_ac: 1,      // Différence AS → AC/PES/PTC
@@ -94,6 +95,35 @@ export default function AideDecision() {
     const totalDisponible = calculerTotalDisponible();
     const totalNecessaire = recommandations.statistiques_globales.total_surveillances_necessaires;
     return totalDisponible - totalNecessaire;
+  };
+
+  // Calculer les créneaux de non-souhaits autorisés avec les quotas ajustés
+  const calculerVoeuxAutorises = (gradeCode, infoOriginal) => {
+    if (!recommandations?.quotas_recommandes) return infoOriginal;
+    
+    const quotaActuel = quotasModifies[gradeCode] !== undefined 
+      ? quotasModifies[gradeCode] 
+      : infoOriginal.quota_actuel || recommandations.quotas_recommandes[gradeCode]?.quota || 0;
+    
+    const nbTotalSeances = infoOriginal.nb_total_seances;
+    
+    // Recalculer le nombre de voeux autorisés avec une formule plus stricte
+    // Formule stricte : max(0, floor((nb_total_seances - quota_actuel) * 0.6))
+    // On autorise seulement 60% de la différence pour être plus restrictif
+    const difference = nbTotalSeances - quotaActuel;
+    const nbVoeuxMaxRecommande = Math.max(0, Math.floor(difference * 0.6));
+    
+    // Recalculer le pourcentage
+    const pourcentageVoeuxAutorises = nbTotalSeances > 0 
+      ? ((nbVoeuxMaxRecommande / nbTotalSeances) * 100).toFixed(1)
+      : 0;
+    
+    return {
+      ...infoOriginal,
+      nb_voeux_max_recommande: nbVoeuxMaxRecommande,
+      pourcentage_voeux_autorises: pourcentageVoeuxAutorises,
+      quota_actuel: quotaActuel
+    };
   };
 
   // Fonction pour appliquer les quotas
@@ -211,6 +241,21 @@ export default function AideDecision() {
               />
               <span className="absolute right-3 top-2.5 text-gray-500 font-medium">%</span>
             </div>
+          </div>
+
+          {/* Quota minimal pour PR/MC/V */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Quota minimal pour PR/MC/V
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={parametres.quota_min_groupe1}
+              onChange={(e) => setParametres({ ...parametres, quota_min_groupe1: parseInt(e.target.value) })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+            />
           </div>
 
           {/* Différence PR/MC/V → MA */}
@@ -348,7 +393,7 @@ export default function AideDecision() {
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   <p className="text-sm text-gray-600 mb-1">Disponible</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {recommandations.faisabilite.total_surveillances_disponibles} 
+                    {calculerTotalDisponible()} 
                     <span className="text-sm text-gray-400 font-normal ml-1">heures</span>
                   </p>
                 </div>
@@ -462,37 +507,41 @@ export default function AideDecision() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(recommandations.voeux_autorises).map(([gradeCode, info], index) => (
-                    <tr 
-                      key={gradeCode} 
-                      className={`border-b border-gray-100 hover:bg-purple-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}
-                    >
-                      <td className="py-3 px-4">
-                        <span className="font-bold text-purple-900">{gradeCode}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-gray-700">{info.grade_nom}</span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-2xl font-black text-purple-600">
-                          {info.nb_voeux_max_recommande}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-lg font-semibold text-gray-500">
-                          {info.nb_total_seances}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-lg font-semibold text-purple-600">
-                          {info.pourcentage_voeux_autorises}%
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-xs text-gray-600">{info.message}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {Object.entries(recommandations.voeux_autorises).map(([gradeCode, info], index) => {
+                    const infoAjustee = calculerVoeuxAutorises(gradeCode, info);
+                    
+                    return (
+                      <tr 
+                        key={gradeCode} 
+                        className={`border-b border-gray-100 hover:bg-purple-50 transition-colors ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}
+                      >
+                        <td className="py-3 px-4">
+                          <span className="font-bold text-purple-900">{gradeCode}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-gray-700">{infoAjustee.grade_nom}</span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-2xl font-black text-purple-600">
+                            {infoAjustee.nb_voeux_max_recommande}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-lg font-semibold text-gray-500">
+                            {infoAjustee.nb_total_seances}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-lg font-semibold text-purple-600">
+                            {infoAjustee.pourcentage_voeux_autorises}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-xs text-gray-600">{infoAjustee.message}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

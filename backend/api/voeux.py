@@ -6,7 +6,7 @@ from models import (
     VoeuResponse,
     Voeu, Affectation
 )
-from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from models.models import GenerationStatistique, Presence, SouhaitViole, ResponsableAbsent, DepassementMaxJour
 import logging
 
 router = APIRouter(prefix="/voeux", tags=["Voeux"])
@@ -20,8 +20,9 @@ def vider_statistiques_generation(db: Session):
         db.query(ResponsableAbsent).delete()
         db.query(DepassementMaxJour).delete()
         db.query(GenerationStatistique).delete()
+        db.query(Presence).delete()
         db.commit()
-        logger.info("Statistiques de génération vidées")
+        logger.info("Statistiques de génération et présences vidées")
     except Exception as e:
         logger.warning(f"Erreur lors de la suppression des statistiques: {str(e)}")
         db.rollback()

@@ -23,8 +23,11 @@ class SurveillanceOptimizerV3:
       alors la séance nécessite 10 enseignants (5 × 2)
 
     RÈGLES DE BASE (Contraintes fortes - HARD - OBLIGATOIRES):
-    1. ÉGALITÉ STRICTE par grade (tous les enseignants d'un même grade font EXACTEMENT le même nombre de séances)
+    1. ÉGALITÉ STRICTE par grade (tous les enseignants NORMAUX d'un même grade font EXACTEMENT le même nombre de séances)
+       - Les enseignants avec is_Exception=True ne sont PAS soumis à cette contrainte d'égalité
     2. Quota maximum strict par grade (pas de dépassement autorisé)
+       - Les enseignants NORMAUX suivent le quota de leur grade
+       - Les enseignants avec is_Exception=True suivent leur quota_Exception personnel
     3. Nombre d'enseignants par séance:
        - Mode normal: EXACTEMENT nb_examens × min_surveillants_par_examen
        - Mode adaptatif (si min_surveillants_par_examen > 2): 
@@ -182,7 +185,7 @@ class SurveillanceOptimizerV3:
         )
 
         # CONTRAINTE 2: Nombre d'enseignants par séance (PRIORITÉ 2 - OBLIGATOIRE)
-        besoins_par_seance, mode_adaptatif = self._contrainte_nombre_minimal(
+        besoins_par_seance, mode_adaptatif, objectifs_par_seance = self._contrainte_nombre_minimal(
             seances,
             enseignants,
             affectations_vars,
@@ -222,8 +225,8 @@ class SurveillanceOptimizerV3:
             min_surveillants_par_examen,
         )
 
-        # CONTRAINTE 7: Interdire première+dernière séance isolées (PRIORITÉ 7)
-        self._contrainte_interdire_premiere_derniere_isolees(
+        # CONTRAINTE 7: Pénaliser première+dernière séance isolées (PRIORITÉ 7 - SOUPLE)
+        penalite_isolees = self._contrainte_interdire_premiere_derniere_isolees(
             seances, enseignants, affectations_vars
         )
 
@@ -250,6 +253,8 @@ class SurveillanceOptimizerV3:
             mode_adaptatif,
             penalite_max_seances,
             preferences_responsables,
+            objectifs_par_seance,
+            penalite_isolees,
         )
 
         # ===== PHASE 8: RÉSOLUTION =====
@@ -458,7 +463,13 @@ class SurveillanceOptimizerV3:
         for grade_code, enseignants_grade in enseignants_par_grade.items():
             grade_config = self.grade_configs.get(grade_code, {"nb_surveillances": 2})
             quota_fixe = grade_config.get("nb_surveillances", 2)
-            quotas_totaux += len(enseignants_grade) * quota_fixe
+            
+            # Pour chaque enseignant, utiliser son quota d'exception s'il en a un, sinon le quota du grade
+            for enseignant in enseignants_grade:
+                if getattr(enseignant, 'is_Exception', False) and getattr(enseignant, 'quota_Exception', None) is not None:
+                    quotas_totaux += enseignant.quota_Exception
+                else:
+                    quotas_totaux += quota_fixe
 
         # Calculer le besoin total avec min_surveillants_par_examen
         nb_total_examens = sum([len(examens) for examens in seances.values()])
@@ -481,18 +492,28 @@ class SurveillanceOptimizerV3:
         # ⚠️ MODE ADAPTATIF SEULEMENT SI allow_fallback=True
         mode_adaptatif = allow_fallback and (quotas_totaux < besoin_ideal)
 
+        # 🎯 CALCUL DE L'OBJECTIF MOYEN PROPORTIONNEL EN MODE ADAPTATIF
+        # Au lieu d'avoir min/max brutaux, on calcule un objectif proportionnel pour chaque séance
+        objectifs_par_seance = {}
+        
         if mode_adaptatif:
             if min_surveillants_par_examen > 2:
                 # Mode adaptatif intelligent avec calcul proportionnel
                 
                 # Ajouter aux warnings pour le rapport final
-                self.warnings.append("⚠️  MODE ADAPTATIF ACTIVÉ (CALCUL INTELLIGENT)")
+                self.warnings.append("⚠️  MODE ADAPTATIF ACTIVÉ (CALCUL INTELLIGENT AVEC ÉQUILIBRAGE)")
                 self.warnings.append(f"   • Quotas totaux disponibles: {quotas_totaux} enseignants")
                 self.warnings.append(f"   • Besoin idéal: {besoin_ideal} enseignants")
                 self.warnings.append(f"   • MINIMUM: {min_par_examen_adaptatif} surveillant(s) par examen")
                 self.warnings.append(f"   • MAXIMUM: {min_surveillants_par_examen} surveillant(s) par examen")
                 self.warnings.append(f"   • Besoin minimal: {besoin_minimal} enseignants ({nb_total_examens} examens × {min_par_examen_adaptatif})")
                 self.warnings.append(f"   • Besoin maximal: {besoin_ideal} enseignants ({nb_total_examens} examens × {min_surveillants_par_examen})")
+                
+                # 🎯 NOUVEAU: Calcul de l'objectif proportionnel moyen pour équilibrer
+                # Ratio de couverture global: combien on peut donner en moyenne
+                ratio_global = quotas_totaux / besoin_ideal
+                self.warnings.append(f"   • Ratio de couverture global: {ratio_global:.2%}")
+                self.warnings.append(f"   • Objectif: Répartir proportionnellement les {quotas_totaux} enseignants sur toutes les séances")
             else:
                 # Calculer combien d'examens peuvent avoir min_surveillants_par_examen
                 # et combien devront se contenter de 1 seul
@@ -501,10 +522,12 @@ class SurveillanceOptimizerV3:
                 )
                 nb_examens_min_reduit = nb_total_examens - nb_examens_min_complet
                 
+                # Calcul du ratio pour l'équilibrage
+                ratio_global = quotas_totaux / besoin_ideal
+                
                 # Ajouter aussi aux warnings pour le rapport final
                 self.warnings.append(
-                    f"⚠️ MODE ADAPTATIF: {nb_examens_min_complet} examens avec {min_surveillants_par_examen} surveillants, "
-                    f"{nb_examens_min_reduit} avec 1 surveillant"
+                    f"⚠️ MODE ADAPTATIF AVEC ÉQUILIBRAGE: Ratio moyen {ratio_global:.2%}"
                 )
 
         for seance_key, examens_seance in seances.items():
@@ -533,13 +556,30 @@ class SurveillanceOptimizerV3:
                 self.model.Add(sum(surveillants_pour_seance) >= len(enseignants))
 
             elif mode_adaptatif:
-                # MODE ADAPTATIF: Nombre flexible mais NE JAMAIS DÉPASSER l'idéal
-                # RÈGLE 1: Minimum adaptatif (calculé selon le ratio quotas/besoin)
+                # MODE ADAPTATIF AVEC ÉQUILIBRAGE: Calculer un objectif proportionnel pour chaque séance
+                # Au lieu d'avoir toutes les séances au min ou toutes au max, on vise un équilibre
+                
+                # 🎯 OBJECTIF PROPORTIONNEL: nb_examens × (ratio_global × min_surveillants_par_examen)
+                # Cela donne un objectif moyen entre min et max, proportionnel au besoin de la séance
+                objectif_proportionnel = int(nb_examens * ratio_global * min_surveillants_par_examen)
+                
+                # S'assurer que l'objectif est dans l'intervalle [min, max]
+                objectif_proportionnel = max(nb_requis_minimal, min(objectif_proportionnel, nb_requis_ideal))
+                
+                # Stocker l'objectif pour cette séance (sera utilisé dans la fonction objectif)
+                objectifs_par_seance[seance_key] = objectif_proportionnel
+                
+                # RÈGLE 1: Minimum strict (garantir au moins le minimum)
                 self.model.Add(sum(surveillants_pour_seance) >= nb_requis_minimal)
 
                 # RÈGLE 2: MAXIMUM ABSOLU = nb_examens × min_surveillants_par_examen
                 # ⚠️ NE JAMAIS DÉPASSER CE MAXIMUM, même en mode adaptatif
                 self.model.Add(sum(surveillants_pour_seance) <= nb_requis_ideal)
+                
+                # 🎯 RÈGLE 3 (NOUVELLE): Favoriser l'objectif proportionnel via la fonction objectif
+                # Cette règle sera gérée dans _configurer_fonction_objectif en minimisant
+                # la déviation par rapport aux objectifs proportionnels
+                
             else:
                 # MODE NORMAL: EXACTEMENT nb_examens × min_surveillants_par_examen
                 # Pour 15 examens avec min=2 → EXACTEMENT 30 enseignants (pas plus, pas moins)
@@ -547,7 +587,7 @@ class SurveillanceOptimizerV3:
                 # CONTRAINTE STRICTE: EXACTEMENT nb_requis_ideal surveillants
                 self.model.Add(sum(surveillants_pour_seance) == nb_requis_ideal)
 
-        return besoins_par_seance, mode_adaptatif
+        return besoins_par_seance, mode_adaptatif, objectifs_par_seance
 
     def _contrainte_quotas_grades(
         self,
@@ -559,17 +599,20 @@ class SurveillanceOptimizerV3:
         """
         CONTRAINTE 1 (PRIORITÉ 1 - OBLIGATOIRE): Égalité stricte du nombre de séances par grade.
 
-        RÈGLE STRICTE: Tous les enseignants d'un même grade doivent faire EXACTEMENT le même nombre de séances.
+        RÈGLE STRICTE: Tous les enseignants NORMAUX d'un même grade doivent faire EXACTEMENT le même nombre de séances.
 
         IMPORTANT:
-        - Chaque enseignant d'un même grade doit avoir la même charge de surveillance
-        - Le quota maximum du grade reste une limite supérieure stricte
+        - Chaque enseignant NORMAL d'un même grade doit avoir la même charge de surveillance
+        - Le quota maximum du grade reste une limite supérieure stricte pour les enseignants normaux
+        - Les enseignants avec is_Exception=True suivent leur quota_Exception au lieu du quota du grade
+        - Les enseignants avec exception ne sont PAS soumis à la contrainte d'égalité stricte
         - Si un responsable a trop d'examens par rapport à cette égalité, cela créera un INFEASIBLE
 
         Exemple:
         - Grade "Professeur": quota maximum = 3 séances
-        - Si 5 profs du même grade participent, ils feront TOUS exactement le même nombre (ex: tous 2 séances)
-        - Impossible d'avoir 2 profs à 3 séances et 3 profs à 1 séance
+        - Si 5 profs du même grade participent (tous normaux), ils feront TOUS exactement le même nombre (ex: tous 2 séances)
+        - Si 1 prof a is_Exception=True avec quota_Exception=5, il peut faire jusqu'à 5 séances
+        - Impossible d'avoir 2 profs normaux à 3 séances et 3 profs normaux à 1 séance
         """
         charge_par_enseignant = {}
 
@@ -590,9 +633,19 @@ class SurveillanceOptimizerV3:
             )
             quota_fixe = grade_config.get("nb_surveillances", 2)
 
-            # Calculer les charges pour ce grade
-            charges = []
+            # Séparer les enseignants normaux et ceux avec exception
+            enseignants_normaux = []
+            enseignants_exception = []
+            
             for enseignant in enseignants_grade:
+                if getattr(enseignant, 'is_Exception', False) and getattr(enseignant, 'quota_Exception', None) is not None:
+                    enseignants_exception.append(enseignant)
+                else:
+                    enseignants_normaux.append(enseignant)
+
+            # Calculer les charges pour les enseignants normaux
+            charges_normales = []
+            for enseignant in enseignants_normaux:
                 charge = sum(
                     [
                         affectations_vars[(seance_key, enseignant.id)]
@@ -600,33 +653,48 @@ class SurveillanceOptimizerV3:
                     ]
                 )
                 charge_par_enseignant[enseignant.id] = charge
-                charges.append(charge)
+                charges_normales.append((enseignant, charge))
 
-            # Imposer l'égalité stricte et le quota maximum
-            if charges:
-                # ⚠️ CONTRAINTE OBLIGATOIRE 1: Aucun enseignant ne doit dépasser le quota fixe de son grade
-                for charge in charges:
-                    self.model.Add(charge <= quota_fixe)
+            # Calculer les charges pour les enseignants avec exception
+            charges_exceptions = []
+            for enseignant in enseignants_exception:
+                charge = sum(
+                    [
+                        affectations_vars[(seance_key, enseignant.id)]
+                        for seance_key in seances.keys()
+                    ]
+                )
+                charge_par_enseignant[enseignant.id] = charge
+                charges_exceptions.append((enseignant, charge))
 
-                # ⚠️ CONTRAINTE OBLIGATOIRE 2: ÉGALITÉ PARFAITE entre tous les enseignants du même grade
-                # Cette contrainte est STRICTE et NON NÉGOCIABLE
-                if len(charges) > 1:
-                    # Tous les enseignants du même grade doivent avoir EXACTEMENT la même charge
-                    # On force l'égalité entre chaque enseignant et le premier de la liste
-                    charge_reference = charges[0]
-                    for i, charge in enumerate(charges[1:], start=1):
-                        # Contrainte d'égalité stricte (HARD CONSTRAINT)
-                        self.model.Add(charge == charge_reference)
-                    
-                    # Plus besoin de calculer la dispersion car elle sera toujours 0
-                    # On la conserve quand même pour compatibilité avec la fonction objectif
-                    if not hasattr(self, "dispersions_par_grade"):
-                        self.dispersions_par_grade = {}
-                    # Créer une variable de dispersion qui sera forcément 0
-                    dispersion_grade = self.model.NewIntVar(
-                        0, 0, f"dispersion_{grade_code}"
-                    )
-                    self.dispersions_par_grade[grade_code] = dispersion_grade
+            # ⚠️ CONTRAINTE OBLIGATOIRE 1: Quotas maximums
+            # Pour les enseignants normaux: respecter le quota du grade
+            for enseignant, charge in charges_normales:
+                self.model.Add(charge <= quota_fixe)
+
+            # Pour les enseignants avec exception: respecter leur quota d'exception
+            for enseignant, charge in charges_exceptions:
+                quota_exception = getattr(enseignant, 'quota_Exception', quota_fixe)
+                self.model.Add(charge <= quota_exception)
+
+            # ⚠️ CONTRAINTE OBLIGATOIRE 2: ÉGALITÉ PARFAITE entre tous les enseignants NORMAUX du même grade
+            # Les enseignants avec exception ne sont PAS soumis à cette contrainte d'égalité
+            if len(charges_normales) > 1:
+                # Tous les enseignants normaux du même grade doivent avoir EXACTEMENT la même charge
+                charge_reference = charges_normales[0][1]
+                for i, (enseignant, charge) in enumerate(charges_normales[1:], start=1):
+                    # Contrainte d'égalité stricte (HARD CONSTRAINT)
+                    self.model.Add(charge == charge_reference)
+                
+                # Plus besoin de calculer la dispersion car elle sera toujours 0
+                # On la conserve quand même pour compatibilité avec la fonction objectif
+                if not hasattr(self, "dispersions_par_grade"):
+                    self.dispersions_par_grade = {}
+                # Créer une variable de dispersion qui sera forcément 0
+                dispersion_grade = self.model.NewIntVar(
+                    0, 0, f"dispersion_{grade_code}"
+                )
+                self.dispersions_par_grade[grade_code] = dispersion_grade
 
         return charge_par_enseignant
 
@@ -928,17 +996,19 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 7 (PRIORITÉ 7): Interdire d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
+        CONTRAINTE 7 (PRIORITÉ 7 - SOUPLE): Pénaliser d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
 
-        Règle stricte:
-        - Si un enseignant a la 1ère séance ET la dernière séance d'un jour
-        - Alors il DOIT avoir au moins une autre séance dans ce jour
-        - Sinon, c'est INTERDIT (contrainte forte)
+        Règle souple:
+        - Si un enseignant a la 1ère séance ET la dernière séance d'un jour SANS séance intermédiaire
+        - Une pénalité est appliquée (contrainte souple via fonction objectif)
 
         Exemple:
         - Jour avec séances [S1, S2, S3, S4]
-        - INTERDIT: avoir uniquement S1 + S4 (sans S2 ni S3)
-        - AUTORISÉ: S1 + S2, S1 + S3, S1 + S2 + S4, etc.
+        - PÉNALISÉ: avoir uniquement S1 + S4 (sans S2 ni S3)
+        - PRÉFÉRÉ: S1 + S2, S1 + S3, S1 + S2 + S4, etc.
+        
+        Returns:
+            Variable de pénalité (nombre de violations) à minimiser dans la fonction objectif
         """
 
         # Grouper les séances par jour et identifier première/dernière
@@ -951,8 +1021,10 @@ class SurveillanceOptimizerV3:
                 seances_par_jour[jour_index] = []
             seances_par_jour[jour_index].append((seance_key, seance_code))
 
+        # Liste des variables de violation (1 si violation, 0 sinon)
+        violations = []
+        
         # Pour chaque jour avec au moins 3 séances (si < 3, pas de problème)
-        nb_contraintes_ajoutees = 0
         for jour_index, seances_jour in seances_par_jour.items():
             if len(seances_jour) < 3:
                 # Pas assez de séances pour que la contrainte ait du sens
@@ -983,13 +1055,37 @@ class SurveillanceOptimizerV3:
                 if not a_intermediaire:
                     continue
 
-                # CONTRAINTE FORTE: Si (première ET dernière), alors au moins une intermédiaire
-                # Logique: NOT(première AND dernière) OR (au moins une intermédiaire)
-                # Équivalent: première + dernière <= 1 + sum(intermédiaires)
-                # Si première=1 et dernière=1, alors sum(intermédiaires) >= 1
-
-                self.model.Add(a_premiere + a_derniere <= 1 + sum(a_intermediaire))
-                nb_contraintes_ajoutees += 1
+                # Créer une variable booléenne pour détecter la violation
+                # Violation = (première AND dernière AND NOT(au moins une intermédiaire))
+                # = (première=1 AND dernière=1 AND sum(intermédiaires)=0)
+                
+                violation = self.model.NewBoolVar(
+                    f"violation_isolee_j{jour_index}_ens{enseignant.id}"
+                )
+                
+                # a_au_moins_une_intermediaire = 1 si sum(a_intermediaire) >= 1, 0 sinon
+                a_au_moins_une_intermediaire = self.model.NewBoolVar(
+                    f"a_inter_j{jour_index}_ens{enseignant.id}"
+                )
+                self.model.Add(sum(a_intermediaire) >= 1).OnlyEnforceIf(a_au_moins_une_intermediaire)
+                self.model.Add(sum(a_intermediaire) == 0).OnlyEnforceIf(a_au_moins_une_intermediaire.Not())
+                
+                # violation = 1 si (première=1 AND dernière=1 AND a_au_moins_une_intermediaire=0)
+                # Utiliser AddBoolAnd: violation == (a_premiere AND a_derniere AND NOT(a_au_moins_une_intermediaire))
+                self.model.AddBoolAnd([a_premiere, a_derniere, a_au_moins_une_intermediaire.Not()]).OnlyEnforceIf(violation)
+                self.model.AddBoolOr([a_premiere.Not(), a_derniere.Not(), a_au_moins_une_intermediaire]).OnlyEnforceIf(violation.Not())
+                
+                violations.append(violation)
+        
+        # Créer une variable pour le nombre total de violations
+        if violations:
+            penalite_isolees = self.model.NewIntVar(
+                0, len(violations), "penalite_premiere_derniere_isolees"
+            )
+            self.model.Add(penalite_isolees == sum(violations))
+            return penalite_isolees
+        
+        return None
 
 
     def _contrainte_seances_consecutives(
@@ -1123,6 +1219,8 @@ class SurveillanceOptimizerV3:
         mode_adaptatif: bool = False,
         penalite_max_seances=None,
         preferences_responsables: Dict = None,
+        objectifs_par_seance: Dict = None,
+        penalite_isolees=None,
     ) -> cp_model.IntVar:
         """
         Configure la fonction objectif multi-critères pour maximiser la satisfaction globale.
@@ -1304,6 +1402,53 @@ class SurveillanceOptimizerV3:
             composantes.append(total_affectations)
             # Poids ajusté selon si regroupement temporel activé
             poids.append(20 if activer_regroupement_temporel else 20)
+
+        # 🎯 NOUVEAU: Minimiser la déviation par rapport aux objectifs proportionnels en mode adaptatif
+        # Cela encourage l'équilibrage entre les séances au lieu d'avoir certaines au min et d'autres au max
+        deviation_proportionnelle = None
+        if mode_adaptatif and objectifs_par_seance:
+            # Calculer la déviation totale par rapport aux objectifs proportionnels
+            deviations = []
+            for seance_key, objectif in objectifs_par_seance.items():
+                # Compter le nombre d'enseignants affectés à cette séance
+                surveillants_seance = [
+                    affectations_vars[(seance_key, ens.id)]
+                    for ens in enseignants
+                    if (seance_key, ens.id) in affectations_vars
+                ]
+                
+                if surveillants_seance:
+                    # Nombre réel d'enseignants pour cette séance
+                    nb_enseignants_seance = self.model.NewIntVar(
+                        0, len(enseignants), f"nb_ens_{seance_key}"
+                    )
+                    self.model.Add(nb_enseignants_seance == sum(surveillants_seance))
+                    
+                    # Calculer la déviation absolue |nb_enseignants_seance - objectif|
+                    deviation_seance = self.model.NewIntVar(
+                        0, len(enseignants), f"dev_{seance_key}"
+                    )
+                    self.model.AddAbsEquality(deviation_seance, nb_enseignants_seance - objectif)
+                    deviations.append(deviation_seance)
+            
+            if deviations:
+                # Déviation totale = somme des déviations de toutes les séances
+                deviation_proportionnelle = self.model.NewIntVar(
+                    0, len(enseignants) * len(seances), "deviation_proportionnelle"
+                )
+                self.model.Add(deviation_proportionnelle == sum(deviations))
+                
+                composantes.append(deviation_proportionnelle)
+                # Poids négatif pour minimiser la déviation (favoriser l'équilibrage)
+                # Poids modéré pour équilibrer avec les autres priorités
+                poids.append(-25 if activer_regroupement_temporel else -30)
+
+        # PRIORITÉ 7: Pénalité première+dernière isolées (POIDS MOYEN - SOUPLE)
+        if penalite_isolees is not None:
+            composantes.append(penalite_isolees)
+            # Poids négatif pour éviter les séances isolées (première+dernière sans intermédiaire)
+            # Poids modéré: -20 (moins important que les vœux et responsables)
+            poids.append(-20)
 
         # PRIORITÉ 8: Bonus regroupement (POIDS FAIBLE pour meilleur confort enseignants)
         if activer_regroupement_temporel and bonus_consecutivite is not None:

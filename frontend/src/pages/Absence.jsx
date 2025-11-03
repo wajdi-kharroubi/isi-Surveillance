@@ -145,6 +145,16 @@ export default function Absence() {
     ? seancesFiltrees
     : seancesFiltrees.filter((s) => seanceKey(s) === selectedSeanceKey);
 
+  // Trier les séances par date puis par heure
+  const sortedSeances = [...filteredSeances].sort((a, b) => {
+    // Tri par date d'abord
+    if (a.date !== b.date) {
+      return a.date.localeCompare(b.date);
+    }
+    // Si même date, trier par heure de début
+    return a.h_debut.localeCompare(b.h_debut);
+  });
+
   const togglePresence = async (seance, enseignant) => {
     // seance: {date,h_debut,h_fin,session,semestre}
     const payload = {
@@ -411,7 +421,7 @@ export default function Absence() {
 
       {/* Seances List */}
       <div className="max-w-7xl mx-auto space-y-4">
-        {filteredSeances.length === 0 && (
+        {sortedSeances.length === 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Calendar className="w-10 h-10 text-gray-400" />
@@ -421,7 +431,7 @@ export default function Absence() {
           </div>
         )}
 
-        {filteredSeances.map((s, idx) => {
+        {sortedSeances.map((s, idx) => {
           const seanceKeyStr = seanceKey(s);
           const seanceSearch = seanceSearches[seanceKeyStr] || '';
           

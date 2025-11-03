@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { planningAPI, enseignantsAPI, statistiquesAPI, gradesAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
-import { XMarkIcon, PlusIcon, StarIcon, MagnifyingGlassIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/solid';
+import { XMarkIcon, PlusIcon, StarIcon, MagnifyingGlassIcon, ArrowsRightLeftIcon, ExclamationTriangleIcon, CalendarIcon, ClockIcon } from '@heroicons/react/24/solid';
 
 /**
  * Composant compact pour gérer les enseignants d'une séance
@@ -19,6 +19,12 @@ export default function GestionEnseignantsSeanceInline({
   const [isAdding, setIsAdding] = useState(false);
   const [selectedEnseignantId, setSelectedEnseignantId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [validationData, setValidationData] = useState(null);
+  
+  // États pour la suppression
+  const [showSuppressionModal, setShowSuppressionModal] = useState(false);
+  const [pendingSuppressionData, setPendingSuppressionData] = useState(null);
 
   // Récupérer la liste des enseignants
   const { data: enseignants } = useQuery({
@@ -99,31 +105,108 @@ export default function GestionEnseignantsSeanceInline({
   });
 
   const handleSupprimer = (enseignantId) => {
-    if (!confirm('Retirer cet enseignant de la séance ?')) return;
+    // Trouver l'enseignant dans la liste de la séance
+    const enseignant = seance.enseignants?.find(e => e.id === enseignantId);
+    
+    if (!enseignant) {
+      toast.error('Enseignant introuvable');
+      return;
+    }
 
-    supprimerMutation.mutate({
-      enseignant_id: enseignantId,
-      date_examen: seance.date,
-      h_debut: seance.h_debut,
-      h_fin: seance.h_fin,
-      session: seance.session,
-      semestre: seance.semestre,
+    // Préparer les données de suppression
+    setPendingSuppressionData({
+      enseignant,
+      mutation: {
+        enseignant_id: enseignantId,
+        date_examen: seance.date,
+        h_debut: seance.h_debut,
+        h_fin: seance.h_fin,
+        session: seance.session,
+        semestre: seance.semestre,
+      }
     });
+
+    // Afficher la modale de confirmation
+    setShowSuppressionModal(true);
   };
 
-  const handleAjouter = () => {
+  // Fonction pour confirmer la suppression
+  const confirmerSuppression = () => {
+    if (pendingSuppressionData) {
+      supprimerMutation.mutate(pendingSuppressionData.mutation);
+      setShowSuppressionModal(false);
+      setPendingSuppressionData(null);
+    }
+  };
+
+  // Fonction pour annuler la suppression
+  const annulerSuppression = () => {
+    setShowSuppressionModal(false);
+    setPendingSuppressionData(null);
+    toast.info('Suppression annulée');
+  };
+
+  const handleAjouter = async () => {
     if (!selectedEnseignantId) return;
 
-    // Le backend détermine automatiquement le statut responsable
-    // Pas besoin d'envoyer est_responsable
-    ajouterMutation.mutate({
-      enseignant_id: parseInt(selectedEnseignantId),
-      date_examen: seance.date,
-      h_debut: seance.h_debut,
-      h_fin: seance.h_fin,
-      session: seance.session,
-      semestre: seance.semestre,
-    });
+    try {
+      // Vérifier les contraintes avant d'ajouter
+      const response = await planningAPI.verifierContraintesAjout({
+        enseignant_id: parseInt(selectedEnseignantId),
+        date_examen: seance.date,
+        h_debut: seance.h_debut,
+      });
+
+      const validation = response.data;
+      
+      // Si il y a des erreurs bloquantes, ne pas permettre l'ajout
+      if (!validation.peut_ajouter) {
+        toast.error('Impossible d\'ajouter cet enseignant à cette séance');
+        // Afficher les erreurs dans une alerte
+        const errorMsg = validation.errors.join('\n');
+        alert(`❌ Impossible d'ajouter l'enseignant :\n\n${errorMsg}`);
+        return;
+      }
+
+      // Toujours afficher la modal de confirmation
+      setValidationData({
+        enseignant_id: parseInt(selectedEnseignantId),
+        date_examen: seance.date,
+        h_debut: seance.h_debut,
+        h_fin: seance.h_fin,
+        session: seance.session,
+        semestre: seance.semestre,
+        validation: validation
+      });
+      setShowConfirmationModal(true);
+    } catch (error) {
+      console.error('Erreur lors de la vérification des contraintes:', error);
+      toast.error('Erreur lors de la vérification des contraintes');
+    }
+  };
+
+  // Fonction pour confirmer l'ajout après validation
+  const confirmerAjout = () => {
+    if (validationData) {
+      ajouterMutation.mutate({
+        enseignant_id: validationData.enseignant_id,
+        date_examen: validationData.date_examen,
+        h_debut: validationData.h_debut,
+        h_fin: validationData.h_fin,
+        session: validationData.session,
+        semestre: validationData.semestre,
+      });
+      setShowConfirmationModal(false);
+      setValidationData(null);
+      setIsAdding(false);
+      setSelectedEnseignantId('');
+    }
+  };
+
+  // Fonction pour annuler l'ajout
+  const annulerAjout = () => {
+    setShowConfirmationModal(false);
+    setValidationData(null);
   };
 
   // Filtrer les enseignants disponibles avec leurs stats
@@ -438,6 +521,316 @@ export default function GestionEnseignantsSeanceInline({
 
       {seance.enseignants?.length === 0 && !isAdding && (
         <p className="text-xs text-gray-500 italic">Aucun enseignant affecté</p>
+      )}
+
+      {/* Modal de confirmation d'ajout avec validation des contraintes */}
+      {showConfirmationModal && validationData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* En-tête */}
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-4 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <h2 className="text-xl font-bold">Confirmation requise</h2>
+                    <p className="text-sm opacity-90">Vérification des contraintes avant l'ajout</p>
+                  </div>
+                </div>
+                <button
+                  onClick={annulerAjout}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-all"
+                >
+                  <span className="text-2xl leading-none">×</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu */}
+            <div className="p-6 space-y-6">
+              {/* Informations enseignant */}
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+                <h3 className="text-sm font-bold text-blue-900 mb-2">Enseignant</h3>
+                <p className="text-lg font-bold text-blue-700">
+                  {validationData.validation.enseignant.nom} {validationData.validation.enseignant.prenom}
+                </p>
+                <p className="text-sm text-blue-600 font-medium">
+                  Grade: {validationData.validation.enseignant.grade}
+                </p>
+              </div>
+
+              {/* Information si l'enseignant est responsable d'un examen dans cette séance */}
+              {validationData.validation.responsable_examen?.est_responsable && (
+                <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-4 border-2 border-amber-300">
+                  <h3 className="text-sm font-bold text-amber-900 mb-2 flex items-center gap-2">
+                    <StarIcon className="w-5 h-5 text-amber-600" />
+                    Responsable d'examen dans cette séance
+                  </h3>
+                  <p className="text-sm text-amber-800 font-semibold">
+                    Cet enseignant est <span className="font-bold uppercase">RESPONSABLE</span> d'un examen pendant cette séance.
+                  </p>
+                </div>
+              )}
+
+
+
+              {/* Erreurs bloquantes */}
+              {validationData.validation.errors.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-red-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Erreurs bloquantes
+                  </h3>
+                  <ul className="space-y-2">
+                    {validationData.validation.errors.map((error, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-red-800">
+                        <span className="text-red-600 font-bold mt-0.5">•</span>
+                        <span className="font-semibold">{error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Avertissements */}
+              {validationData.validation.warnings.length > 0 && (
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-orange-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Avertissements - Confirmation nécessaire
+                  </h3>
+                  <ul className="space-y-2">
+                    {validationData.validation.warnings.map((warning, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-orange-800">
+                        <span className="text-orange-600 font-bold mt-0.5">•</span>
+                        <span className="font-semibold">{warning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {validationData.validation.souhait.existe && validationData.validation.souhait.motif && (
+                    <div className="mt-3 p-3 bg-orange-100 rounded-lg border border-orange-200">
+                      <p className="text-xs font-semibold text-orange-900">
+                        <span className="font-bold">💬 Motif du souhait:</span> {validationData.validation.souhait.motif}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Détails quota */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
+                  <h3 className="text-xs font-bold text-green-900 mb-2 uppercase">Quota de surveillances</h3>
+                  <div className="space-y-1">
+                    <p className="text-sm text-green-700">
+                      <span className="font-semibold">Actuel:</span> {validationData.validation.quota.actuel}/{validationData.validation.quota.max}
+                    </p>
+                    <p className="text-sm text-green-700">
+                      <span className="font-semibold">Après ajout:</span> {validationData.validation.quota.apres_ajout}/{validationData.validation.quota.max}
+                    </p>
+                    <p className={`text-lg font-bold ${
+                      validationData.validation.quota.depasse ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {validationData.validation.quota.pourcentage_apres_ajout}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border-2 border-purple-200">
+                  <h3 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour</h3>
+                  <div className="space-y-1">
+                    <p className="text-sm text-purple-700">
+                      <span className="font-semibold">Actuel:</span> {validationData.validation.seances_jour.actuel}/{validationData.validation.seances_jour.max}
+                    </p>
+                    <p className="text-sm text-purple-700">
+                      <span className="font-semibold">Après ajout:</span> {validationData.validation.seances_jour.apres_ajout}/{validationData.validation.seances_jour.max}
+                    </p>
+                    <p className={`text-lg font-bold ${
+                      validationData.validation.seances_jour.depasse ? 'text-red-600' : 'text-purple-600'
+                    }`}>
+                      {validationData.validation.seances_jour.depasse ? 'MAX DÉPASSÉ' : 'OK'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t-2 border-gray-200">
+              <button
+                onClick={annulerAjout}
+                className="px-6 py-3 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-bold text-sm"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmerAjout}
+                disabled={ajouterMutation.isPending}
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all font-bold text-sm shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {ajouterMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Ajout en cours...
+                  </>
+                ) : (
+                  <>
+                    <PlusIcon className="w-4 h-4" />
+                    Confirmer l'ajout
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation de suppression */}
+      {showSuppressionModal && pendingSuppressionData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* En-tête */}
+            <div className={`${
+              pendingSuppressionData.enseignant.est_responsable 
+                ? 'bg-gradient-to-r from-red-600 to-rose-600' 
+                : 'bg-gradient-to-r from-orange-500 to-amber-500'
+            } px-6 py-4 text-white`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <ExclamationTriangleIcon className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      {pendingSuppressionData.enseignant.est_responsable 
+                        ? 'Suppression d\'un RESPONSABLE' 
+                        : 'Confirmation de suppression'}
+                    </h2>
+                    <p className="text-sm opacity-90">
+                      {pendingSuppressionData.enseignant.est_responsable 
+                        ? 'Cette action nécessite une attention particulière' 
+                        : 'Veuillez confirmer cette opération'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={annulerSuppression}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-all"
+                >
+                  <span className="text-2xl leading-none">×</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu */}
+            <div className="p-6 space-y-6">
+              {/* Informations enseignant */}
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+                <h3 className="text-sm font-bold text-blue-900 mb-2">Enseignant à retirer</h3>
+                <p className="text-lg font-bold text-blue-700">
+                  {pendingSuppressionData.enseignant.nom} {pendingSuppressionData.enseignant.prenom}
+                </p>
+                <p className="text-sm text-blue-600 font-medium">
+                  Grade: {pendingSuppressionData.enseignant.grade}
+                </p>
+              </div>
+
+              {/* Informations de la séance */}
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border-2 border-purple-200">
+                <h3 className="text-sm font-bold text-purple-900 mb-3">Détails de la séance</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm text-purple-700">
+                      <span className="font-semibold">Date:</span> {new Date(seance.date).toLocaleDateString('fr-FR')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ClockIcon className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm text-purple-700">
+                      <span className="font-semibold">Horaire:</span> {seance.h_debut} - {seance.h_fin}
+                    </span>
+                  </div>
+                  <div className="text-sm text-purple-700">
+                    <span className="font-semibold">Session:</span> {seance.session === 'P' ? 'Principale' : 'Rattrapage'}
+                  </div>
+                  <div className="text-sm text-purple-700">
+                    <span className="font-semibold">Semestre:</span> {seance.semestre}
+                  </div>
+                </div>
+              </div>
+
+              {/* Avertissement spécial si responsable */}
+              {pendingSuppressionData.enseignant.est_responsable && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-red-900 mb-3 flex items-center gap-2">
+                    <ExclamationTriangleIcon className="w-5 h-5" />
+                    ATTENTION : Suppression d'un responsable
+                  </h3>
+                  <div className="space-y-2">
+                    <p className="text-sm text-red-800 font-semibold">
+                      Cet enseignant est <span className="font-bold uppercase">RESPONSABLE</span> d'un examen.
+                    </p>
+                    <p className="text-xs text-red-700 mt-2 italic">
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Information générale */}
+              {!pendingSuppressionData.enseignant.est_responsable && (
+                <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                  <p className="text-sm text-orange-800">
+                    <span className="font-bold">ℹ️ Information:</span> Cette action retirera l'enseignant de la séance de surveillance.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t-2 border-gray-200">
+              <button
+                onClick={annulerSuppression}
+                className="px-6 py-3 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-bold text-sm"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmerSuppression}
+                disabled={supprimerMutation.isPending}
+                className={`px-6 py-3 ${
+                  pendingSuppressionData.enseignant.est_responsable
+                    ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600'
+                    : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600'
+                } text-white rounded-lg transition-all font-bold text-sm shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
+              >
+                {supprimerMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Suppression en cours...
+                  </>
+                ) : (
+                  <>
+                    <ExclamationTriangleIcon className="w-4 h-4" />
+                    {pendingSuppressionData.enseignant.est_responsable 
+                      ? 'Confirmer la suppression du responsable' 
+                      : 'Confirmer la suppression'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

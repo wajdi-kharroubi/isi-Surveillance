@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from services import ImportService
 from config import UPLOAD_DIR
-from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from models.models import GenerationStatistique, Presence, SouhaitViole, ResponsableAbsent, DepassementMaxJour
 import os
 import shutil
 import logging
@@ -19,10 +19,11 @@ def vider_statistiques_generation(db: Session):
         db.query(SouhaitViole).delete()
         db.query(ResponsableAbsent).delete()
         db.query(DepassementMaxJour).delete()
+        db.query(Presence).delete()
         # Puis la table parent
         db.query(GenerationStatistique).delete()
         db.commit()
-        logger.info("Statistiques de génération vidées suite à l'importation")
+        logger.info("Statistiques de génération et présences vidées suite à l'importation")
     except Exception as e:
         logger.warning(f"Erreur lors de la suppression des statistiques: {str(e)}")
         db.rollback()

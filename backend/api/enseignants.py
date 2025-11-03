@@ -7,7 +7,7 @@ from models import (
     EnseignantExceptionUpdate,
     Enseignant, Affectation
 )
-from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour ,Presence
 import logging
 
 router = APIRouter(prefix="/enseignants", tags=["Enseignants"])
@@ -21,6 +21,7 @@ def vider_statistiques_generation(db: Session):
         db.query(ResponsableAbsent).delete()
         db.query(DepassementMaxJour).delete()
         db.query(GenerationStatistique).delete()
+        db.query(Presence).delete()
         db.commit()
         logger.info("Statistiques de génération vidées")
     except Exception as e:

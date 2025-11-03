@@ -40,10 +40,19 @@ export default function Planning() {
   const [sortBy, setSortBy] = useState('pourcentage'); // 'pourcentage', 'grade', 'nom'
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
   const [expandedSalles, setExpandedSalles] = useState({}); // Pour gérer l'affichage des salles
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false); // Modal de confirmation
+  const [validationData, setValidationData] = useState(null); // Données de validation
   
   // États pour l'échange d'enseignants
   const [exchangeMode, setExchangeMode] = useState(false);
   const [selectedForExchange, setSelectedForExchange] = useState(null); // { enseignant, seance }
+  const [showExchangeConfirmationModal, setShowExchangeConfirmationModal] = useState(false); // Modal de confirmation d'échange
+  const [exchangeValidationData, setExchangeValidationData] = useState(null); // Données de validation pour l'échange
+  const [pendingExchangeData, setPendingExchangeData] = useState(null); // Données de l'échange en attente
+
+  // États pour la suppression
+  const [showSuppressionModal, setShowSuppressionModal] = useState(false); // Modal de confirmation de suppression
+  const [pendingSuppressionData, setPendingSuppressionData] = useState(null); // Données de suppression en attente
 
   const { data: enseignants = [] } = useQuery({
     queryKey: ['enseignants'],
@@ -99,7 +108,7 @@ export default function Planning() {
   });
 
   // Récupérer la liste des séances disponibles pour le formulaire d'ajout
-  const { data: seancesDisponibles = [] } = useQuery({
+  const { data: toutesSeances = [] } = useQuery({
     queryKey: ['seances-disponibles'],
     queryFn: () => planningAPI.getEmploiSeances().then(res => res.data),
     enabled: activeTab === 'enseignant' && showAddSeanceForm,
@@ -112,6 +121,26 @@ export default function Planning() {
     queryFn: () => planningAPI.getEmploiEnseignant(selectedEnseignant).then(res => res.data),
     enabled: activeTab === 'enseignant' && selectedEnseignant !== null,
   });
+
+  // Filtrer les séances pour n'afficher que celles non affectées à l'enseignant
+  const seancesDisponibles = useMemo(() => {
+    if (!emploiEnseignant || !toutesSeances.length) {
+      return toutesSeances;
+    }
+
+    // Créer un Set des clés des séances déjà affectées à l'enseignant
+    const seancesAffectees = new Set(
+      emploiEnseignant.emplois.map(emploi => 
+        `${emploi.date}|${emploi.h_debut}|${emploi.h_fin}`
+      )
+    );
+
+    // Filtrer les séances disponibles en excluant celles déjà affectées
+    return toutesSeances.filter(seance => {
+      const key = `${seance.date}|${seance.h_debut}|${seance.h_fin}`;
+      return !seancesAffectees.has(key);
+    });
+  }, [toutesSeances, emploiEnseignant]);
 
   // Mutation pour supprimer un enseignant d'une séance
   const supprimerSeanceMutation = useMutation({
@@ -243,22 +272,44 @@ export default function Planning() {
 
   // Fonction pour supprimer un enseignant d'une séance
   const handleSupprimerSeance = (emploi) => {
-    if (!confirm(`Voulez-vous vraiment retirer cet enseignant de cette séance du ${formatDate(emploi.date)} ?`)) {
-      return;
-    }
+    if (!emploiEnseignant) return;
 
-    supprimerSeanceMutation.mutate({
-      enseignant_id: selectedEnseignant,
-      date_examen: emploi.date,
-      h_debut: emploi.h_debut,
-      h_fin: emploi.h_fin,
-      session: emploi.session,
-      semestre: emploi.semestre,
+    // Préparer les données de suppression
+    setPendingSuppressionData({
+      emploi,
+      enseignant: emploiEnseignant.enseignant,
+      mutation: {
+        enseignant_id: selectedEnseignant,
+        date_examen: emploi.date,
+        h_debut: emploi.h_debut,
+        h_fin: emploi.h_fin,
+        session: emploi.session,
+        semestre: emploi.semestre,
+      }
     });
+
+    // Afficher la modale de confirmation
+    setShowSuppressionModal(true);
+  };
+
+  // Fonction pour confirmer la suppression
+  const confirmerSuppression = () => {
+    if (pendingSuppressionData) {
+      supprimerSeanceMutation.mutate(pendingSuppressionData.mutation);
+      setShowSuppressionModal(false);
+      setPendingSuppressionData(null);
+    }
+  };
+
+  // Fonction pour annuler la suppression
+  const annulerSuppression = () => {
+    setShowSuppressionModal(false);
+    setPendingSuppressionData(null);
+    toast.info('Suppression annulée');
   };
 
   // Fonction pour ajouter une séance à l'enseignant
-  const handleAjouterSeance = (e) => {
+  const handleAjouterSeance = async (e) => {
     e.preventDefault();
     
     if (!selectedSeanceKey) {
@@ -269,11 +320,56 @@ export default function Planning() {
     // Extraire date et heure de la clé sélectionnée
     const [date, h_debut, h_fin] = selectedSeanceKey.split('|');
 
-    ajouterSeanceMutation.mutate({
-      enseignant_id: selectedEnseignant,
-      date_examen: date,
-      h_debut: h_debut
-    });
+    try {
+      // Vérifier les contraintes avant d'ajouter
+      const response = await planningAPI.verifierContraintesAjout({
+        enseignant_id: selectedEnseignant,
+        date_examen: date,
+        h_debut: h_debut
+      });
+
+      const validation = response.data;
+      
+      // Si il y a des erreurs bloquantes, ne pas permettre l'ajout
+      if (!validation.peut_ajouter) {
+        toast.error('Impossible d\'ajouter cet enseignant à cette séance');
+        // Afficher les erreurs dans une alerte
+        const errorMsg = validation.errors.join('\n');
+        alert(`❌ Impossible d'ajouter l'enseignant :\n\n${errorMsg}`);
+        return;
+      }
+
+      // Toujours afficher la modal de confirmation
+      setValidationData({
+        enseignant_id: selectedEnseignant,
+        date_examen: date,
+        h_debut: h_debut,
+        validation: validation
+      });
+      setShowConfirmationModal(true);
+    } catch (error) {
+      console.error('Erreur lors de la vérification des contraintes:', error);
+      toast.error('Erreur lors de la vérification des contraintes');
+    }
+  };
+
+  // Fonction pour confirmer l'ajout après validation
+  const confirmerAjout = () => {
+    if (validationData) {
+      ajouterSeanceMutation.mutate({
+        enseignant_id: validationData.enseignant_id,
+        date_examen: validationData.date_examen,
+        h_debut: validationData.h_debut
+      });
+      setShowConfirmationModal(false);
+      setValidationData(null);
+    }
+  };
+
+  // Fonction pour annuler l'ajout
+  const annulerAjout = () => {
+    setShowConfirmationModal(false);
+    setValidationData(null);
   };
 
   // Fonction pour déterminer le numéro de séance en fonction de l'heure
@@ -347,7 +443,7 @@ export default function Planning() {
   };
 
   // Fonction pour sélectionner un enseignant pour l'échange
-  const handleSelectForExchange = (enseignant, seance) => {
+  const handleSelectForExchange = async (enseignant, seance) => {
     if (!selectedForExchange) {
       // Premier enseignant sélectionné
       setSelectedForExchange({ enseignant, seance });
@@ -377,32 +473,60 @@ export default function Planning() {
         return;
       }
 
-      // Confirmer l'échange
-      const message = `Voulez-vous échanger :\n\n` +
-        `${selectedForExchange.enseignant.nom} ${selectedForExchange.enseignant.prenom}\n` +
-        `(${formatDate(selectedForExchange.seance.date)} ${selectedForExchange.seance.h_debut}-${selectedForExchange.seance.h_fin})\n\n` +
-        `avec\n\n` +
-        `${enseignant.nom} ${enseignant.prenom}\n` +
-        `(${formatDate(seance.date)} ${seance.h_debut}-${seance.h_fin}) ?`;
+      // Préparer les données de l'échange
+      const exchangeData = {
+        enseignant1_id: selectedForExchange.enseignant.id,
+        date1: selectedForExchange.seance.date,
+        h_debut1: selectedForExchange.seance.h_debut,
+        h_fin1: selectedForExchange.seance.h_fin,
+        session1: selectedForExchange.seance.session,
+        semestre1: selectedForExchange.seance.semestre,
+        enseignant2_id: enseignant.id,
+        date2: seance.date,
+        h_debut2: seance.h_debut,
+        h_fin2: seance.h_fin,
+        session2: seance.session,
+        semestre2: seance.semestre,
+      };
 
-      if (confirm(message)) {
-        // Effectuer l'échange
-        exchangeEnseignantsMutation.mutate({
-          enseignant1_id: selectedForExchange.enseignant.id,
-          date1: selectedForExchange.seance.date,
-          h_debut1: selectedForExchange.seance.h_debut,
-          h_fin1: selectedForExchange.seance.h_fin,
-          session1: selectedForExchange.seance.session,
-          semestre1: selectedForExchange.seance.semestre,
-          enseignant2_id: enseignant.id,
-          date2: seance.date,
-          h_debut2: seance.h_debut,
-          h_fin2: seance.h_fin,
-          session2: seance.session,
-          semestre2: seance.semestre,
-        });
+      // Vérifier les contraintes pour les deux enseignants
+      try {
+        const validation = await planningAPI.verifierContraintesEchange(exchangeData);
+        
+        // Vérifier s'il y a des erreurs bloquantes
+        if (validation.data.errors.length > 0) {
+          // Afficher les erreurs
+          toast.error(validation.data.errors.join('\n'), { duration: 6000 });
+          return;
+        }
+
+        // Toujours afficher la modale de confirmation
+        setExchangeValidationData(validation.data);
+        setPendingExchangeData(exchangeData);
+        setShowExchangeConfirmationModal(true);
+      } catch (error) {
+        console.error('Erreur lors de la vérification des contraintes:', error);
+        toast.error('Erreur lors de la vérification des contraintes');
       }
     }
+  };
+
+  // Fonction pour confirmer l'échange après validation
+  const confirmerEchange = () => {
+    if (pendingExchangeData) {
+      exchangeEnseignantsMutation.mutate(pendingExchangeData);
+      setShowExchangeConfirmationModal(false);
+      setExchangeValidationData(null);
+      setPendingExchangeData(null);
+    }
+  };
+
+  // Fonction pour annuler l'échange
+  const annulerEchange = () => {
+    setShowExchangeConfirmationModal(false);
+    setExchangeValidationData(null);
+    setPendingExchangeData(null);
+    toast.info('Échange annulé');
   };
 
   return (
@@ -1513,6 +1637,480 @@ export default function Planning() {
           )}
         </div>
       </div>
+
+      {/* Modal de confirmation d'ajout avec validation des contraintes */}
+      {showConfirmationModal && validationData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* En-tête */}
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-4 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-xl font-bold">Confirmation requise</h2>
+                    <p className="text-sm opacity-90">Vérification des contraintes avant l'ajout</p>
+                  </div>
+                </div>
+                <button
+                  onClick={annulerAjout}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-all"
+                >
+                  <span className="text-2xl leading-none">×</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu */}
+            <div className="p-6 space-y-6">
+              {/* Informations enseignant */}
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+                <h3 className="text-sm font-bold text-blue-900 mb-2">Enseignant</h3>
+                <p className="text-lg font-bold text-blue-700">
+                  {validationData.validation.enseignant.nom} {validationData.validation.enseignant.prenom}
+                </p>
+                <p className="text-sm text-blue-600 font-medium">
+                  Grade: {validationData.validation.enseignant.grade}
+                </p>
+              </div>
+
+              {/* Information si l'enseignant est responsable d'un examen dans cette séance */}
+              {validationData.validation.responsable_examen?.est_responsable && (
+                <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-4 border-2 border-amber-300">
+                  <h3 className="text-sm font-bold text-amber-900 mb-2 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-600" />
+                    Responsable d'examen dans cette séance
+                  </h3>
+                  <p className="text-sm text-amber-800 font-semibold">
+                    Cet enseignant est <span className="font-bold uppercase">RESPONSABLE</span> d'un examen pendant cette séance.
+                  </p>
+                </div>
+              )}
+
+              {/* Erreurs bloquantes */}
+              {validationData.validation.errors.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-red-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    Erreurs bloquantes
+                  </h3>
+                  <ul className="space-y-2">
+                    {validationData.validation.errors.map((error, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-red-800">
+                        <span className="text-red-600 font-bold mt-0.5">•</span>
+                        <span className="font-semibold">{error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Avertissements */}
+              {validationData.validation.warnings.length > 0 && (
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-orange-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    Avertissements - Confirmation nécessaire
+                  </h3>
+                  <ul className="space-y-2">
+                    {validationData.validation.warnings.map((warning, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-orange-800">
+                        <span className="text-orange-600 font-bold mt-0.5">•</span>
+                        <span className="font-semibold">{warning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {validationData.validation.souhait.existe && validationData.validation.souhait.motif && (
+                    <div className="mt-3 p-3 bg-orange-100 rounded-lg border border-orange-200">
+                      <p className="text-xs font-semibold text-orange-900">
+                        <span className="font-bold">💬 Motif du souhait:</span> {validationData.validation.souhait.motif}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Détails quota */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
+                  <h3 className="text-xs font-bold text-green-900 mb-2 uppercase">Quota de surveillances</h3>
+                  <div className="space-y-1">
+                    <p className="text-sm text-green-700">
+                      <span className="font-semibold">Actuel:</span> {validationData.validation.quota.actuel}/{validationData.validation.quota.max}
+                    </p>
+                    <p className="text-sm text-green-700">
+                      <span className="font-semibold">Après ajout:</span> {validationData.validation.quota.apres_ajout}/{validationData.validation.quota.max}
+                    </p>
+                    <p className={`text-lg font-bold ${
+                      validationData.validation.quota.depasse ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {validationData.validation.quota.pourcentage_apres_ajout}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border-2 border-purple-200">
+                  <h3 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour</h3>
+                  <div className="space-y-1">
+                    <p className="text-sm text-purple-700">
+                      <span className="font-semibold">Actuel:</span> {validationData.validation.seances_jour.actuel}/{validationData.validation.seances_jour.max}
+                    </p>
+                    <p className="text-sm text-purple-700">
+                      <span className="font-semibold">Après ajout:</span> {validationData.validation.seances_jour.apres_ajout}/{validationData.validation.seances_jour.max}
+                    </p>
+                    <p className={`text-lg font-bold ${
+                      validationData.validation.seances_jour.depasse ? 'text-red-600' : 'text-purple-600'
+                    }`}>
+                      {validationData.validation.seances_jour.depasse ? 'MAX DÉPASSÉ' : 'OK'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t-2 border-gray-200">
+              <button
+                onClick={annulerAjout}
+                className="px-6 py-3 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-bold text-sm"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmerAjout}
+                disabled={ajouterSeanceMutation.isPending}
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 transition-all font-bold text-sm shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {ajouterSeanceMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Ajout en cours...
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="w-4 h-4" />
+                    Confirmer l'ajout
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation d'échange avec validation des contraintes */}
+      {showExchangeConfirmationModal && exchangeValidationData && selectedForExchange && pendingExchangeData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* En-tête */}
+            <div className="bg-gradient-to-r from-purple-500 to-indigo-500 px-6 py-4 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <ArrowLeftRight className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-xl font-bold">Confirmation d'échange</h2>
+                    <p className="text-sm opacity-90">Vérification des contraintes pour les deux enseignants</p>
+                  </div>
+                </div>
+                <button
+                  onClick={annulerEchange}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-all"
+                >
+                  <span className="text-2xl leading-none">×</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu */}
+            <div className="p-6 space-y-6">
+              {/* Résumé de l'échange */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4 border-2 border-indigo-200">
+                <h3 className="text-sm font-bold text-indigo-900 mb-3">Échange proposé</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-indigo-700">
+                      {exchangeValidationData.enseignant1.enseignant.nom} {exchangeValidationData.enseignant1.enseignant.prenom}
+                    </p>
+                    <p className="text-sm text-indigo-600">
+                      {formatDate(pendingExchangeData.date1)} {pendingExchangeData.h_debut1}
+                    </p>
+                  </div>
+                  <div className="flex justify-center">
+                    <ArrowLeftRight className="w-8 h-8 text-indigo-500" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-indigo-700">
+                      {exchangeValidationData.enseignant2.enseignant.nom} {exchangeValidationData.enseignant2.enseignant.prenom}
+                    </p>
+                    <p className="text-sm text-indigo-600">
+                      {formatDate(pendingExchangeData.date2)} {pendingExchangeData.h_debut2}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Avertissements globaux */}
+              {exchangeValidationData.warnings.length > 0 && (
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-orange-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    Avertissements - Confirmation nécessaire
+                  </h3>
+                  <ul className="space-y-2">
+                    {exchangeValidationData.warnings.map((warning, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-orange-800">
+                        <span className="text-orange-600 font-bold mt-0.5">•</span>
+                        <span className="font-semibold">{warning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Détails par enseignant */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Enseignant 1 */}
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+                    <h3 className="text-sm font-bold text-blue-900 mb-2">
+                      {exchangeValidationData.enseignant1.enseignant.nom} {exchangeValidationData.enseignant1.enseignant.prenom}
+                    </h3>
+                    <p className="text-xs text-blue-600 font-medium">
+                      Vers: {formatDate(pendingExchangeData.date2)} {pendingExchangeData.h_debut2}
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-3 border border-green-200">
+                    <h4 className="text-xs font-bold text-green-900 mb-2 uppercase">Quota</h4>
+                    <p className="text-sm text-green-700">
+                      {exchangeValidationData.enseignant1.quota.actuel}/{exchangeValidationData.enseignant1.quota.max} ({exchangeValidationData.enseignant1.quota.pourcentage}%)
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 border border-purple-200">
+                    <h4 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour</h4>
+                    <p className="text-sm text-purple-700">
+                      {exchangeValidationData.enseignant1.seances_jour.actuel}/{exchangeValidationData.enseignant1.seances_jour.max}
+                    </p>
+                  </div>
+
+                  {exchangeValidationData.enseignant1.souhait.existe && exchangeValidationData.enseignant1.souhait.motif && (
+                    <div className="p-3 bg-orange-100 rounded-lg border border-orange-200">
+                      <p className="text-xs font-semibold text-orange-900">
+                        <span className="font-bold">💬 Motif:</span> {exchangeValidationData.enseignant1.souhait.motif}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Enseignant 2 */}
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+                    <h3 className="text-sm font-bold text-blue-900 mb-2">
+                      {exchangeValidationData.enseignant2.enseignant.nom} {exchangeValidationData.enseignant2.enseignant.prenom}
+                    </h3>
+                    <p className="text-xs text-blue-600 font-medium">
+                      Vers: {formatDate(pendingExchangeData.date1)} {pendingExchangeData.h_debut1}
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-3 border border-green-200">
+                    <h4 className="text-xs font-bold text-green-900 mb-2 uppercase">Quota</h4>
+                    <p className="text-sm text-green-700">
+                      {exchangeValidationData.enseignant2.quota.actuel}/{exchangeValidationData.enseignant2.quota.max} ({exchangeValidationData.enseignant2.quota.pourcentage}%)
+                    </p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 border border-purple-200">
+                    <h4 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour</h4>
+                    <p className="text-sm text-purple-700">
+                      {exchangeValidationData.enseignant2.seances_jour.actuel}/{exchangeValidationData.enseignant2.seances_jour.max}
+                    </p>
+                  </div>
+
+                  {exchangeValidationData.enseignant2.souhait.existe && exchangeValidationData.enseignant2.souhait.motif && (
+                    <div className="p-3 bg-orange-100 rounded-lg border border-orange-200">
+                      <p className="text-xs font-semibold text-orange-900">
+                        <span className="font-bold">💬 Motif:</span> {exchangeValidationData.enseignant2.souhait.motif}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t-2 border-gray-200">
+              <button
+                onClick={annulerEchange}
+                className="px-6 py-3 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-bold text-sm"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmerEchange}
+                disabled={exchangeEnseignantsMutation.isPending}
+                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg hover:from-purple-600 hover:to-indigo-600 transition-all font-bold text-sm shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {exchangeEnseignantsMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Échange en cours...
+                  </>
+                ) : (
+                  <>
+                    <ArrowLeftRight className="w-4 h-4" />
+                    Confirmer l'échange
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation de suppression */}
+      {showSuppressionModal && pendingSuppressionData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* En-tête */}
+            <div className={`${
+              pendingSuppressionData.emploi.est_responsable 
+                ? 'bg-gradient-to-r from-red-600 to-rose-600' 
+                : 'bg-gradient-to-r from-orange-500 to-amber-500'
+            } px-6 py-4 text-white`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      {pendingSuppressionData.emploi.est_responsable 
+                        ? 'Suppression d\'un RESPONSABLE' 
+                        : 'Confirmation de suppression'}
+                    </h2>
+                    <p className="text-sm opacity-90">
+                      {pendingSuppressionData.emploi.est_responsable 
+                        ? 'Cette action nécessite une attention particulière' 
+                        : 'Veuillez confirmer cette opération'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={annulerSuppression}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-all"
+                >
+                  <span className="text-2xl leading-none">×</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu */}
+            <div className="p-6 space-y-6">
+              {/* Informations enseignant */}
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+                <h3 className="text-sm font-bold text-blue-900 mb-2">Enseignant à retirer</h3>
+                <p className="text-lg font-bold text-blue-700">
+                  {pendingSuppressionData.enseignant.nom} {pendingSuppressionData.enseignant.prenom}
+                </p>
+                <p className="text-sm text-blue-600 font-medium">
+                  Grade: {pendingSuppressionData.enseignant.grade}
+                </p>
+              </div>
+
+              {/* Informations de la séance */}
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border-2 border-purple-200">
+                <h3 className="text-sm font-bold text-purple-900 mb-3">Détails de la séance</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm text-purple-700">
+                      <span className="font-semibold">Date:</span> {formatDate(pendingSuppressionData.emploi.date)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm text-purple-700">
+                      <span className="font-semibold">Horaire:</span> {pendingSuppressionData.emploi.h_debut} - {pendingSuppressionData.emploi.h_fin}
+                    </span>
+                  </div>
+                  <div className="text-sm text-purple-700">
+                    <span className="font-semibold">Session:</span> {pendingSuppressionData.emploi.session === 'P' ? 'Principale' : 'Rattrapage'}
+                  </div>
+                  <div className="text-sm text-purple-700">
+                    <span className="font-semibold">Semestre:</span> {pendingSuppressionData.emploi.semestre}
+                  </div>
+                </div>
+              </div>
+
+              {/* Avertissement spécial si responsable */}
+              {pendingSuppressionData.emploi.est_responsable && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-red-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    ATTENTION : Suppression d'un responsable
+                  </h3>
+                  <div className="space-y-2">
+                    <p className="text-sm text-red-800 font-semibold">
+                      Cet enseignant est <span className="font-bold uppercase">RESPONSABLE</span> d'un examen.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Information générale */}
+              {!pendingSuppressionData.emploi.est_responsable && (
+                <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
+                  <p className="text-sm text-orange-800">
+                    <span className="font-bold">ℹ️ Information:</span> Cette action retirera l'enseignant de la séance de surveillance.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t-2 border-gray-200">
+              <button
+                onClick={annulerSuppression}
+                className="px-6 py-3 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-all border-2 border-gray-300 font-bold text-sm"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmerSuppression}
+                disabled={supprimerSeanceMutation.isPending}
+                className={`px-6 py-3 ${
+                  pendingSuppressionData.emploi.est_responsable
+                    ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600'
+                    : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600'
+                } text-white rounded-lg transition-all font-bold text-sm shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
+              >
+                {supprimerSeanceMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Suppression en cours...
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4" />
+                    {pendingSuppressionData.emploi.est_responsable 
+                      ? 'Confirmer la suppression du responsable' 
+                      : 'Confirmer la suppression'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
