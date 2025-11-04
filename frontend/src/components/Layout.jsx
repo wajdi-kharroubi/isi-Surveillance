@@ -62,7 +62,7 @@ const navigation = [
     ]
   },
     { 
-    name: 'Absences (beta)', 
+    name: 'Absences', 
     href: '/absences', 
     icon: ClockIcon, 
     description: 'Marquer présences/absences',

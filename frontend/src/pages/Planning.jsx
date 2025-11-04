@@ -224,11 +224,13 @@ export default function Planning() {
         const prenom = (ens.prenom || '').toLowerCase();
         const codeSmartex = (ens.code_smartex || '').toLowerCase();
         const gradeCode = (ens.grade_code || '').toLowerCase();
+        const hasException = ens.is_Exception ? 'exception' : '';
         
         return nom.includes(filterLower) || 
                prenom.includes(filterLower) || 
                codeSmartex.includes(filterLower) ||
-               gradeCode.includes(filterLower);
+               gradeCode.includes(filterLower) ||
+               hasException.includes(filterLower);
       });
   }, [enseignantsAvecCharge, searchFilter]);
 

@@ -570,7 +570,7 @@ export default function Absence() {
                         {/* Info */}
                         <div className="flex-1">
                           <div className="flex items-center gap-3">
-                            <p className="font-bold text-gray-900">{e.prenom} {e.nom}</p>
+                            <p className="font-bold text-gray-900">{e.nom} {e.prenom}</p>
                             {e.est_responsable && (
                               <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
                                 Responsable

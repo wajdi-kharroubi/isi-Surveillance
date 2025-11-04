@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { generationAPI } from '../services/api';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { generationAPI, statistiquesAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { 
   SparklesIcon, 
@@ -15,7 +15,7 @@ import {
 
 export default function Generation() {
   const [config, setConfig] = useState({
-    min_surveillants_par_salle: 2,
+    min_surveillants_par_salle: 3,
     allow_single_surveillant: true,
     max_time_in_seconds: 600, // 10 minutes par défaut 
     relative_gap_limit: 0.05, // 5% de tolérance par défaut
@@ -25,17 +25,33 @@ export default function Generation() {
   const [isGenerating, setIsGenerating] = useState(false);
   const queryClient = useQueryClient();
 
-  // Load result from localStorage on mount
+  // Vérifier si des affectations existent
+  const { data: stats } = useQuery({
+    queryKey: ['statistiques'],
+    queryFn: () => statistiquesAPI.getGlobal().then(res => res.data),
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  // Load result from localStorage on mount and verify affectations exist
   useEffect(() => {
     const savedResult = localStorage.getItem('generation_result');
     if (savedResult) {
       try {
-        setResult(JSON.parse(savedResult));
+        const parsedResult = JSON.parse(savedResult);
+        // Si des affectations existent, charger les résultats
+        if (stats && stats.nb_affectations > 0) {
+          setResult(parsedResult);
+        } else if (stats && stats.nb_affectations === 0) {
+          // Si plus d'affectations, supprimer les logs
+          localStorage.removeItem('generation_result');
+          setResult(null);
+        }
       } catch (error) {
         console.error('Error loading saved result:', error);
       }
     }
-  }, []);
+  }, [stats]);
 
   // Chronomètre pendant la génération
   useEffect(() => {
@@ -357,6 +373,8 @@ export default function Generation() {
               onClick={() => {
                 setResult(null);
                 localStorage.removeItem('generation_result');
+                queryClient.invalidateQueries(['statistiques']);
+                queryClient.invalidateQueries(['generation-stats']);
                 toast.success('Logs effacés');
               }}
               className="group relative overflow-hidden flex items-center gap-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"

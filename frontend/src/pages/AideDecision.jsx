@@ -13,17 +13,10 @@ import {
   TrendingUp,
   AlertTriangle,
   XCircle,
-  Settings
+  Settings,
+  Download
 } from 'lucide-react';
-import axios from 'axios';
-
-const API_URL = 'http://localhost:8000/api';
-
-const decisionAPI = {
-  calculerRecommandations: (params) => axios.post(`${API_URL}/decision/calculer-recommandations`, params),
-  appliquerQuotas: (quotas) => axios.post(`${API_URL}/decision/appliquer-quotas`, quotas),
-  getQuotasActuels: () => axios.get(`${API_URL}/decision/quotas-actuels`),
-};
+import { decisionAPI } from '../services/api';
 
 export default function AideDecision() {
   const queryClient = useQueryClient();
@@ -65,9 +58,37 @@ export default function AideDecision() {
     },
   });
 
+  // Mutation pour exporter les voeux autorisés
+  const exporterVoeuxMutation = useMutation({
+    mutationFn: decisionAPI.exporterVoeuxAutorises,
+    onSuccess: (response) => {
+      // Créer un lien de téléchargement
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'creneaux_non_souhaits_autorises.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    },
+    onError: (error) => {
+      alert(`❌ Erreur lors de l'exportation: ${error.response?.data?.detail || error.message}`);
+    },
+  });
+
   // Fonction pour calculer les recommandations
   const handleCalculer = () => {
     refetch();
+  };
+
+  // Fonction pour exporter les voeux autorisés
+  const handleExporterVoeux = () => {
+    if (!recommandations) {
+      alert('⚠️ Veuillez d\'abord calculer les recommandations');
+      return;
+    }
+    exporterVoeuxMutation.mutate(parametres);
   };
 
   // Fonction pour modifier un quota
@@ -484,14 +505,33 @@ export default function AideDecision() {
 
           {/* Créneaux de Non-Souhaits Autorisés */}
           <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-purple-600" />
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Créneaux de Non-Souhaits Autorisés</h2>
+                  <p className="text-sm text-gray-500">Nombre maximum de créneaux de non-surveillance par grade</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Créneaux de Non-Souhaits Autorisés</h2>
-                <p className="text-sm text-gray-500">Nombre maximum de créneaux de non-surveillance par grade</p>
-              </div>
+              <button
+                onClick={handleExporterVoeux}
+                disabled={exporterVoeuxMutation.isPending || !recommandations}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {exporterVoeuxMutation.isPending ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Exportation...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Exporter Excel
+                  </>
+                )}
+              </button>
             </div>
             
             <div className="overflow-x-auto">

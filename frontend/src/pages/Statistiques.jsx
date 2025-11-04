@@ -299,7 +299,7 @@ export default function Statistiques() {
           {activeTab === 'souhaits' && <VueSouhaits stats={stats} />}
           {activeTab === 'responsables' && <VueResponsables stats={stats} />}
           {activeTab === 'contraintes' && <VueContraintes stats={stats} />}
-          {activeTab === 'grades' && <VueGrades statsParGrade={statsParGrade} />}
+          {activeTab === 'grades' && <VueGrades statsParGrade={statsParGrade} chargeEnseignants={chargeEnseignants} />}
         </div>
       </div>
     </div>
@@ -967,8 +967,10 @@ function VueContraintes({ stats }) {
 }
 
 // Composant Vue Grades
-function VueGrades({ statsParGrade }) {
+function VueGrades({ statsParGrade, chargeEnseignants }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [sortConfigEnseignants, setSortConfigEnseignants] = useState({ key: 'grade', direction: 'asc' });
+  const [searchFilter, setSearchFilter] = useState('');
 
   const sortedGrades = React.useMemo(() => {
     const gradesArray = Object.entries(statsParGrade);
@@ -1091,6 +1093,235 @@ function VueGrades({ statsParGrade }) {
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Nouveau tableau : Détail des quotas par enseignant */}
+      <div className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden mt-6">
+        <div className="p-6 border-b-2 border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+                  <UserGroupIcon className="h-5 w-5 text-white" />
+                </div>
+                Détail des quotas par enseignant
+              </h3>
+              <p className="text-sm text-gray-600 mt-2 font-medium">
+                Vue détaillée des surveillances affectées pour chaque enseignant
+              </p>
+            </div>
+            
+            {/* Barre de recherche */}
+            <div className="relative w-96">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Rechercher par nom ou grade..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="w-full pl-10 pr-10 py-2.5 border-2 border-green-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all text-sm font-semibold bg-white"
+              />
+              {searchFilter && (
+                <button
+                  onClick={() => setSearchFilter('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-green-400 hover:text-green-600 transition-colors"
+                >
+                  <span className="text-xl font-bold">✕</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    const newDirection = sortConfigEnseignants.key === 'nom' && sortConfigEnseignants.direction === 'asc' ? 'desc' : 'asc';
+                    setSortConfigEnseignants({ key: 'nom', direction: newDirection });
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    Enseignant
+                    {sortConfigEnseignants.key === 'nom' && (
+                      sortConfigEnseignants.direction === 'asc' 
+                        ? <ChevronUpIcon className="h-4 w-4" />
+                        : <ChevronDownIcon className="h-4 w-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    const newDirection = sortConfigEnseignants.key === 'grade' && sortConfigEnseignants.direction === 'asc' ? 'desc' : 'asc';
+                    setSortConfigEnseignants({ key: 'grade', direction: newDirection });
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    Grade
+                    {sortConfigEnseignants.key === 'grade' && (
+                      sortConfigEnseignants.direction === 'asc' 
+                        ? <ChevronUpIcon className="h-4 w-4" />
+                        : <ChevronDownIcon className="h-4 w-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    const newDirection = sortConfigEnseignants.key === 'surveillances' && sortConfigEnseignants.direction === 'asc' ? 'desc' : 'asc';
+                    setSortConfigEnseignants({ key: 'surveillances', direction: newDirection });
+                  }}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Surveillances
+                    {sortConfigEnseignants.key === 'surveillances' && (
+                      sortConfigEnseignants.direction === 'asc' 
+                        ? <ChevronUpIcon className="h-4 w-4" />
+                        : <ChevronDownIcon className="h-4 w-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    const newDirection = sortConfigEnseignants.key === 'pourcentage' && sortConfigEnseignants.direction === 'asc' ? 'desc' : 'asc';
+                    setSortConfigEnseignants({ key: 'pourcentage', direction: newDirection });
+                  }}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Pourcentage
+                    {sortConfigEnseignants.key === 'pourcentage' && (
+                      sortConfigEnseignants.direction === 'asc' 
+                        ? <ChevronUpIcon className="h-4 w-4" />
+                        : <ChevronDownIcon className="h-4 w-4" />
+                    )}
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {chargeEnseignants
+                .filter(charge => {
+                  if (!searchFilter) return true;
+                  const searchLower = searchFilter.toLowerCase();
+                  
+                  const nomComplet = `${charge.nom || ''} ${charge.prenom || ''}`.toLowerCase();
+                  const grade = (charge.grade || '').toLowerCase();
+                  const hasException = charge.is_exception ? 'exception' : '';
+                  
+                  return nomComplet.includes(searchLower) || 
+                         grade.includes(searchLower) || 
+                         hasException.includes(searchLower);
+                })
+                .sort((a, b) => {
+                  let compareValue = 0;
+                  
+                  switch (sortConfigEnseignants.key) {
+                    case 'nom':
+                      compareValue = (a.nom || '').localeCompare(b.nom || '');
+                      break;
+                    case 'grade':
+                      compareValue = (a.grade || '').localeCompare(b.grade || '');
+                      if (compareValue === 0) {
+                        compareValue = (a.nom || '').localeCompare(b.nom || '');
+                      }
+                      break;
+                    case 'surveillances':
+                      compareValue = a.nb_surveillances - b.nb_surveillances;
+                      break;
+                    case 'pourcentage':
+                      const pctA = a.quota_initial > 0 ? (a.nb_surveillances / a.quota_initial) * 100 : 0;
+                      const pctB = b.quota_initial > 0 ? (b.nb_surveillances / b.quota_initial) * 100 : 0;
+                      compareValue = pctA - pctB;
+                      break;
+                    default:
+                      compareValue = (a.grade || '').localeCompare(b.grade || '');
+                      if (compareValue === 0) {
+                        compareValue = (a.nom || '').localeCompare(b.nom || '');
+                      }
+                  }
+                  
+                  return sortConfigEnseignants.direction === 'asc' ? compareValue : -compareValue;
+                })
+                .map((charge) => {
+                  const pourcentage = charge.quota_initial > 0 
+                    ? Math.round((charge.nb_surveillances / charge.quota_initial) * 100)
+                    : 0;
+                  
+                  return (
+                    <tr key={charge.enseignant_id} className="hover:bg-green-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <UserGroupIcon className="w-4 h-4 text-green-600" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-bold text-gray-900">
+                                {charge.nom} {charge.prenom}
+                              </div>
+                              {charge.is_exception && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-sm">
+                                  EXCEPTION
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold bg-green-100 text-green-800 border border-green-200">
+                          {charge.grade || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-xl font-black text-gray-900">
+                            {charge.nb_surveillances}
+                          </span>
+                          <span className="text-sm text-gray-500 font-medium">
+                            / {charge.quota_initial}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-full max-w-[150px] bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                pourcentage >= 100 
+                                  ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
+                                  : pourcentage >= 75 
+                                  ? 'bg-gradient-to-r from-yellow-400 to-orange-400' 
+                                  : 'bg-gradient-to-r from-red-400 to-pink-400'
+                              }`}
+                              style={{ width: `${Math.min(pourcentage, 100)}%` }}
+                            ></div>
+                          </div>
+                          <span className={`text-sm font-bold ${
+                            pourcentage >= 100 
+                              ? 'text-green-600' 
+                              : pourcentage >= 75 
+                              ? 'text-yellow-600' 
+                              : 'text-red-600'
+                          }`}>
+                            {pourcentage}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>

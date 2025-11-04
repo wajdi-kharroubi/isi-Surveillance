@@ -23,13 +23,25 @@ export default function Dashboard() {
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['statistiques'],
     queryFn: () => statistiquesAPI.getGlobal().then(res => res.data),
+    staleTime: 0, // Les données deviennent obsolètes immédiatement
+    refetchOnMount: 'always', // Toujours rafraîchir au montage du composant
   });
 
   // Fetch dernière génération stats
   const { data: generationStats } = useQuery({
     queryKey: ['generation-stats'],
-    queryFn: () => statistiquesAPI.getDerniereGeneration(false).then(res => res.data),
-    enabled: (stats?.nb_affectations || 0) > 0,
+    queryFn: async () => {
+      try {
+        const res = await statistiquesAPI.getDerniereGeneration(false);
+        return res.data;
+      } catch (error) {
+        // Si pas de génération, retourner null
+        return null;
+      }
+    },
+    staleTime: 0, // Les données deviennent obsolètes immédiatement
+    gcTime: 0, // Supprimer du cache immédiatement après démontage
+    refetchOnMount: 'always', // Toujours rafraîchir au montage du composant
   });
 
   const { data: grades } = useQuery({
@@ -269,7 +281,10 @@ export default function Dashboard() {
       </div> */}
 
       {/* Statistics Preview - Only show if generation exists */}
-      {generationStats && (
+      {generationStats && 
+       generationStats.nb_affectations && 
+       generationStats.nb_affectations > 0 && 
+       (stats?.nb_affectations || 0) > 0 && (
         <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200">
           <div className="px-8 py-6">
             {/* Header */}

@@ -186,6 +186,17 @@ export const gradesAPI = {
   reset: () => api.post('/grades/reset'),
 };
 
+// ========== Aide à la Décision ==========
+export const decisionAPI = {
+  calculerRecommandations: (params) => api.post('/decision/calculer-recommandations', params),
+  appliquerQuotas: (quotas) => api.post('/decision/appliquer-quotas', quotas),
+  getQuotasActuels: () => api.get('/decision/quotas-actuels'),
+  exporterVoeuxAutorises: (params) => 
+    api.post('/decision/exporter-voeux-autorises', params, {
+      responseType: 'blob'
+    }),
+};
+
 // ========== Health Check ==========
 export const healthCheck = () => api.get('/health');
 
