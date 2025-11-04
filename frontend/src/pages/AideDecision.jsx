@@ -609,8 +609,8 @@ export default function AideDecision() {
                         <span className="font-bold text-gray-900">{alerte.type}</span>
                         <span className="text-xs text-gray-500">• {alerte.categorie}</span>
                       </div>
-                      <p className="text-sm text-gray-700 mb-1">{alerte.message}</p>
-                      <p className="text-xs text-gray-600 italic">{alerte.recommandation}</p>
+                      <p className="text-sm text-gray-700 mb-1 whitespace-pre-line">{alerte.message}</p>
+                      <p className="text-xs text-gray-600 italic whitespace-pre-line">{alerte.recommandation}</p>
                     </div>
                   </div>
                 </div>

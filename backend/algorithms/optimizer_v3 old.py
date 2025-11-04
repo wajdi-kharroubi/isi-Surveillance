@@ -514,7 +514,6 @@ class SurveillanceOptimizerV3:
                 ratio_global = quotas_totaux / besoin_ideal
                 self.warnings.append(f"   • Ratio de couverture global: {ratio_global:.2%}")
                 self.warnings.append(f"   • Objectif: Répartir proportionnellement les {quotas_totaux} enseignants sur toutes les séances")
-                self.warnings.append(f"   ⚡ PRIORITÉ ABSOLUE: Maximiser l'utilisation de TOUS les quotas disponibles")
             else:
                 # Calculer combien d'examens peuvent avoir min_surveillants_par_examen
                 # et combien devront se contenter de 1 seul
@@ -1243,12 +1242,11 @@ class SurveillanceOptimizerV3:
         - Avec regroupement: Vœux (40%) + Responsables (30%) + Dispersion (20%) + Regroupement (10%)
         - Sans regroupement: Vœux (50%) + Responsables (30%) + Dispersion (20%)
         
-        MODE ADAPTATIF (quotas insuffisants) - ⚡ NOUVEAU:
-        - ⚡ PRIORITÉ ABSOLUE: Maximiser l'utilisation des quotas disponibles (poids 100-120)
-        - Les enseignants DOIVENT utiliser le maximum de leurs quotas
-        - Dispersion globale DÉSACTIVÉE (structurelle due aux différences de quotas entre grades)
-        - Avec regroupement: Quotas (100) + Vœux (40) + Responsables (30) + Déviation (10) + Regroupement (10)
-        - Sans regroupement: Quotas (120) + Vœux (45) + Responsables (35) + Max séances (15) + Déviation (12)
+        MODE ADAPTATIF (quotas insuffisants):
+        - Les enseignants peuvent avoir MOINS que leur quota maximum
+        - Important d'optimiser l'utilisation des quotas disponibles
+        - Avec regroupement: Vœux (35%) + Responsables (25%) + Dispersion (15%) + Quotas (15%) + Regroupement (10%)
+        - Sans regroupement: Vœux (50%) + Dispersion (30%) + Quotas (20%)
         
         NOTE: L'équilibre par grade (dispersion intra-grade) est déjà garanti par la CONTRAINTE 1
               (Égalité stricte par grade) qui impose dispersion_grades = 0. Pas besoin de l'optimiser.
@@ -1350,10 +1348,10 @@ class SurveillanceOptimizerV3:
         # PRIORITÉ 3: ÉVITER les vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ)
         if penalite_voeux is not None:
             composantes.append(penalite_voeux)
-            # MODE ADAPTATIF: Poids augmenté pour mieux respecter les vœux
+            # MODE ADAPTATIF: Poids ajusté selon si regroupement temporel activé
             # MODE NORMAL: Poids plus élevé car pas besoin d'optimiser les quotas
             if mode_adaptatif:
-                poids.append(-45 if not activer_regroupement_temporel else -40)
+                poids.append(-50 if not activer_regroupement_temporel else -35)
             else:
                 poids.append(-50 if not activer_regroupement_temporel else -40)
 
@@ -1371,41 +1369,39 @@ class SurveillanceOptimizerV3:
                 self.model.Add(bonus_responsables == sum(responsables_vars))
                 
                 composantes.append(bonus_responsables)
-                # MODE ADAPTATIF: Poids augmenté pour favoriser les responsables
-                # MODE NORMAL: Poids élevé
+                # Poids très élevé pour favoriser la présence des responsables
+                # Juste après les vœux dans l'ordre de priorité
                 if mode_adaptatif:
-                    poids.append(35 if not activer_regroupement_temporel else 30)
+                    poids.append(40 if not activer_regroupement_temporel else 25)
                 else:
                     poids.append(50 if not activer_regroupement_temporel else 30)
 
         # PRIORITÉ 5: Pénalité dépassement nombre max séances/jour (POIDS MOYEN - SOUPLE)
         if penalite_max_seances is not None:
             composantes.append(penalite_max_seances)
-            # MODE ADAPTATIF: Poids réduit pour laisser priorité à la maximisation des quotas
-            if mode_adaptatif:
-                poids.append(-15)
-            else:
-                poids.append(-30)  # Poids moyen: -30 (PRIORITÉ 5)
+            # Poids moyen car c'est une préférence importante (PRIORITÉ 5)
+            # Plus élevé que le regroupement, mais moins que les vœux
+            poids.append(-30)  # Poids moyen: -30 (PRIORITÉ 5)
 
         # Équilibre global de charge (minimiser dispersion globale entre TOUS les enseignants)
-        # ⚠️ DÉSACTIVÉ EN MODE ADAPTATIF : La dispersion inter-grades est structurelle (quotas différents)
-        # L'égalité stricte par grade garantit déjà l'équité intra-grade (dispersion = 0 par grade)
-        if dispersion is not None and not mode_adaptatif:
-            # Seulement en MODE NORMAL
+        if dispersion is not None:
             composantes.append(dispersion)
-            poids.append(-40 if not activer_regroupement_temporel else -30)
+            # MODE ADAPTATIF: Poids réduit pour laisser place au regroupement
+            # MODE NORMAL: Poids modéré (égalité par grade déjà garantie)
+            if mode_adaptatif:
+                poids.append(-30 if not activer_regroupement_temporel else -20)
+            else:
+                poids.append(-40 if not activer_regroupement_temporel else -30)
 
         # NOTE: dispersion_grades est DÉSACTIVÉE car redondante avec CONTRAINTE 1
         # La CONTRAINTE 1 (Égalité stricte par grade) impose déjà dispersion_grades = 0
 
-        # Maximisation des quotas (SEULEMENT EN MODE ADAPTATIF - PRIORITAIRE)
+        # Maximisation des quotas (SEULEMENT EN MODE ADAPTATIF)
         # En mode NORMAL, les quotas sont déjà maximisés par la CONTRAINTE 1 (redondant)
-        # ⚡ NOUVEAU: Poids TRÈS ÉLEVÉ pour forcer l'utilisation de TOUS les quotas disponibles
         if mode_adaptatif and total_affectations is not None:
             composantes.append(total_affectations)
-            # Poids TRÈS ÉLEVÉ pour maximiser obligatoirement l'utilisation des quotas
-            # Plus élevé que tous les autres pour prioriser l'utilisation maximale
-            poids.append(100 if activer_regroupement_temporel else 120)
+            # Poids ajusté selon si regroupement temporel activé
+            poids.append(20 if activer_regroupement_temporel else 20)
 
         # 🎯 NOUVEAU: Minimiser la déviation par rapport aux objectifs proportionnels en mode adaptatif
         # Cela encourage l'équilibrage entre les séances au lieu d'avoir certaines au min et d'autres au max
@@ -1443,8 +1439,9 @@ class SurveillanceOptimizerV3:
                 self.model.Add(deviation_proportionnelle == sum(deviations))
                 
                 composantes.append(deviation_proportionnelle)
-                # Poids réduit pour laisser priorité à la maximisation des quotas
-                poids.append(-10 if activer_regroupement_temporel else -12)
+                # Poids négatif pour minimiser la déviation (favoriser l'équilibrage)
+                # Poids modéré pour équilibrer avec les autres priorités
+                poids.append(-25 if activer_regroupement_temporel else -30)
 
         # PRIORITÉ 7: Pénalité première+dernière isolées (POIDS MOYEN - SOUPLE)
         if penalite_isolees is not None:

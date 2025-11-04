@@ -494,7 +494,7 @@ class DecisionService:
         # - q2 (AS) - q1 >= difference_min_ma_as
         # - q3 (AC/PES/PTC) - q2 >= difference_min_as_ac
         # - chaque différence entre groupes adjacents <= 3
-        quota_min = max(3, quota_min_groupe1)  # Le quota minimal est au moins 3 ou quota_min_groupe1
+        quota_min = quota_min_groupe1
         quota_max = 20
 
         best_quotas = None
@@ -1129,16 +1129,15 @@ class DecisionService:
                 for c in conflits_info
             ]
             
-            message_principal = f"ℹ️ {nb_conflits} responsable(s) avec plus d'examens que le quota de leur grade\n"
-            message_principal += "(Contrainte souple - l'optimizer peut générer une solution)\n"
-            message_principal += "\nEnseignants concernés:\n"
+            message_principal = f"⚠️ {nb_conflits} responsable(s) avec plus d'examens que le quota de leur grade\n"
+            message_principal += "Enseignants concernés:\n"
             for i, ens_info in enumerate(enseignants_en_conflit, 1):
-                message_principal += f"   {i}. {ens_info}\n"
+                message_principal += f"  {i}. {ens_info}\n"
             
             alertes.append({
-                "type": "INFO",
+                "type": "ATTENTION",
                 "categorie": "RESPONSABLES_QUOTA_DEPASSE",
-                "message": message_principal.strip(),
+                "message": message_principal,
                 "details": [c["message"] for c in conflits_info],
                 "recommandations": [c["recommandation"] for c in conflits_info],
                 "nb_conflits": nb_conflits,
@@ -1155,14 +1154,14 @@ class DecisionService:
             ]
             
             message_attention = f"⚠️ {nb_attentions} responsable(s) avec un nombre d'examens égal à leur quota (aucune flexibilité)\n"
-            message_attention += "\nEnseignants concernés:\n"
+            message_attention += "Enseignants concernés:\n"
             for i, ens_info in enumerate(enseignants_en_attention, 1):
-                message_attention += f"   {i}. {ens_info}\n"
+                message_attention += f"  {i}. {ens_info}\n"
             
             alertes.append({
                 "type": "ATTENTION",
                 "categorie": "RESPONSABLES_QUOTA_EXACT",
-                "message": message_attention.strip(),
+                "message": message_attention,
                 "details": [c["message"] for c in conflits_attentions],
                 "recommandations": [c["recommandation"] for c in conflits_attentions],
                 "nb_attentions": nb_attentions,
