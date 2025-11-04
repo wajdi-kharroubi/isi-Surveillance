@@ -43,7 +43,7 @@ Application de bureau complète pour la **gestion automatisée des plannings de 
 
 Découvrez l'application en action à travers cette démonstration complète :
 
-**[▶️ Voir la démonstration sur YouTube de la version 2 (nouvelle version)](https://www.youtube.com/watch?v=jGNlg5-VkTU)** 
+**[▶️ Voir la démonstration sur YouTube de la version 2](https://www.youtube.com/watch?v=jGNlg5-VkTU)**
 
 **[▶️ Voir la démonstration sur YouTube de la version 1](https://www.youtube.com/watch?v=JNGDvO74-O0)**
 
