@@ -1201,7 +1201,7 @@ export default function Planning() {
                             </div>
                             <div className="flex items-center gap-3 text-sm text-gray-600">
                               <span className="px-2 py-1 bg-green-100 rounded-md font-semibold text-xs text-green-700 border border-green-200">
-                                {emploiEnseignant.enseignant.grade}
+                                {emploiEnseignant.enseignant.grade_code}
                               </span>
                               <span className="font-medium">
                                 {emploiEnseignant.enseignant.nb_surveillances_affectees} / {emploiEnseignant.enseignant.quota_max} surveillances
@@ -1672,7 +1672,7 @@ export default function Planning() {
                   {validationData.validation.enseignant.nom} {validationData.validation.enseignant.prenom}
                 </p>
                 <p className="text-sm text-blue-600 font-medium">
-                  Grade: {validationData.validation.enseignant.grade}
+                  Grade: {validationData.validation.enseignant.grade_code}
                 </p>
               </div>
 
@@ -1872,6 +1872,82 @@ export default function Planning() {
                 </div>
               )}
 
+              {/* Alerte ROUGE : Responsables qui vont quitter leur séance (MAUVAIS) */}
+              {(exchangeValidationData.enseignant1.responsable_seance_actuelle.est_responsable || 
+                exchangeValidationData.enseignant2.responsable_seance_actuelle.est_responsable) && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-red-900 mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                     ALERTE : Responsables vont quitter leur séance
+                  </h3>
+                  <p className="text-xs text-red-800 mb-3 font-semibold">
+                    Les enseignants suivants sont responsables d'examens dans les séances qu'ils vont quitter. Ceci peut poser problème !
+                  </p>
+                  <ul className="space-y-2">
+                    {exchangeValidationData.enseignant1.responsable_seance_actuelle.est_responsable && (
+                      <li className="flex items-start gap-2 text-sm text-red-800 bg-red-100 p-3 rounded-lg">
+                        <span className="text-red-600 font-bold mt-0.5">❌</span>
+                        <span className="font-semibold">
+                          <span className="font-bold uppercase">{exchangeValidationData.enseignant1.enseignant.nom} {exchangeValidationData.enseignant1.enseignant.prenom}</span> est RESPONSABLE 
+                          de <span className="font-bold">{exchangeValidationData.enseignant1.responsable_seance_actuelle.nb_examens} examen(s)</span> dans la séance qu'il/elle va quitter
+                          <br />
+                          <span className="text-xs"> Séance : {formatDate(pendingExchangeData.date1)} à {pendingExchangeData.h_debut1}</span>
+                        </span>
+                      </li>
+                    )}
+                    {exchangeValidationData.enseignant2.responsable_seance_actuelle.est_responsable && (
+                      <li className="flex items-start gap-2 text-sm text-red-800 bg-red-100 p-3 rounded-lg">
+                        <span className="text-red-600 font-bold mt-0.5">❌</span>
+                        <span className="font-semibold">
+                          <span className="font-bold uppercase">{exchangeValidationData.enseignant2.enseignant.nom} {exchangeValidationData.enseignant2.enseignant.prenom}</span> est RESPONSABLE 
+                          de <span className="font-bold">{exchangeValidationData.enseignant2.responsable_seance_actuelle.nb_examens} examen(s)</span> dans la séance qu'il/elle va quitter
+                          <br />
+                          <span className="text-xs"> Séance : {formatDate(pendingExchangeData.date2)} à {pendingExchangeData.h_debut2}</span>
+                        </span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* Alerte VERTE : Responsables qui vont arriver dans leur séance (BON) */}
+              {(exchangeValidationData.enseignant1.responsable_nouvelle_seance.est_responsable || 
+                exchangeValidationData.enseignant2.responsable_nouvelle_seance.est_responsable) && (
+                <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-green-900 mb-3 flex items-center gap-2">
+                    <Star className="w-5 h-5" />
+                     INFO : Responsables vont rejoindre leur séance
+                  </h3>
+                  <p className="text-xs text-green-800 mb-3 font-semibold">
+                    Les enseignants suivants sont responsables d'examens dans les séances où ils vont être ajoutés. C'est une bonne chose !
+                  </p>
+                  <ul className="space-y-2">
+                    {exchangeValidationData.enseignant1.responsable_nouvelle_seance.est_responsable && (
+                      <li className="flex items-start gap-2 text-sm text-green-800 bg-green-100 p-3 rounded-lg">
+                        <span className="text-green-600 font-bold mt-0.5">✓</span>
+                        <span className="font-semibold">
+                          <span className="font-bold uppercase">{exchangeValidationData.enseignant1.enseignant.nom} {exchangeValidationData.enseignant1.enseignant.prenom}</span> est RESPONSABLE 
+                          de <span className="font-bold">{exchangeValidationData.enseignant1.responsable_nouvelle_seance.nb_examens} examen(s)</span> dans la séance où il/elle va être ajouté(e)
+                          <br />
+                          <span className="text-xs"> Séance : {formatDate(pendingExchangeData.date2)} à {pendingExchangeData.h_debut2}</span>
+                        </span>
+                      </li>
+                    )}
+                    {exchangeValidationData.enseignant2.responsable_nouvelle_seance.est_responsable && (
+                      <li className="flex items-start gap-2 text-sm text-green-800 bg-green-100 p-3 rounded-lg">
+                        <span className="text-green-600 font-bold mt-0.5">✓</span>
+                        <span className="font-semibold">
+                          <span className="font-bold uppercase">{exchangeValidationData.enseignant2.enseignant.nom} {exchangeValidationData.enseignant2.enseignant.prenom}</span> est RESPONSABLE 
+                          de <span className="font-bold">{exchangeValidationData.enseignant2.responsable_nouvelle_seance.nb_examens} examen(s)</span> dans la séance où il/elle va être ajouté(e)
+                          <br />
+                          <span className="text-xs"> Séance : {formatDate(pendingExchangeData.date1)} à {pendingExchangeData.h_debut1}</span>
+                        </span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
               {/* Détails par enseignant */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Enseignant 1 */}
@@ -2021,7 +2097,7 @@ export default function Planning() {
                   {pendingSuppressionData.enseignant.nom} {pendingSuppressionData.enseignant.prenom}
                 </p>
                 <p className="text-sm text-blue-600 font-medium">
-                  Grade: {pendingSuppressionData.enseignant.grade}
+                  Grade: {pendingSuppressionData.enseignant.grade_code}
                 </p>
               </div>
 

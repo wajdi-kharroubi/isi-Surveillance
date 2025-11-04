@@ -65,63 +65,95 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
       const response = await exportAPI.getGmailAuthUrl();
       const authUrl = response.data.authorization_url;
       
-      // Ouvrir popup Google OAuth
-      const width = 500;
-      const height = 600;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
+      // Vérifier si on est dans Electron
+      const isElectron = window.electronAPI !== undefined;
       
-      const popup = window.open(
-        authUrl,
-        'Google OAuth',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
-
-      // Écouter le message de callback
-      const handleMessage = async (event) => {
-        // Vérifier l'origine pour la sécurité
-        if (event.origin !== window.location.origin) return;
-
-        if (event.data.type === 'GOOGLE_OAUTH_SUCCESS') {
-          const code = event.data.code;
+      if (isElectron) {
+        // Utiliser l'API Electron pour ouvrir la fenêtre OAuth
+        try {
+          const result = await window.electronAPI.openOAuthWindow(authUrl);
+          const code = result.code;
           
-          try {
-            // Échanger le code contre un token
-            const tokenResponse = await exportAPI.handleGmailOAuthCallback({ code });
+          // Échanger le code contre un token
+          const tokenResponse = await exportAPI.handleGmailOAuthCallback({ code });
+          
+          if (tokenResponse.data.success) {
+            const token = tokenResponse.data.token_info;
+            const email = tokenResponse.data.user_email;
             
-            if (tokenResponse.data.success) {
-              const token = tokenResponse.data.token_info;
-              const email = tokenResponse.data.user_email;
-              
-              // Sauvegarder le token
-              setTokenInfo(token);
-              setUserEmail(email);
-              setIsAuthenticated(true);
-              localStorage.setItem('gmail_token_info', JSON.stringify(token));
-              
-              toast.success(`Connecté en tant que ${email}`);
-              popup.close();
-            }
-          } catch (error) {
-            console.error('Erreur échange token:', error);
-            toast.error('Échec de l\'authentification Google');
+            // Sauvegarder le token
+            setTokenInfo(token);
+            setUserEmail(email);
+            setIsAuthenticated(true);
+            localStorage.setItem('gmail_token_info', JSON.stringify(token));
+            
+            toast.success(`Connecté avec succès`);
+          } else {
+            toast.error('Erreur lors de l\'authentification');
           }
-          
-          window.removeEventListener('message', handleMessage);
-          setIsAuthenticating(false);
+        } catch (error) {
+          console.error('Erreur OAuth Electron:', error);
+          toast.error('Erreur lors de la connexion Google');
         }
-      };
+      } else {
+        // Mode navigateur web (développement)
+        const width = 500;
+        const height = 600;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+        
+        const popup = window.open(
+          authUrl,
+          'Google OAuth',
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
 
-      window.addEventListener('message', handleMessage);
-      
-      // Nettoyer si la popup est fermée sans callback
-      const checkPopupClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkPopupClosed);
-          window.removeEventListener('message', handleMessage);
-          setIsAuthenticating(false);
-        }
-      }, 500);
+        // Écouter le message de callback
+        const handleMessage = async (event) => {
+          // Vérifier l'origine pour la sécurité
+          if (event.origin !== window.location.origin) return;
+
+          if (event.data.type === 'GOOGLE_OAUTH_SUCCESS') {
+            const code = event.data.code;
+            
+            try {
+              // Échanger le code contre un token
+              const tokenResponse = await exportAPI.handleGmailOAuthCallback({ code });
+              
+              if (tokenResponse.data.success) {
+                const token = tokenResponse.data.token_info;
+                const email = tokenResponse.data.user_email;
+                
+                // Sauvegarder le token
+                setTokenInfo(token);
+                setUserEmail(email);
+                setIsAuthenticated(true);
+                localStorage.setItem('gmail_token_info', JSON.stringify(token));
+              
+                toast.success(`Connecté en tant que ${email}`);
+                popup.close();
+              }
+            } catch (error) {
+              console.error('Erreur échange token:', error);
+              toast.error('Échec de l\'authentification Google');
+            }
+            
+            window.removeEventListener('message', handleMessage);
+            setIsAuthenticating(false);
+          }
+        };
+
+        window.addEventListener('message', handleMessage);
+        
+        // Nettoyer si la popup est fermée sans callback
+        const checkPopupClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkPopupClosed);
+            window.removeEventListener('message', handleMessage);
+            setIsAuthenticating(false);
+          }
+        }, 500);
+      }
       
     } catch (error) {
       console.error('Erreur OAuth:', error);

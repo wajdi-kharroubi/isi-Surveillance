@@ -557,7 +557,7 @@ export default function GestionEnseignantsSeanceInline({
                   {validationData.validation.enseignant.nom} {validationData.validation.enseignant.prenom}
                 </p>
                 <p className="text-sm text-blue-600 font-medium">
-                  Grade: {validationData.validation.enseignant.grade}
+                  Grade: {validationData.validation.enseignant.grade_code}
                 </p>
               </div>
 
@@ -738,7 +738,7 @@ export default function GestionEnseignantsSeanceInline({
                   {pendingSuppressionData.enseignant.nom} {pendingSuppressionData.enseignant.prenom}
                 </p>
                 <p className="text-sm text-blue-600 font-medium">
-                  Grade: {pendingSuppressionData.enseignant.grade}
+                  Grade: {pendingSuppressionData.enseignant.grade_code}
                 </p>
               </div>
 

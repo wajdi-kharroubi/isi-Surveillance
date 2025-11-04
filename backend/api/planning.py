@@ -241,7 +241,8 @@ def emploi_enseignant(enseignant_id: int, db: Session = Depends(get_db)):
             "id": enseignant.id,
             "nom": enseignant.nom,
             "prenom": enseignant.prenom,
-            "grade": enseignant.grade_code,
+            "grade_code": enseignant.grade_code,
+            "grade": enseignant.grade,
             "quota_max": quota_max,
             "nb_surveillances_affectees": nb_surveillances_affectees,
             "pourcentage_quota": pourcentage_quota,
@@ -286,6 +287,7 @@ def emploi_seances(db: Session = Depends(get_db)):
                     "id": aff.enseignant_id,
                     "nom": aff.enseignant.nom,
                     "prenom": aff.enseignant.prenom,
+                    "grade_code": aff.enseignant.grade_code,
                     "est_responsable": aff.est_responsable,
                 }
             elif aff.est_responsable:
@@ -1275,19 +1277,19 @@ def verifier_contraintes_ajout(
 
     if quota_depasse:
         warnings.append(
-            f"⚠️ QUOTA DÉPASSÉ : L'enseignant aura {nb_seances_actuelles + 1}/{quota_max} séances ({pourcentage_apres_ajout}%)"
+            f"QUOTA DÉPASSÉ : L'enseignant aura {nb_seances_actuelles + 1}/{quota_max} séances ({pourcentage_apres_ajout}%)"
         )
 
     if souhait_non_respecte:
         # Traiter comme un warning au lieu d'une erreur pour laisser l'utilisateur décider
-        warning_msg = f"⚠️ SOUHAIT NON RESPECTÉ : L'enseignant a exprimé le souhait de NE PAS être disponible pour cette séance ({code_seance})"
+        warning_msg = f"SOUHAIT NON RESPECTÉ : L'enseignant a exprimé le souhait de NE PAS être disponible pour cette séance ({code_seance})"
         if voeu and voeu.motif:
             warning_msg += f" - Motif: {voeu.motif}"
         warnings.append(warning_msg)
 
     if max_seances_jour_depasse:
         warnings.append(
-            f"⚠️ MAX SÉANCES/JOUR DÉPASSÉ : L'enseignant aura {nb_seances_ce_jour + 1}/{nombre_max_par_jour} séances ce jour-là"
+            f"MAX SÉANCES/JOUR DÉPASSÉ : L'enseignant aura {nb_seances_ce_jour + 1}/{nombre_max_par_jour} séances ce jour-là"
         )
 
     # Vérifier si l'enseignant est responsable d'un examen dans cette séance
@@ -1326,7 +1328,7 @@ def verifier_contraintes_ajout(
             "id": enseignant.id,
             "nom": enseignant.nom,
             "prenom": enseignant.prenom,
-            "grade": enseignant.grade_code,
+            "grade_code": enseignant.grade_code,
         },
         "quota": {
             "actuel": nb_seances_actuelles,
@@ -1380,7 +1382,7 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
         else:  # 14:30+
             return "S4"
     
-    def verifier_enseignant_pour_seance(enseignant_id, date_examen, h_debut, h_fin):
+    def verifier_enseignant_pour_seance(enseignant_id, date_examen, h_debut, h_fin, date_actuelle=None, h_debut_actuelle=None):
         """Vérifie les contraintes pour un enseignant dans une nouvelle séance."""
         enseignant = db.query(Enseignant).filter(Enseignant.id == enseignant_id).first()
         if not enseignant:
@@ -1457,24 +1459,57 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
         nombre_max_par_jour = enseignant.nombre_max
         max_seances_jour_depasse = nb_seances_ce_jour > nombre_max_par_jour
 
+        # Vérifier si l'enseignant est responsable dans sa séance actuelle (celle qu'il va quitter)
+        est_responsable_seance_actuelle = False
+        nb_examens_responsable_actuelle = 0
+        if date_actuelle and h_debut_actuelle:
+            examens_seance_actuelle = (
+                db.query(Examen)
+                .filter(
+                    Examen.dateExam == date_actuelle,
+                    Examen.h_debut == h_debut_actuelle,
+                )
+                .all()
+            )
+            for examen in examens_seance_actuelle:
+                if examen.enseignant == enseignant.code_smartex:
+                    est_responsable_seance_actuelle = True
+                    nb_examens_responsable_actuelle += 1
+
+        # Vérifier si l'enseignant est responsable dans la nouvelle séance (celle où il va aller)
+        est_responsable_nouvelle_seance = False
+        nb_examens_responsable_nouvelle = 0
+        examens_nouvelle_seance = (
+            db.query(Examen)
+            .filter(
+                Examen.dateExam == date_examen,
+                Examen.h_debut == h_debut,
+            )
+            .all()
+        )
+        for examen in examens_nouvelle_seance:
+            if examen.enseignant == enseignant.code_smartex:
+                est_responsable_nouvelle_seance = True
+                nb_examens_responsable_nouvelle += 1
+
         # Construire warnings et errors
         warnings = []
         errors = []
 
         if quota_depasse:
             warnings.append(
-                f"⚠️ QUOTA DÉPASSÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a déjà {nb_seances_actuelles}/{quota_max} séances ({pourcentage_apres_echange}%)"
+                f"QUOTA DÉPASSÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a déjà {nb_seances_actuelles}/{quota_max} séances ({pourcentage_apres_echange}%)"
             )
 
         if souhait_non_respecte:
-            warning_msg = f"⚠️ SOUHAIT NON RESPECTÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a exprimé le souhait de NE PAS être disponible pour cette séance ({code_seance})"
+            warning_msg = f"SOUHAIT NON RESPECTÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a exprimé le souhait de NE PAS être disponible pour cette séance ({code_seance})"
             if voeu and voeu.motif:
                 warning_msg += f" - Motif: {voeu.motif}"
             warnings.append(warning_msg)
 
         if max_seances_jour_depasse:
             warnings.append(
-                f"⚠️ MAX SÉANCES/JOUR DÉPASSÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a déjà {nb_seances_ce_jour}/{nombre_max_par_jour} séances ce jour-là"
+                f"MAX SÉANCES/JOUR DÉPASSÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a déjà {nb_seances_ce_jour}/{nombre_max_par_jour} séances ce jour-là"
             )
 
         return {
@@ -1482,7 +1517,7 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
                 "id": enseignant.id,
                 "nom": enseignant.nom,
                 "prenom": enseignant.prenom,
-                "grade": enseignant.grade_code,
+                "grade_code": enseignant.grade_code,
             },
             "quota": {
                 "actuel": nb_seances_actuelles,
@@ -1501,24 +1536,36 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
                 "motif": voeu.motif if voeu else None,
                 "non_respecte": souhait_non_respecte,
             },
+            "responsable_seance_actuelle": {
+                "est_responsable": est_responsable_seance_actuelle,
+                "nb_examens": nb_examens_responsable_actuelle,
+            },
+            "responsable_nouvelle_seance": {
+                "est_responsable": est_responsable_nouvelle_seance,
+                "nb_examens": nb_examens_responsable_nouvelle,
+            },
             "warnings": warnings,
             "errors": errors,
         }
     
-    # Vérifier l'enseignant 1 vers la séance 2
+    # Vérifier l'enseignant 1 vers la séance 2 (il quitte la séance 1)
     validation_ens1 = verifier_enseignant_pour_seance(
         request.enseignant1_id,
         request.date2,
         request.h_debut2,
-        request.h_fin2
+        request.h_fin2,
+        date_actuelle=request.date1,
+        h_debut_actuelle=request.h_debut1
     )
     
-    # Vérifier l'enseignant 2 vers la séance 1
+    # Vérifier l'enseignant 2 vers la séance 1 (il quitte la séance 2)
     validation_ens2 = verifier_enseignant_pour_seance(
         request.enseignant2_id,
         request.date1,
         request.h_debut1,
-        request.h_fin1
+        request.h_fin1,
+        date_actuelle=request.date2,
+        h_debut_actuelle=request.h_debut2
     )
     
     # Combiner les warnings et errors
