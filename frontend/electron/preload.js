@@ -4,5 +4,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getBackendUrl: () => ipcRenderer.invoke('get-backend-url'),
+  openOAuthWindow: (authUrl) => ipcRenderer.invoke('open-oauth-window', authUrl),
   platform: process.platform
 });

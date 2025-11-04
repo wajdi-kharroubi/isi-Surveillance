@@ -61,15 +61,6 @@
       {
         "from": "../backend/dist/surveillance_backend.exe",
         "to": "backend/surveillance_backend.exe"
-      },
-      {
-        "from": "../database",
-        "to": "backend/database",
-        "filter": ["**/*"]
-      },
-      {
-        "from": "../backend/config.py",
-        "to": "backend/config.py"
       }
     ],
     "compression": "maximum",

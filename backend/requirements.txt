@@ -1,6 +1,8 @@
 fastapi==0.109.0
 uvicorn==0.27.0
 pydantic>=2.10
+pydantic[email]
+email-validator
 pydantic-settings==2.1.0
 sqlalchemy>=2.0.35
 alembic==1.13.1
@@ -39,3 +41,9 @@ python-dateutil==2.8.2
 # Utilities
 aiofiles==23.2.1
 httpx==0.26.0
+
+pyinstaller
+passlib
+bcrypt
+python-jose
+python-multipart

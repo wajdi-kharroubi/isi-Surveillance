@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 # Application Settings
@@ -11,8 +12,19 @@ HOST = "127.0.0.1"
 PORT = 8000
 RELOAD = DEBUG
 
+# Detect if running as PyInstaller bundle
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Running as compiled executable
+    # Use AppData folder for user data (not Program Files - permissions issue!)
+    appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+    BASE_DIR = Path(appdata) / "GestionSurveillances"
+    BASE_DIR.mkdir(parents=True, exist_ok=True)
+    DEBUG = False  # Force production mode
+else:
+    # Running in normal Python environment
+    BASE_DIR = Path(__file__).resolve().parent.parent
+
 # Database
-BASE_DIR = Path(__file__).resolve().parent.parent
 DATABASE_DIR = BASE_DIR / "database"
 DATABASE_DIR.mkdir(exist_ok=True)
 DATABASE_URL = f"sqlite:///{DATABASE_DIR}/surveillance.db"

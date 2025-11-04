@@ -17,6 +17,8 @@ from datetime import datetime, date
 from typing import List, Dict
 import os
 import sys
+import re
+import unicodedata
 from config import EXPORT_DIR
 import logging
 
@@ -41,6 +43,38 @@ def get_resource_path(relative_path):
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     return os.path.join(base_path, relative_path)
+
+
+def nettoyer_nom_fichier(nom: str) -> str:
+    """
+    Nettoie un nom pour qu'il soit valide comme nom de fichier sous Windows.
+    Supprime les caractères invalides et remplace les accents.
+    
+    Args:
+        nom: Le nom à nettoyer
+        
+    Returns:
+        Le nom nettoyé, valide pour un nom de fichier
+    """
+    # Normaliser les caractères Unicode (décomposer les accents)
+    nom = unicodedata.normalize('NFD', nom)
+    # Supprimer les marques diacritiques (accents)
+    nom = ''.join(char for char in nom if unicodedata.category(char) != 'Mn')
+    
+    # Remplacer les caractères invalides sous Windows par des underscores
+    # Caractères interdits: < > : " / \ | ? *
+    nom = re.sub(r'[<>:"/\\|?*]', '_', nom)
+    
+    # Remplacer les espaces par des underscores
+    nom = nom.replace(' ', '_')
+    
+    # Supprimer les underscores multiples consécutifs
+    nom = re.sub(r'_+', '_', nom)
+    
+    # Supprimer les underscores au début et à la fin
+    nom = nom.strip('_')
+    
+    return nom
 
 
 class ExportService:
@@ -256,8 +290,12 @@ class ExportService:
             if not affectations:
                 continue
             
+            # Nettoyer les noms pour éviter les caractères invalides dans les noms de fichiers
+            nom_propre = nettoyer_nom_fichier(enseignant.nom)
+            prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
+            
             # Générer Word
-            filename_word = f"convocation_{enseignant.nom}_{enseignant.prenom}_{datetime.now().strftime('%Y%m%d')}.docx"
+            filename_word = f"convocation_{nom_propre}_{prenom_propre}_{datetime.now().strftime('%Y%m%d')}.docx"
             filepath_word = os.path.join(self.export_dir, filename_word)
             self._generer_convocation_word(enseignant, affectations, filepath_word)
             filepaths.append(filepath_word)
@@ -957,8 +995,12 @@ class ExportService:
         if not affectations:
             raise ValueError(f"Aucune affectation trouvée pour l'enseignant {enseignant.nom} {enseignant.prenom}")
         
+        # Nettoyer les noms pour éviter les caractères invalides dans les noms de fichiers
+        nom_propre = nettoyer_nom_fichier(enseignant.nom)
+        prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
+        
         # Générer Word
-        filename_word = f"convocation_{enseignant.nom}_{enseignant.prenom}.docx"
+        filename_word = f"convocation_{nom_propre}_{prenom_propre}.docx"
         filepath_word = os.path.join(self.export_dir, filename_word)
         self._generer_convocation_word(enseignant, affectations, filepath_word)
         
@@ -1055,8 +1097,12 @@ class ExportService:
             if not affectations:
                 continue
             
+            # Nettoyer les noms pour éviter les caractères invalides dans les noms de fichiers
+            nom_propre = nettoyer_nom_fichier(enseignant.nom)
+            prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
+            
             # Générer DOCX d'abord
-            filename_docx = f"convocation_{enseignant.nom}_{enseignant.prenom}_{datetime.now().strftime('%Y%m%d')}.docx"
+            filename_docx = f"convocation_{nom_propre}_{prenom_propre}_{datetime.now().strftime('%Y%m%d')}.docx"
             filepath_docx = os.path.join(self.export_dir, filename_docx)
             self._generer_convocation_word(enseignant, affectations, filepath_docx)
             

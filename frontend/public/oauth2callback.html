@@ -52,31 +52,98 @@
     </div>
 
     <script>
+        console.log('OAuth callback page loaded');
+        console.log('Current URL:', window.location.href);
+        console.log('Window opener exists:', !!window.opener);
+        
         // Récupérer le code d'autorisation de l'URL
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
         const error = urlParams.get('error');
+        const state = urlParams.get('state');
+
+        console.log('OAuth Code:', code);
+        console.log('OAuth Error:', error);
+        console.log('OAuth State:', state);
 
         if (error) {
-            // Erreur d'authentification
-            if (window.opener) {
-                window.opener.postMessage({
-                    type: 'GOOGLE_OAUTH_ERROR',
-                    error: error
-                }, window.location.origin);
+            console.error('OAuth Error:', error);
+            
+            // Afficher l'erreur à l'utilisateur
+            document.querySelector('.container').innerHTML = `
+                <div style="color: #e53e3e;">
+                    <h2>❌ Erreur d'authentification</h2>
+                    <p>Erreur: ${error}</p>
+                    <p style="margin-top: 20px;">Cette fenêtre va se fermer automatiquement...</p>
+                </div>
+            `;
+            
+            // Essayer de communiquer avec la fenêtre parent
+            try {
+                if (window.opener && !window.opener.closed) {
+                    console.log('Sending error to opener...');
+                    window.opener.postMessage({
+                        type: 'GOOGLE_OAUTH_ERROR',
+                        error: error
+                    }, '*'); // Use '*' for Electron compatibility
+                }
+            } catch (e) {
+                console.error('Error sending message to opener:', e);
             }
-            window.close();
+            
+            // Fermer après 3 secondes
+            setTimeout(() => {
+                console.log('Closing window...');
+                window.close();
+            }, 3000);
+            
         } else if (code) {
-            // Succès - envoyer le code à la fenêtre parent
-            if (window.opener) {
-                window.opener.postMessage({
-                    type: 'GOOGLE_OAUTH_SUCCESS',
-                    code: code
-                }, window.location.origin);
+            console.log('OAuth code received, processing...');
+            
+            // Afficher le succès
+            document.querySelector('.container').innerHTML = `
+                <div style="color: #38a169;">
+                    <h2>✅ Authentification réussie!</h2>
+                    <p>Transmission du code...</p>
+                    <p style="margin-top: 20px; font-size: 12px;">Cette fenêtre va se fermer automatiquement.</p>
+                </div>
+            `;
+            
+            // Envoyer le code à la fenêtre parent
+            try {
+                if (window.opener && !window.opener.closed) {
+                    console.log('Sending code to opener...', code.substring(0, 10) + '...');
+                    window.opener.postMessage({
+                        type: 'GOOGLE_OAUTH_SUCCESS',
+                        code: code,
+                        state: state
+                    }, '*'); // Use '*' for Electron compatibility
+                    console.log('Message sent successfully');
+                } else {
+                    console.warn('Window opener not available or closed');
+                }
+            } catch (e) {
+                console.error('Error sending message to opener:', e);
             }
-            // La fenêtre sera fermée par le parent après traitement
+            
+            // Fermer la fenêtre après un délai pour laisser le temps au message d'être traité
+            setTimeout(() => {
+                console.log('Closing window...');
+                window.close();
+            }, 2000);
+            
         } else {
-            // Aucun code ni erreur
+            console.warn('No code or error found in URL');
+            
+            // Aucun code ni erreur - page invalide
+            document.querySelector('.container').innerHTML = `
+                <div style="color: #ed8936;">
+                    <h2>⚠️ Aucune donnée d'authentification</h2>
+                    <p>URL invalide ou incomplète.</p>
+                    <p style="margin-top: 20px;">Cette fenêtre va se fermer...</p>
+                </div>
+            `;
+            
             setTimeout(() => {
                 window.close();
             }, 2000);

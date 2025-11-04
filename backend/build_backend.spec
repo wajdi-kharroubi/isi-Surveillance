@@ -45,6 +45,8 @@ a = Analysis(
         ('algorithms/__init__.py', 'algorithms'),
         # Include logo directory
         ('logo', 'logo'),
+        # Include .env file for Gmail OAuth configuration
+        ('.env', '.'),
     ],
     hiddenimports=[
         # Uvicorn
@@ -117,13 +119,16 @@ a = Analysis(
         'httpx',
         'dotenv',
         # Crypto
-        'passlib',
-        'passlib.handlers',
-        'passlib.handlers.bcrypt',
-        'bcrypt',
-        'jose',
-        'jose.jwt',
-        'cryptography',
+    'passlib',
+    'passlib.handlers',
+    'passlib.handlers.bcrypt',
+    'bcrypt',
+    'jose',
+    'jose.jwt',
+    'cryptography',
+    'python_jose',
+    'python_jose.jwt',
+    'python_multipart',
     ],
     hookspath=[],
     hooksconfig={},

@@ -10,11 +10,12 @@ let backendReady = false;
 // Démarrer le backend Python
 function startPythonBackend() {
   const isDev = !app.isPackaged;
+  let resolved = false; // Flag to prevent multiple resolves
   
   return new Promise((resolve, reject) => {
     if (isDev) {
       // En développement: lancer Python directement
-      console.log('🐍 Démarrage du backend Python (mode développement)...');
+      console.log('Starting backend (development mode)...');
       const backendDir = path.join(__dirname, '..', '..', 'backend');
       pythonProcess = spawn('python', ['main.py'], {
         cwd: backendDir,
@@ -25,13 +26,9 @@ function startPythonBackend() {
       const backendExe = path.join(process.resourcesPath, 'backend', 'surveillance_backend.exe');
       const backendDir = path.join(process.resourcesPath, 'backend');
       
-      console.log('🐍 Démarrage du backend (mode production)...');
-      console.log('Backend exe:', backendExe);
-      console.log('Backend dir:', backendDir);
-      
       // Vérifier que l'exécutable existe
       if (!fs.existsSync(backendExe)) {
-        console.error('❌ surveillance_backend.exe not found:', backendExe);
+        console.error('Backend executable not found:', backendExe);
         reject(new Error('Backend executable not found'));
         return;
       }
@@ -40,49 +37,120 @@ function startPythonBackend() {
       pythonProcess = spawn(backendExe, [], {
         cwd: backendDir,
         env: { ...process.env },
-        windowsHide: true // Hide console window on Windows
+        windowsHide: true // Hide console window in production
       });
     }
     
     pythonProcess.stdout.on('data', (data) => {
       const output = data.toString();
-      console.log(`Backend: ${output}`);
+      // Only log in development mode
+      if (!app.isPackaged) {
+        console.log(`[Backend]: ${output}`);
+      }
       
       // Détecter quand le serveur est prêt
-      if (output.includes('Uvicorn running') || output.includes('Application startup complete') || output.includes('📡 API disponible')) {
+      if (!resolved && (output.includes('Uvicorn running') || 
+          output.includes('Application startup complete') || 
+          output.includes('API disponible') ||
+          output.includes('started server process'))) {
         backendReady = true;
+        resolved = true;
         resolve();
       }
     });
     
     pythonProcess.stderr.on('data', (data) => {
       const output = data.toString();
-      console.error(`Backend Error: ${output}`);
+      // Only log in development mode
+      if (!app.isPackaged) {
+        console.log(`[Backend]: ${output}`);
+      }
       
       // Uvicorn logs to stderr even for normal messages
-      if (output.includes('Uvicorn running') || output.includes('Application startup complete') || output.includes('📡 API disponible')) {
+      if (!resolved && (output.includes('Uvicorn running') || 
+          output.includes('Application startup complete') || 
+          output.includes('API disponible') ||
+          output.includes('started server process'))) {
         backendReady = true;
+        resolved = true;
         resolve();
+      }
+      
+      // Log critical errors even in production
+      if (output.toLowerCase().includes('error') || 
+          output.toLowerCase().includes('exception') ||
+          output.toLowerCase().includes('traceback')) {
+        console.error('Backend error:', output);
       }
     });
     
     pythonProcess.on('close', (code) => {
       console.log(`Backend process exited with code ${code}`);
       backendReady = false;
+      
+      if (code !== 0 && code !== null) {
+        console.error(`Backend crashed with exit code ${code}`);
+      }
     });
     
     pythonProcess.on('error', (err) => {
       console.error('Failed to start backend:', err);
-      reject(err);
+      if (!resolved) {
+        resolved = true;
+        reject(err);
+      }
     });
     
     // Timeout de sécurité - give more time for backend startup
     setTimeout(() => {
-      if (!backendReady) {
-        console.log('⚠️  Backend started but not responding yet, continuing anyway...');
+      if (!resolved && !backendReady) {
+        // Try to ping the backend to see if it's actually running
+        const http = require('http');
+        const options = {
+          hostname: '127.0.0.1',
+          port: 8000,
+          path: '/api/health',
+          method: 'GET',
+          timeout: 2000
+        };
+        
+        const req = http.request(options, (res) => {
+          if (res.statusCode === 200) {
+            backendReady = true;
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          } else {
+            if (!resolved) {
+              resolved = true;
+              resolve(); // Continue anyway
+            }
+          }
+        });
+        
+        req.on('error', (e) => {
+          if (!resolved) {
+            resolved = true;
+            reject(new Error('Backend failed to start: ' + e.message));
+          }
+        });
+        
+        req.on('timeout', () => {
+          req.destroy();
+          if (!resolved) {
+            resolved = true;
+            reject(new Error('Backend health check timeout'));
+          }
+        });
+        
+        req.end();
+      } else if (!resolved && backendReady) {
+        // Backend is ready but somehow not resolved yet
+        resolved = true;
         resolve();
       }
-    }, 8000);
+    }, 10000); // 10 seconds timeout
   });
 }
 
@@ -111,7 +179,7 @@ function createWindow() {
   } else {
     iconPath = path.join(__dirname, '../public/icon.png');
   }
-    
+  
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -138,8 +206,6 @@ function createWindow() {
   } else {
     // In production, files are inside app.asar
     const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
-    console.log('Loading index.html from:', indexPath);
-    console.log('File exists:', fs.existsSync(indexPath));
     
     mainWindow.loadFile(indexPath).catch(err => {
       console.error('Failed to load index.html:', err);
@@ -158,21 +224,17 @@ function createWindow() {
 
 // Lifecycle de l'application
 app.whenReady().then(async () => {
-  console.log('🚀 Application starting...');
-  
   try {
     // Démarrer le backend et attendre qu'il soit prêt
     await startPythonBackend();
-    console.log('✅ Backend ready');
     
-    // Attendre un peu plus pour être sûr
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Attendre un peu pour être sûr que le serveur est complètement démarré
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Créer la fenêtre
     createWindow();
-    console.log('✅ Window created');
   } catch (error) {
-    console.error('❌ Failed to start application:', error);
+    console.error('Failed to start application:', error);
     // Créer la fenêtre quand même pour afficher une erreur à l'utilisateur
     createWindow();
   }
@@ -193,7 +255,6 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   // Arrêter le processus Python
   if (pythonProcess) {
-    console.log('🛑 Arrêt du backend Python...');
     pythonProcess.kill();
   }
 });
@@ -206,3 +267,69 @@ ipcMain.handle('get-app-version', () => {
 ipcMain.handle('get-backend-url', () => {
   return 'http://localhost:8000';
 });
+
+// OAuth Gmail - Open authorization window and capture callback
+ipcMain.handle('open-oauth-window', async (event, authUrl) => {
+  return new Promise((resolve, reject) => {
+    const oauthWindow = new BrowserWindow({
+      width: 600,
+      height: 800,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      },
+      parent: mainWindow,
+      modal: true,
+      show: false,
+      title: 'Connexion Google'
+    });
+
+    oauthWindow.once('ready-to-show', () => {
+      oauthWindow.show();
+    });
+
+    // Load the authorization URL
+    oauthWindow.loadURL(authUrl);
+
+    // Listen for navigation to capture the callback URL
+    oauthWindow.webContents.on('will-redirect', (event, url) => {
+      handleOAuthCallback(url, oauthWindow, resolve, reject);
+    });
+
+    oauthWindow.webContents.on('did-navigate', (event, url) => {
+      handleOAuthCallback(url, oauthWindow, resolve, reject);
+    });
+
+    // Handle window closed before auth completes
+    oauthWindow.on('closed', () => {
+      reject(new Error('OAuth window was closed'));
+    });
+  });
+});
+
+function handleOAuthCallback(url, window, resolve, reject) {
+  // Check if this is the callback URL
+  if (url.includes('oauth2callback') || url.includes('localhost:5173')) {
+    try {
+      const urlObj = new URL(url);
+      const code = urlObj.searchParams.get('code');
+      const error = urlObj.searchParams.get('error');
+
+      if (error) {
+        console.error('OAuth error:', error);
+        window.close();
+        reject(new Error(`OAuth error: ${error}`));
+        return;
+      }
+
+      if (code) {
+        window.close();
+        resolve({ code, state: urlObj.searchParams.get('state') });
+      }
+    } catch (err) {
+      console.error('Error parsing OAuth callback:', err);
+      window.close();
+      reject(err);
+    }
+  }
+}
