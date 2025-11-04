@@ -537,14 +537,13 @@ Les grades configurables incluent :
 Les quotas sont **entièrement configurables** via :
 
 - Interface graphique (page Configuration des Grades)
-- API REST (`/api/grades/`)
 
 ### Nombre Maximum de Séances par Jour
 
 Chaque enseignant peut avoir un **nombre maximum de séances par jour** configurable :
 
 - Par défaut : **4 séances/jour**
-- Modifiable individuellement : **0-10 séances/jour**
+- Modifiable individuellement : **1-4 séances/jour**
 - Vérifié lors de la génération automatique
 - Vérifié lors des modifications manuelles
 
@@ -583,9 +582,10 @@ Les **quotas d'exception** permettent de définir des quotas personnalisés pour
 
 Pour revenir au quota du grade :
 
-```http
-DELETE /api/enseignants/{enseignant_id}/exception
-```
+1. Aller dans **Configuration** → **Grades et Exceptions**
+2. Sélectionner l'onglet **"Exceptions Individuelles"**
+3. Rechercher l'enseignant concerné
+4. Cliquer sur la bouton de suppression d'exception
 
 ---
 
@@ -690,15 +690,15 @@ Avant toute modification manuelle du planning, le système **vérifie automatiqu
 
 #### 1. Lors de l'Ajout d'un Enseignant
 
-✅ **Conflit horaire** : L'enseignant n'a pas déjà une séance au même moment  
-✅ **Quota maximum** : L'enseignant ne dépasse pas son quota (grade ou exception)  
-✅ **Nombre max séances/jour** : Respect du `nombre_max` de l'enseignant  
-✅ **Souhait de non-disponibilité** : Avertissement si l'enseignant a déclaré être indisponible
+ **Conflit horaire** : L'enseignant n'a pas déjà une séance au même moment  
+ **Quota maximum** : L'enseignant ne dépasse pas son quota (grade ou exception)  
+ **Nombre max séances/jour** : Respect du `nombre_max` de l'enseignant  
+ **Souhait de non-disponibilité** : Avertissement si l'enseignant a déclaré être indisponible
 
 #### 2. Lors de la Suppression d'un Enseignant
 
-✅ **Nombre minimum** : La séance conserve assez de surveillants après suppression  
-✅ **Responsable** : Avertissement si l'enseignant est responsable d'un examen de la séance
+ **Nombre minimum** : La séance conserve assez de surveillants après suppression  
+ **Responsable** : Avertissement si l'enseignant est responsable d'un examen de la séance
 
 #### 3. Lors de l'Échange d'Enseignants
 
@@ -708,6 +708,7 @@ Vérifications sur les **deux enseignants** :
 - Respect des quotas
 - Respect du nombre max de séances/jour
 - Vérification des souhaits
+- Avertissement si l'enseignant est responsable d'un examen de la séance
 
 ### Interface Utilisateur
 
@@ -749,7 +750,7 @@ Envoi automatique et sécurisé des convocations de surveillance aux enseignants
 1. Dans **APIs & Services** → **Identifiants**
 2. Créer des identifiants → **ID client OAuth 2.0**
 3. Type : **Application Web**
-4. URI de redirection : `http://localhost:3000/oauth2callback`
+4. URI de redirection : `http://localhost:5173/oauth2callback`
 5. Télécharger le fichier JSON
 
 #### 3. Configuration de l'Application
@@ -768,17 +769,15 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/oauth2callback
 
 1. Aller dans **Export** → **Envoi Emails**
 2. Cliquer sur **"Configurer Gmail"**
-3. Se connecter avec le compte Gmail institutionnel
+3. Se connecter avec un compte Gmail 
 4. Autoriser l'application
 5. Le token est sauvegardé automatiquement
 
 #### 2. Envoi en Masse
 
 1. Cliquer sur **"Envoyer Convocations"**
-2. Personnaliser le message (optionnel)
-3. Choisir les options :
-   - Joindre les convocations PDF
-   - Inclure le planning complet
+2. Activer option :
+   - Inviter les ensiegnants à  des événements google Agenda
 4. Lancer l'envoi
 
 ### Fonctionnalités
@@ -797,18 +796,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/oauth2callback
 - Token OAuth2 sécurisé
 - Refresh automatique du token
 - Scopes minimaux (send only)
-- Révocation possible à tout moment
 
-### Endpoints API
-
-```http
-GET  /api/export/gmail/auth-url
-POST /api/export/gmail/oauth-callback
-POST /api/export/gmail/tester-token
-POST /api/export/gmail/envoyer-convocations
-```
-
----
 
 ## 📊 Gestion des Présences/Absences
 
@@ -819,11 +807,6 @@ Système de suivi des **présences réelles** des enseignants aux séances de su
 ### Fonctionnalités
 
 #### 1. Enregistrement des Présences
-
-**Interface en deux modes :**
-
-- 🔲 **Mode Grille** : Vue compacte par séance
-- 📋 **Mode Liste** : Vue détaillée par enseignant
 
 **Actions :**
 
@@ -860,53 +843,16 @@ Filtrage par :
 
 Export complet au format `.xlsx` contenant :
 
-- Liste de toutes les séances
-- Présences/absences par enseignant et séance
-- Statistiques agrégées
-- Totaux et pourcentages
-
-**Colonnes exportées :**
-
-- Date, Heure début, Heure fin
-- Session, Semestre
-- Enseignant (nom, prénom, grade)
-- Statut (Présent/Absent)
-- Code SmartEx
-
-### Visualisation
-
-#### Vue Grille
-
-```
-┌─────────────────────────────────────┐
-│ Séance: Lundi 15/01 - 08:30-10:30   │
-├─────────────────────────────────────┤
-│ ✅ BENAMMOU Marwen    [Présent]    │
-│ ❌ KHARROUBI Wajdi    [Absent]     │
-│ ✅ DUPONT Jean        [Présent]    │
-└─────────────────────────────────────┘
-```
-
-#### Vue Liste
-
-Tableau détaillé avec toutes les informations et possibilité de tri/recherche.
+- Présences/absences par enseignant 
+- Statistiques agrégées et pourcentages
 
 ### Cas d'Usage
 
 1. **Contrôle a posteriori** : Vérifier qui était réellement présent
 2. **Gestion administrative** : Calculer les heures effectuées
 3. **Statistiques RH** : Analyser les taux d'absentéisme
-4. **Justificatifs** : Tracer les absences pour suivi
-5. **Planification future** : Identifier les enseignants fiables
+4. **Planification future** : Identifier les enseignants fiables
 
-### Endpoints API
-
-```http
-GET  /api/planning/absences/seances
-POST /api/planning/absences/mark
-GET  /api/planning/absences/stats
-GET  /api/planning/absences/export-excel
-```
 
 ---
 
@@ -969,14 +915,15 @@ GET  /api/planning/absences/export-excel
 | `Date`       | Date  | ✅          | Date (format j/m/a)                 | 15/01/2025 |
 | `Jour`       | Texte | ✅          | Jour de la semaine                  | Lundi      |
 | `Séances`    | Code  | ✅          | Code séance (S1/S2/S3/S4)           | S1,S2,S3   |
+|` Nombre-Max` | entier |  ✅        | nombre de seance max par jour       | 2          |
 
 **Exemple de fichier :**
 
-| Enseignant  | Semestre   | Session | Date       | Jour   | Séances |
-| ----------- | ---------- | ------- | ---------- | ------ | ------- |
-| M.BENAMMOU  | Semestre 1 | Partiel | 15/01/2025 | Lundi  | S1      |
-| W.KHARROUBI | Semestre 1 | Partiel | 15/01/2025 | Lundi  | S3      |
-| J.DUPEN     | Semestre 1 | Partiel | 20/01/2025 | Samedi | S2      |
+| Enseignant  | Semestre   | Session | Date       | Jour   | Séances | Nombre-Max|
+| ----------- | ---------- | ------- | ---------- | ------ | ------- |-----------|
+| M.BENAMMOU  | Semestre 1 | Partiel | 15/01/2025 | Lundi  | S1      |2          |
+| W.KHARROUBI | Semestre 1 | Partiel | 15/01/2025 | Lundi  | S3      |3          |
+| J.DUPEN     | Semestre 1 | Partiel | 20/01/2025 | Samedi | S2      |3          |
 
 ### Exports Disponibles
 
@@ -989,15 +936,10 @@ GET  /api/planning/absences/export-excel
 
 #### Fichiers Excel
 
-- Planning complet (.xlsx)
-- Convocations (.xlsx)
+- Planning complet (.xlsx / .csv)
 - Présences/Absences (.xlsx)
 - Souhaits autorisés (.xlsx)
 
-#### Fichiers CSV
-
-- Convocations (.csv)
-- Statistiques (.csv)
 
 ---
 
@@ -1061,7 +1003,7 @@ GET  /api/planning/absences/export-excel
 
    - Aller dans `Génération`
    - Définir la durée maximale d'exécution
-   - Définir le nombre minimum de surveillants par examen (2 recommandé)
+   - Définir le nombre maximal de surveillants par examen (3 recommandé)
    - Définir la tolérance maximale admissible
 
 9. **Lancer la génération**
@@ -1098,8 +1040,8 @@ GET  /api/planning/absences/export-excel
     - Télécharger les fichiers
 
 14. **Envoyer les convocations par email** (Optionnel)
-    - Configurer Gmail OAuth2 (première fois)
-    - Sélectionner les options d'envoi
+    - Se connecter par gmail
+    - Activer la creation des événements dans google agenda
     - Envoyer en masse
 
 #### Phase 6 : Suivi (Pendant les examens)
@@ -1129,7 +1071,7 @@ GET  /api/planning/absences/export-excel
 
    - Consulter le dashboard avant génération
    - Lire et comprendre les warnings
-   - Commencer avec 2 surveillants/examen puis ajuster
+   - Commencer avec 3 surveillants/examen puis ajuster
    - Activer le mode adaptatif si quotas limites
 
 4. **Vérification**
