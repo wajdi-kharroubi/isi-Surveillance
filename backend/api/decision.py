@@ -40,11 +40,15 @@ def estimate(request: DecisionRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from database import get_db
 from services.decision_service import DecisionService
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
+import io
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill
 
 router = APIRouter(prefix="/decision", tags=["Aide à la Décision"])
 
@@ -362,4 +366,107 @@ def modifier_quota_individuel(
         raise HTTPException(
             status_code=500,
             detail=f"Erreur lors de la modification du quota individuel: {str(e)}",
+        )
+
+
+@router.post("/exporter-voeux-autorises")
+def exporter_voeux_autorises(request: DecisionRequest, db: Session = Depends(get_db)):
+    """
+    📊 EXPORTE LES CRÉNEAUX DE NON-SOUHAITS AUTORISÉS AU FORMAT EXCEL
+
+    Génère un fichier Excel contenant les informations sur les créneaux de non-souhaits
+    autorisés par grade, basé sur les recommandations calculées.
+
+    **Colonnes du fichier:**
+    - Code Grade
+    - Nom du Grade
+    - Créneaux Autorisés
+
+    **Paramètres:** Les mêmes que pour `/calculer-recommandations`
+
+    **Retour:** Fichier Excel (.xlsx) nommé `creneaux_non_souhaits_autorises.xlsx`
+    """
+    try:
+        decision_service = DecisionService(db)
+
+        # Calculer les recommandations
+        recommandations = decision_service.calculer_recommandations(
+            min_surveillants_par_salle=request.min_surveillants_par_salle,
+            majoration_absences=request.majoration_absences,
+            quota_min_groupe1=request.quota_min_groupe1,
+            difference_min_pr_ma=request.difference_min_pr_ma,
+            difference_min_ma_as=request.difference_min_ma_as,
+            difference_min_as_ac=request.difference_min_as_ac,
+            expert_quota=request.expert_quota,
+        )
+
+        # Créer un fichier Excel
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Créneaux Non-Souhaits"
+
+        # Style pour l'en-tête
+        header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        header_alignment = Alignment(horizontal="center", vertical="center")
+
+        # En-têtes
+        headers = ["Code Grade", "Nom du Grade", "Créneaux Autorisés"]
+        for col_num, header in enumerate(headers, 1):
+            cell = sheet.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+
+        # Données
+        voeux_autorises = recommandations.get("voeux_autorises", {})
+        quotas_recommandes = recommandations.get("quotas_recommandes", {})
+        
+        row_num = 2
+        for grade_code, info in voeux_autorises.items():
+            # Calculer les voeux autorisés ajustés
+            quota_actuel = quotas_recommandes.get(grade_code, {}).get("quota", 0)
+            nb_total_seances = info.get("nb_total_seances", 0)
+            
+            # Formule stricte : max(0, floor((nb_total_seances - quota_actuel) * 0.6))
+            difference = nb_total_seances - quota_actuel
+            nb_voeux_max_recommande = max(0, int(difference * 0.6))
+            
+            sheet.cell(row=row_num, column=1).value = grade_code
+            sheet.cell(row=row_num, column=2).value = info.get("grade_nom", "")
+            sheet.cell(row=row_num, column=3).value = nb_voeux_max_recommande
+            
+            # Aligner les données
+            for col in range(1, 4):
+                cell = sheet.cell(row=row_num, column=col)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            
+            row_num += 1
+
+        # Ajuster la largeur des colonnes
+        column_widths = [15, 30, 20]
+        for col_num, width in enumerate(column_widths, 1):
+            sheet.column_dimensions[openpyxl.utils.get_column_letter(col_num)].width = width
+
+        # Sauvegarder dans un buffer
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+
+        # Retourner le fichier
+        headers = {
+            'Content-Disposition': 'attachment; filename="creneaux_non_souhaits_autorises.xlsx"'
+        }
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de l'exportation: {str(e)}"
         )

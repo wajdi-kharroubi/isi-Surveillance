@@ -1,5 +1,6 @@
 import pandas as pd
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from models.models import Enseignant, Voeu, Examen, Affectation
 from typing import List, Dict, Tuple
 from datetime import datetime
@@ -215,9 +216,9 @@ class ImportService:
                 for idx, row in df.iterrows():
                     abrv_ens = str(row['Enseignant']).strip()
                     
-                    # Vérifier si l'enseignant existe
+                    # Vérifier si l'enseignant existe (insensible à la casse)
                     enseignant = db.query(Enseignant).filter(
-                        Enseignant.abrv_ens == abrv_ens
+                        func.lower(Enseignant.abrv_ens) == func.lower(abrv_ens)
                     ).first()
                     
                     if enseignant and enseignant.id not in enseignants_nombre_max_dict:
@@ -244,11 +245,11 @@ class ImportService:
             # Import ligne par ligne
             for idx, row in df.iterrows():
                 try:
-                    # Rechercher l'enseignant par abréviation (abrv_ens)
+                    # Rechercher l'enseignant par abréviation (abrv_ens) - insensible à la casse
                     abrv_ens = str(row['Enseignant']).strip()
                     
                     enseignant = db.query(Enseignant).filter(
-                        Enseignant.abrv_ens == abrv_ens
+                        func.lower(Enseignant.abrv_ens) == func.lower(abrv_ens)
                     ).first()
                     
                     if not enseignant:
