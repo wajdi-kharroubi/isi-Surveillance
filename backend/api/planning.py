@@ -2,7 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 from database import get_db
-from models.models import Enseignant, Affectation, Examen, GradeConfig, Presence, ResponsableAbsent, GenerationStatistique, SouhaitViole, Voeu, DepassementMaxJour
+from models.models import (
+    Enseignant,
+    Affectation,
+    Examen,
+    GradeConfig,
+    Presence,
+    ResponsableAbsent,
+    GenerationStatistique,
+    SouhaitViole,
+    Voeu,
+    DepassementMaxJour,
+)
 from models.schemas import (
     AjouterEnseignantSeanceRequest,
     SupprimerEnseignantSeanceRequest,
@@ -55,7 +66,7 @@ def _verifier_et_gerer_depassement_max_jour(
     enseignant_id: int,
     date_exam,
     derniere_generation,
-    action: str  # "ajouter" ou "supprimer"
+    action: str,  # "ajouter" ou "supprimer"
 ):
     """
     Vérifie si l'enseignant dépasse le nombre max de séances par jour après ajout/suppression
@@ -63,31 +74,30 @@ def _verifier_et_gerer_depassement_max_jour(
     """
     if not derniere_generation:
         return
-    
+
     # Récupérer l'enseignant
     enseignant = db.query(Enseignant).filter(Enseignant.id == enseignant_id).first()
     if not enseignant:
         return
-    
+
     # Flush pour que les affectations ajoutées/supprimées soient prises en compte
     db.flush()
-    
+
     # Compter le nombre de séances distinctes pour cet enseignant à cette date
     # Une séance = une combinaison unique de (dateExam, h_debut)
     seances_jour = (
         db.query(Examen.h_debut)
         .join(Affectation, Affectation.examen_id == Examen.id)
         .filter(
-            Affectation.enseignant_id == enseignant_id,
-            Examen.dateExam == date_exam
+            Affectation.enseignant_id == enseignant_id, Examen.dateExam == date_exam
         )
         .distinct()
         .all()
     )
-    
+
     nb_seances = len(seances_jour)
     max_autorise = enseignant.nombre_max
-    
+
     # Récupérer les codes de séances
     seances_codes = []
     for (h_debut,) in seances_jour:
@@ -96,7 +106,7 @@ def _verifier_et_gerer_depassement_max_jour(
             seances_codes.append(code)
     seances_codes.sort()
     seances_str = ", ".join(seances_codes)
-    
+
     # Chercher un dépassement existant
     depassement_existant = (
         db.query(DepassementMaxJour)
@@ -107,11 +117,11 @@ def _verifier_et_gerer_depassement_max_jour(
         )
         .first()
     )
-    
+
     # Cas 1: Dépassement actuel
     if nb_seances > max_autorise:
         depassement = nb_seances - max_autorise
-        
+
         if not depassement_existant:
             # Créer un nouveau dépassement
             nouveau_depassement = DepassementMaxJour(
@@ -127,18 +137,22 @@ def _verifier_et_gerer_depassement_max_jour(
                 seances=seances_str,
             )
             db.add(nouveau_depassement)
-            
+
             # Mettre à jour les statistiques
             derniere_generation.nb_contraintes_seances_violees += 1
             if derniere_generation.nb_contraintes_seances_respectees > 0:
                 derniere_generation.nb_contraintes_seances_respectees -= 1
-            
+
             # Recalculer le taux
             if derniere_generation.nb_contraintes_seances_total > 0:
                 derniere_generation.taux_contraintes_seances_respectees = round(
-                    (derniere_generation.nb_contraintes_seances_respectees / derniere_generation.nb_contraintes_seances_total) * 100
+                    (
+                        derniere_generation.nb_contraintes_seances_respectees
+                        / derniere_generation.nb_contraintes_seances_total
+                    )
+                    * 100
                 )
-            
+
             return "cree"
         else:
             # Mettre à jour le dépassement existant
@@ -146,26 +160,30 @@ def _verifier_et_gerer_depassement_max_jour(
             depassement_existant.depassement = depassement
             depassement_existant.seances = seances_str
             return "mis_a_jour"
-    
+
     # Cas 2: Plus de dépassement
     else:
         if depassement_existant:
             # Supprimer le dépassement
             db.delete(depassement_existant)
-            
+
             # Mettre à jour les statistiques
             if derniere_generation.nb_contraintes_seances_violees > 0:
                 derniere_generation.nb_contraintes_seances_violees -= 1
             derniere_generation.nb_contraintes_seances_respectees += 1
-            
+
             # Recalculer le taux
             if derniere_generation.nb_contraintes_seances_total > 0:
                 derniere_generation.taux_contraintes_seances_respectees = round(
-                    (derniere_generation.nb_contraintes_seances_respectees / derniere_generation.nb_contraintes_seances_total) * 100
+                    (
+                        derniere_generation.nb_contraintes_seances_respectees
+                        / derniere_generation.nb_contraintes_seances_total
+                    )
+                    * 100
                 )
-            
+
             return "supprime"
-    
+
     return None
 
 
@@ -485,7 +503,9 @@ def absences_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/absences/export-excel")
-def export_absences_excel(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def export_absences_excel(
+    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
     """Exporte les statistiques d'absences par enseignant au format Excel."""
     import pandas as pd
     import os
@@ -493,7 +513,9 @@ def export_absences_excel(background_tasks: BackgroundTasks, db: Session = Depen
     from fastapi.responses import FileResponse
 
     # Récupérer tous les enseignants qui participent aux surveillances
-    enseignants = db.query(Enseignant).filter(Enseignant.participe_surveillance == True).all()
+    enseignants = (
+        db.query(Enseignant).filter(Enseignant.participe_surveillance == True).all()
+    )
 
     # Calculer les absences par enseignant
     rows = []
@@ -685,7 +707,11 @@ def ajouter_enseignant_seance(
         # Recalculer le taux
         if derniere_generation.nb_responsables_total > 0:
             derniere_generation.taux_responsables_presents = round(
-                (derniere_generation.nb_responsables_presents / derniere_generation.nb_responsables_total) * 100
+                (
+                    derniere_generation.nb_responsables_presents
+                    / derniere_generation.nb_responsables_total
+                )
+                * 100
             )
         messages_info.append(f"Absence responsable supprimée")
 
@@ -697,9 +723,7 @@ def ajouter_enseignant_seance(
             Voeu.enseignant_id == request.enseignant_id,
             Voeu.seance == seance_code,
         )
-        .filter(
-            (Voeu.date_voeu == request.date_examen) | (Voeu.jour == jour)
-        )
+        .filter((Voeu.date_voeu == request.date_examen) | (Voeu.jour == jour))
         .first()
     )
 
@@ -738,7 +762,11 @@ def ajouter_enseignant_seance(
             # Recalculer le taux
             if derniere_generation.nb_souhaits_total > 0:
                 derniere_generation.taux_souhaits_respectes = round(
-                    (derniere_generation.nb_souhaits_respectes / derniere_generation.nb_souhaits_total) * 100
+                    (
+                        derniere_generation.nb_souhaits_respectes
+                        / derniere_generation.nb_souhaits_total
+                    )
+                    * 100
                 )
             messages_info.append(f"Vœu de non-disponibilité violé")
 
@@ -857,7 +885,11 @@ def supprimer_enseignant_seance(
     messages_info = []
 
     # Gestion des ResponsableAbsent
-    if est_responsable_examen and enseignant.participe_surveillance and derniere_generation:
+    if (
+        est_responsable_examen
+        and enseignant.participe_surveillance
+        and derniere_generation
+    ):
         # Vérifier si cet enseignant n'est pas déjà enregistré comme absent
         absence_existante = (
             db.query(ResponsableAbsent)
@@ -893,7 +925,11 @@ def supprimer_enseignant_seance(
             # Recalculer le taux
             if derniere_generation.nb_responsables_total > 0:
                 derniere_generation.taux_responsables_presents = round(
-                    (derniere_generation.nb_responsables_presents / derniere_generation.nb_responsables_total) * 100
+                    (
+                        derniere_generation.nb_responsables_presents
+                        / derniere_generation.nb_responsables_total
+                    )
+                    * 100
                 )
             messages_info.append(f"Responsable marqué absent")
 
@@ -924,7 +960,11 @@ def supprimer_enseignant_seance(
             # Recalculer le taux
             if derniere_generation.nb_souhaits_total > 0:
                 derniere_generation.taux_souhaits_respectes = round(
-                    (derniere_generation.nb_souhaits_respectes / derniere_generation.nb_souhaits_total) * 100
+                    (
+                        derniere_generation.nb_souhaits_respectes
+                        / derniere_generation.nb_souhaits_total
+                    )
+                    * 100
                 )
             messages_info.append(f"Vœu de non-disponibilité respecté")
 
@@ -1065,7 +1105,11 @@ def ajouter_enseignant_par_date_heure(
         # Recalculer le taux
         if derniere_generation.nb_responsables_total > 0:
             derniere_generation.taux_responsables_presents = round(
-                (derniere_generation.nb_responsables_presents / derniere_generation.nb_responsables_total) * 100
+                (
+                    derniere_generation.nb_responsables_presents
+                    / derniere_generation.nb_responsables_total
+                )
+                * 100
             )
         messages_info.append(f"Absence responsable supprimée")
 
@@ -1077,9 +1121,7 @@ def ajouter_enseignant_par_date_heure(
             Voeu.enseignant_id == request.enseignant_id,
             Voeu.seance == seance_code,
         )
-        .filter(
-            (Voeu.date_voeu == request.date_examen) | (Voeu.jour == jour)
-        )
+        .filter((Voeu.date_voeu == request.date_examen) | (Voeu.jour == jour))
         .first()
     )
 
@@ -1117,7 +1159,11 @@ def ajouter_enseignant_par_date_heure(
             # Recalculer le taux
             if derniere_generation.nb_souhaits_total > 0:
                 derniere_generation.taux_souhaits_respectes = round(
-                    (derniere_generation.nb_souhaits_respectes / derniere_generation.nb_souhaits_total) * 100
+                    (
+                        derniere_generation.nb_souhaits_respectes
+                        / derniere_generation.nb_souhaits_total
+                    )
+                    * 100
                 )
             messages_info.append(f"Vœu de non-disponibilité violé")
 
@@ -1169,7 +1215,7 @@ def verifier_contraintes_ajout(
     Retourne les informations de validation et les warnings/erreurs
     """
     from models.models import Voeu
-    
+
     # Vérifier que l'enseignant existe
     enseignant = (
         db.query(Enseignant).filter(Enseignant.id == request.enseignant_id).first()
@@ -1196,19 +1242,15 @@ def verifier_contraintes_ajout(
     # Compter le nombre de séances déjà affectées (séances uniques par date/heure)
     # Une séance = combinaison unique de (dateExam, h_debut, h_fin)
     from sqlalchemy import func, distinct
-    
+
     seances_affectees = (
-        db.query(
-            Examen.dateExam,
-            Examen.h_debut,
-            Examen.h_fin
-        )
+        db.query(Examen.dateExam, Examen.h_debut, Examen.h_fin)
         .join(Affectation)
         .filter(Affectation.enseignant_id == request.enseignant_id)
         .distinct()
         .all()
     )
-    
+
     nb_seances_actuelles = len(seances_affectees)
 
     # Vérifier le quota
@@ -1219,14 +1261,14 @@ def verifier_contraintes_ajout(
 
     # Vérifier les souhaits (voeux)
     # IMPORTANT: Si un voeu existe, cela signifie que l'enseignant NE SOUHAITE PAS être présent à cette séance
-    
+
     # Déterminer le numéro de séance à partir de l'heure
     # request.h_debut est déjà un objet time, pas besoin de le parser
     h_debut_time = request.h_debut
     heures = h_debut_time.hour
     minutes = h_debut_time.minute
     heure_minutes = heures * 60 + minutes
-    
+
     # Déterminer le code séance (S1, S2, S3, S4)
     if 510 <= heure_minutes < 630:  # 8:30 - 10:29
         code_seance = "S1"
@@ -1236,7 +1278,7 @@ def verifier_contraintes_ajout(
         code_seance = "S3"
     else:  # 14:30+
         code_seance = "S4"
-    
+
     # Chercher un voeu pour cette date et cette séance
     voeu = (
         db.query(Voeu)
@@ -1253,10 +1295,7 @@ def verifier_contraintes_ajout(
 
     # Vérifier le nombre de séances par jour (séances uniques ce jour-là)
     seances_ce_jour = (
-        db.query(
-            Examen.h_debut,
-            Examen.h_fin
-        )
+        db.query(Examen.h_debut, Examen.h_fin)
         .join(Affectation)
         .filter(
             Affectation.enseignant_id == request.enseignant_id,
@@ -1265,7 +1304,7 @@ def verifier_contraintes_ajout(
         .distinct()
         .all()
     )
-    
+
     nb_seances_ce_jour = len(seances_ce_jour)
 
     nombre_max_par_jour = enseignant.nombre_max
@@ -1302,11 +1341,11 @@ def verifier_contraintes_ajout(
         )
         .all()
     )
-    
+
     # Vérifier si l'enseignant est responsable de l'un de ces examens
     est_responsable_examen = False
     examen_responsable_info = None
-    
+
     for examen in examens_seance:
         # Vérifier si l'enseignant correspond au code smartex de l'examen (responsable)
         ens_responsable = (
@@ -1314,7 +1353,7 @@ def verifier_contraintes_ajout(
             .filter(Enseignant.code_smartex == examen.enseignant)
             .first()
         )
-        
+
         if ens_responsable and ens_responsable.id == request.enseignant_id:
             est_responsable_examen = True
             examen_responsable_info = {
@@ -1360,19 +1399,21 @@ def verifier_contraintes_ajout(
 
 
 @router.post("/verifier-contraintes-echange")
-def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Session = Depends(get_db)):
+def verifier_contraintes_echange(
+    request: ExchangeEnseignantsRequest, db: Session = Depends(get_db)
+):
     """
     Vérifie les contraintes pour les deux enseignants lors d'un échange de séances.
     Retourne les validations pour les deux enseignants.
     """
     from models.models import Voeu
-    
+
     def calculer_code_seance(h_debut_time):
         """Détermine le code séance (S1, S2, S3, S4) à partir de l'heure de début."""
         heures = h_debut_time.hour
         minutes = h_debut_time.minute
         heure_minutes = heures * 60 + minutes
-        
+
         if 510 <= heure_minutes < 630:  # 8:30 - 10:29
             return "S1"
         elif 630 <= heure_minutes < 750:  # 10:30 - 12:29
@@ -1381,8 +1422,15 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
             return "S3"
         else:  # 14:30+
             return "S4"
-    
-    def verifier_enseignant_pour_seance(enseignant_id, date_examen, h_debut, h_fin, date_actuelle=None, h_debut_actuelle=None):
+
+    def verifier_enseignant_pour_seance(
+        enseignant_id,
+        date_examen,
+        h_debut,
+        h_fin,
+        date_actuelle=None,
+        h_debut_actuelle=None,
+    ):
         """Vérifie les contraintes pour un enseignant dans une nouvelle séance."""
         enseignant = db.query(Enseignant).filter(Enseignant.id == enseignant_id).first()
         if not enseignant:
@@ -1390,7 +1438,7 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
                 status_code=404,
                 detail=f"Enseignant avec ID {enseignant_id} introuvable",
             )
-        
+
         # Récupérer la configuration du grade
         grade_config = (
             db.query(GradeConfig)
@@ -1406,17 +1454,13 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
 
         # Compter les séances déjà affectées (sans la séance actuelle)
         seances_affectees = (
-            db.query(
-                Examen.dateExam,
-                Examen.h_debut,
-                Examen.h_fin
-            )
+            db.query(Examen.dateExam, Examen.h_debut, Examen.h_fin)
             .join(Affectation)
             .filter(Affectation.enseignant_id == enseignant_id)
             .distinct()
             .all()
         )
-        
+
         nb_seances_actuelles = len(seances_affectees)
 
         # Le nombre de séances reste le même après l'échange (on échange, on n'ajoute pas)
@@ -1427,7 +1471,7 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
 
         # Vérifier les souhaits (voeux)
         code_seance = calculer_code_seance(h_debut)
-        
+
         voeu = (
             db.query(Voeu)
             .filter(
@@ -1442,10 +1486,7 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
 
         # Vérifier le nombre de séances par jour
         seances_ce_jour = (
-            db.query(
-                Examen.h_debut,
-                Examen.h_fin
-            )
+            db.query(Examen.h_debut, Examen.h_fin)
             .join(Affectation)
             .filter(
                 Affectation.enseignant_id == enseignant_id,
@@ -1454,7 +1495,7 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
             .distinct()
             .all()
         )
-        
+
         nb_seances_ce_jour = len(seances_ce_jour)
         nombre_max_par_jour = enseignant.nombre_max
         max_seances_jour_depasse = nb_seances_ce_jour > nombre_max_par_jour
@@ -1547,7 +1588,7 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
             "warnings": warnings,
             "errors": errors,
         }
-    
+
     # Vérifier l'enseignant 1 vers la séance 2 (il quitte la séance 1)
     validation_ens1 = verifier_enseignant_pour_seance(
         request.enseignant1_id,
@@ -1555,9 +1596,9 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
         request.h_debut2,
         request.h_fin2,
         date_actuelle=request.date1,
-        h_debut_actuelle=request.h_debut1
+        h_debut_actuelle=request.h_debut1,
     )
-    
+
     # Vérifier l'enseignant 2 vers la séance 1 (il quitte la séance 2)
     validation_ens2 = verifier_enseignant_pour_seance(
         request.enseignant2_id,
@@ -1565,13 +1606,13 @@ def verifier_contraintes_echange(request: ExchangeEnseignantsRequest, db: Sessio
         request.h_debut1,
         request.h_fin1,
         date_actuelle=request.date2,
-        h_debut_actuelle=request.h_debut2
+        h_debut_actuelle=request.h_debut2,
     )
-    
+
     # Combiner les warnings et errors
     all_warnings = validation_ens1["warnings"] + validation_ens2["warnings"]
     all_errors = validation_ens1["errors"] + validation_ens2["errors"]
-    
+
     return {
         "enseignant1": validation_ens1,
         "enseignant2": validation_ens2,
@@ -1765,7 +1806,8 @@ def exchange_enseignants(
             absence_existante = (
                 db.query(ResponsableAbsent)
                 .filter(
-                    ResponsableAbsent.generation_statistique_id == derniere_generation.id,
+                    ResponsableAbsent.generation_statistique_id
+                    == derniere_generation.id,
                     ResponsableAbsent.enseignant_id == request.enseignant1_id,
                     ResponsableAbsent.date_exam == request.date1,
                     ResponsableAbsent.seance == seance1_code,
@@ -1797,7 +1839,8 @@ def exchange_enseignants(
             absence_existante = (
                 db.query(ResponsableAbsent)
                 .filter(
-                    ResponsableAbsent.generation_statistique_id == derniere_generation.id,
+                    ResponsableAbsent.generation_statistique_id
+                    == derniere_generation.id,
                     ResponsableAbsent.enseignant_id == request.enseignant2_id,
                     ResponsableAbsent.date_exam == request.date2,
                     ResponsableAbsent.seance == seance2_code,
@@ -1866,7 +1909,11 @@ def exchange_enseignants(
         # Recalculer le taux de présence des responsables
         if derniere_generation.nb_responsables_total > 0:
             derniere_generation.taux_responsables_presents = round(
-                (derniere_generation.nb_responsables_presents / derniere_generation.nb_responsables_total) * 100
+                (
+                    derniere_generation.nb_responsables_presents
+                    / derniere_generation.nb_responsables_total
+                )
+                * 100
             )
 
     # Gestion des SouhaitViole
@@ -1881,10 +1928,7 @@ def exchange_enseignants(
             db.query(Voeu)
             .filter(
                 Voeu.enseignant_id == request.enseignant1_id,
-                or_(
-                    Voeu.date_voeu == request.date1,
-                    Voeu.jour == jour1
-                ),
+                or_(Voeu.date_voeu == request.date1, Voeu.jour == jour1),
                 Voeu.seance == seance1_code,
             )
             .first()
@@ -1915,10 +1959,7 @@ def exchange_enseignants(
             db.query(Voeu)
             .filter(
                 Voeu.enseignant_id == request.enseignant2_id,
-                or_(
-                    Voeu.date_voeu == request.date2,
-                    Voeu.jour == jour2
-                ),
+                or_(Voeu.date_voeu == request.date2, Voeu.jour == jour2),
                 Voeu.seance == seance2_code,
             )
             .first()
@@ -1949,10 +1990,7 @@ def exchange_enseignants(
             db.query(Voeu)
             .filter(
                 Voeu.enseignant_id == request.enseignant1_id,
-                or_(
-                    Voeu.date_voeu == request.date2,
-                    Voeu.jour == jour2
-                ),
+                or_(Voeu.date_voeu == request.date2, Voeu.jour == jour2),
                 Voeu.seance == seance2_code,
             )
             .first()
@@ -1993,10 +2031,7 @@ def exchange_enseignants(
             db.query(Voeu)
             .filter(
                 Voeu.enseignant_id == request.enseignant2_id,
-                or_(
-                    Voeu.date_voeu == request.date1,
-                    Voeu.jour == jour1
-                ),
+                or_(Voeu.date_voeu == request.date1, Voeu.jour == jour1),
                 Voeu.seance == seance1_code,
             )
             .first()
@@ -2034,7 +2069,11 @@ def exchange_enseignants(
         # Recalculer le taux de souhaits respectés
         if derniere_generation.nb_souhaits_total > 0:
             derniere_generation.taux_souhaits_respectes = round(
-                (derniere_generation.nb_souhaits_respectes / derniere_generation.nb_souhaits_total) * 100
+                (
+                    derniere_generation.nb_souhaits_respectes
+                    / derniere_generation.nb_souhaits_total
+                )
+                * 100
             )
 
     # Commencer la transaction d'échange
@@ -2083,7 +2122,7 @@ def exchange_enseignants(
             messages_depassements.append(f"Dépassement Ens1 date1 résolu")
         elif resultat_dep1 == "mis_a_jour":
             messages_depassements.append(f"Dépassement Ens1 date1 réduit")
-        
+
         # Vérifier pour Ens2 sur date2 (supprimé de séance2)
         resultat_dep2 = _verifier_et_gerer_depassement_max_jour(
             db, request.enseignant2_id, request.date2, derniere_generation, "supprimer"
@@ -2092,7 +2131,7 @@ def exchange_enseignants(
             messages_depassements.append(f"Dépassement Ens2 date2 résolu")
         elif resultat_dep2 == "mis_a_jour":
             messages_depassements.append(f"Dépassement Ens2 date2 réduit")
-        
+
         # Vérifier pour Ens1 sur date2 (ajouté à séance2)
         resultat_dep3 = _verifier_et_gerer_depassement_max_jour(
             db, request.enseignant1_id, request.date2, derniere_generation, "ajouter"
@@ -2101,7 +2140,7 @@ def exchange_enseignants(
             messages_depassements.append(f"Dépassement Ens1 date2 détecté")
         elif resultat_dep3 == "mis_a_jour":
             messages_depassements.append(f"Dépassement Ens1 date2 augmenté")
-        
+
         # Vérifier pour Ens2 sur date1 (ajouté à séance1)
         resultat_dep4 = _verifier_et_gerer_depassement_max_jour(
             db, request.enseignant2_id, request.date1, derniere_generation, "ajouter"
@@ -2113,20 +2152,14 @@ def exchange_enseignants(
 
     db.commit()
 
-    message = (
-        f"Échange effectué avec succès : "
-        f"{enseignant1.nom} {enseignant1.prenom} "
-        f"({request.date1} {request.h_debut1}) ↔ "
-        f"{enseignant2.nom} {enseignant2.prenom} "
-        f"({request.date2} {request.h_debut2})"
-    )
+    message = "Échange effectué avec succès"
 
     if messages_absence:
         message += f" [Absences: {', '.join(messages_absence)}]"
-    
+
     if messages_souhaits:
         message += f" [Souhaits: {', '.join(messages_souhaits)}]"
-    
+
     if messages_depassements:
         message += f" [Dépassements: {', '.join(messages_depassements)}]"
 

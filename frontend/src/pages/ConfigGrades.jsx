@@ -432,7 +432,7 @@ export default function ConfigGrades() {
                       <option value="">Tous les grades</option>
                       {grades?.map(grade => (
                         <option key={grade.grade_code} value={grade.grade_code}>
-                          {grade.grade_code} - {grade.grade_nom}
+                          {grade.grade_code}
                         </option>
                       ))}
                     </select>
@@ -451,12 +451,25 @@ export default function ConfigGrades() {
                       <option value="without">Sans exception</option>
                     </select>
                   </div>
+                  {/* Reset Filters Button - always visible if any filter is active */}
+                  {(filterNom || filterGrade || filterException !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setFilterNom('');
+                        setFilterGrade('');
+                        setFilterException('all');
+                      }}
+                      className="px-4 py-2.5 bg-red-100 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-200 transition-colors border-2 border-red-200"
+                    >
+                      Réinitialiser les filtres
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Résultat des filtres */}
-            {filterNom || filterGrade || filterException !== 'all' ? (
+            {/* {filterNom || filterGrade || filterException !== 'all' ? (
               <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
                 <p className="text-sm text-blue-800">
                   <strong>{enseignantsFiltres?.length || 0}</strong> enseignant(s) trouvé(s) avec les filtres appliqués
@@ -474,7 +487,7 @@ export default function ConfigGrades() {
                   )}
                 </p>
               </div>
-            ) : null}
+            ) : null} */}
 
             {enseignantsFiltres && enseignantsFiltres.length > 0 ? (
               <div className="overflow-x-auto">
@@ -519,7 +532,7 @@ export default function ConfigGrades() {
                           </td>
                           <td>
                             <span className="badge badge-primary text-sm">
-                              {enseignant.grade_code} - {enseignant.grade}
+                              {enseignant.grade_code}
                             </span>
                           </td>
                           <td className="text-center">

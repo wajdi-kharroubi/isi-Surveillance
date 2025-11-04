@@ -403,7 +403,7 @@ export default function Enseignants() {
                 <td>{ens.prenom}</td>
                 <td className="text-gray-600 text-sm">{ens.email}</td>
                 <td>
-                  <span className="badge badge-info">{getGradeName(ens.grade_code)}</span>
+                  <span className="badge badge-info">{ens.grade_code}</span>
                 </td>
                 <td>
                   {ens.participe_surveillance ? (
