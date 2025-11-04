@@ -664,7 +664,7 @@ Génération automatique d'alertes :
 
 | Paramètre                    | Description                    | Valeur par défaut |
 | ---------------------------- | ------------------------------ | ----------------- |
-| `min_surveillants_par_salle` | Surveillants minimum par salle | 2                 |
+| `min_surveillants_par_salle` | Surveillants minimum par salle | 3                 |
 | `majoration_absences`        | Coefficient pour absences      | 1.20 (20%)        |
 | `quota_min_groupe1`          | Quota minimal PR/MC/V          | 4                 |
 | `difference_min_pr_ma`       | Écart minimal PR/MC/V → MA     | 2                 |
