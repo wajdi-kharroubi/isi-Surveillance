@@ -43,15 +43,17 @@ Application de bureau complète pour la **gestion automatisée des plannings de 
 
 Découvrez l'application en action à travers cette démonstration complète :
 
-**[▶️ Voir la démonstration sur YouTube](https://www.youtube.com/watch?v=JNGDvO74-O0)**
+**[▶️ Voir la démonstration sur YouTube de la version 2](https://www.youtube.com)**
+
+**[▶️ Voir la démonstration sur YouTube de la version 1](https://www.youtube.com/watch?v=JNGDvO74-O0)**
 
 Cette vidéo présente :
 
-- ✅ L'interface utilisateur complète
-- ✅ Le processus d'import des données (Enseignants, Examens, Souhaits)
-- ✅ La génération automatique du planning
-- ✅ La consultation et modification manuelle des affectations
-- ✅ L'export des documents (Word/PDF)
+- L'interface utilisateur complète
+- Le processus d'import des données (Enseignants, Examens, Souhaits)
+- La génération automatique du planning
+- La consultation et modification manuelle des affectations
+- L'export des documents (Word/PDF)
 
 ---
 
@@ -563,26 +565,12 @@ Les **quotas d'exception** permettent de définir des quotas personnalisés pour
 
 ### Configuration
 
-#### Via l'Interface Graphique
-
 1. Aller dans **Configuration** → **Grades et Exceptions**
 2. Sélectionner l'onglet **"Exceptions Individuelles"**
 3. Rechercher l'enseignant concerné
 4. Cliquer sur **"Définir Exception"**
 5. Définir le quota personnalisé
 6. Sauvegarder
-
-#### Via l'API REST
-
-```http
-PATCH /api/enseignants/{enseignant_id}/exception
-Content-Type: application/json
-
-{
-  "is_Exception": true,
-  "quota_Exception": 3
-}
-```
 
 ### Fonctionnement dans l'Algorithme
 
@@ -739,16 +727,6 @@ Le composant `GestionEnseignantsSeanceInline` offre :
 - Affichage des contraintes violées
 - Suggestions d'enseignants disponibles
 
-### Endpoints API
-
-```http
-POST /api/planning/verifier-contraintes-ajout
-POST /api/planning/verifier-contraintes-echange
-POST /api/planning/ajouter-enseignant-seance
-POST /api/planning/supprimer-enseignant-seance
-POST /api/planning/exchange-enseignants
-```
-
 ---
 
 ## 📧 Envoi des Convocations par Email
@@ -805,21 +783,21 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/oauth2callback
 
 ### Fonctionnalités
 
-✅ **Authentification OAuth2** sécurisée  
-✅ **Envoi en masse** avec gestion des quotas Gmail  
-✅ **Personnalisation** des messages  
-✅ **Pièces jointes PDF** automatiques  
-✅ **Gestion des erreurs** et retry  
-✅ **Logs d'envoi** pour traçabilité  
-✅ **Test de connexion** avant envoi
+- **Authentification OAuth2** sécurisée
+- **Envoi en masse** avec gestion des quotas Gmail
+- **Personnalisation** des messages
+- **Pièces jointes PDF** automatiques
+- **Gestion des erreurs** et retry
+- **Logs d'envoi** pour traçabilité
+- **Test de connexion** avant envoi
 
 ### Sécurité
 
-- ✅ Aucun mot de passe stocké
-- ✅ Token OAuth2 sécurisé
-- ✅ Refresh automatique du token
-- ✅ Scopes minimaux (send only)
-- ✅ Révocation possible à tout moment
+- Aucun mot de passe stocké
+- Token OAuth2 sécurisé
+- Refresh automatique du token
+- Scopes minimaux (send only)
+- Révocation possible à tout moment
 
 ### Endpoints API
 
@@ -901,11 +879,11 @@ Export complet au format `.xlsx` contenant :
 
 ```
 ┌─────────────────────────────────────┐
-│ Séance: Lundi 15/01 - 08:30-10:30  │
+│ Séance: Lundi 15/01 - 08:30-10:30   │
 ├─────────────────────────────────────┤
-│ ✅ BENAMMOU Marwen    [Présent]     │
-│ ❌ KHARROUBI Wajdi    [Absent]      │
-│ ✅ DUPONT Jean        [Présent]     │
+│ ✅ BENAMMOU Marwen    [Présent]    │
+│ ❌ KHARROUBI Wajdi    [Absent]     │
+│ ✅ DUPONT Jean        [Présent]    │
 └─────────────────────────────────────┘
 ```
 
@@ -946,7 +924,7 @@ GET  /api/planning/absences/export-excel
 | `email_ens`              | Email     | ✅          | Adresse email unique        | marwen.benammou@example.com |
 | `grade_code_ens`         | Code      | ✅          | Code du grade (2-3 lettres) | MA                          |
 | `code_smartex_ens`       | int       | ✅          | Identifiant SmartEx unique  | 65                          |
-| `participe_surveillance` | VRAI/FAUX | ✅          | Participe aux surveillances | VRAI/FAUX                   |
+| `participe_surveillance` | VRAI/FAUX | ✅          | Participe aux surveillances | VRAI                        |
 
 **Exemple de fichier :**
 
@@ -1034,19 +1012,20 @@ GET  /api/planning/absences/export-excel
    - Exécuter `Gestion Surveillances-1.0.0-Setup.exe`
    - Laisser l'installation se terminer
 
-2. **Configurer les grades**
+2. **Utiliser l'Aide à la Décision** (Recommandé)
 
-   - Ouvrir l'application
-   - Aller dans `Configuration` → `Grades`
-   - Vérifier les quotas par grade
-   - Sauvegarder
-
-3. **Utiliser l'Aide à la Décision** (Recommandé)
    - Aller dans `Aide à la Décision`
    - Cliquer sur `Calculer les Recommandations`
    - Analyser les quotas recommandés
    - Appliquer les quotas recommandés
    - Exporter les souhaits autorisés
+
+3. **Configurer les grades**
+
+   - Ouvrir l'application
+   - Aller dans `Configuration` → `Grades`
+   - Vérifier les quotas par grade
+   - Sauvegarder
 
 #### Phase 2 : Import des Données (Chaque session)
 
@@ -1136,54 +1115,54 @@ GET  /api/planning/absences/export-excel
 
 1. **Préparation des données**
 
-   - ✅ Vérifier le format Excel avant import (colonnes, types)
-   - ✅ Nettoyer les données (corriger fautes)
-   - ✅ Utiliser l'Aide à la Décision avant génération
+   - Vérifier le format Excel avant import (colonnes, types)
+   - Nettoyer les données (corriger fautes)
+   - Utiliser l'Aide à la Décision avant génération
 
 2. **Configuration**
 
-   - ✅ Ajuster les quotas en fonction de la charge réelle
-   - ✅ Définir les exceptions individuelles si nécessaire
-   - ✅ Vérifier le nombre max de séances/jour par enseignant
+   - Ajuster les quotas en fonction de la charge réelle
+   - Définir les exceptions individuelles si nécessaire
+   - Vérifier le nombre max de séances/jour par enseignant
 
 3. **Génération**
 
-   - ✅ Consulter le dashboard avant génération
-   - ✅ Lire et comprendre les warnings
-   - ✅ Commencer avec 2 surveillants/examen puis ajuster
-   - ✅ Activer le mode adaptatif si quotas limites
+   - Consulter le dashboard avant génération
+   - Lire et comprendre les warnings
+   - Commencer avec 2 surveillants/examen puis ajuster
+   - Activer le mode adaptatif si quotas limites
 
 4. **Vérification**
 
-   - ✅ Vérifier le respect des souhaits (rapport)
-   - ✅ Vérifier l'égalité par grade (Consulter Planning)
-   - ✅ Vérifier qu'il n'y a pas de conflits horaires
-   - ✅ Utiliser la validation automatique pour modifications
+   - Vérifier le respect des souhaits (rapport)
+   - Vérifier l'égalité par grade (Consulter Planning)
+   - Vérifier qu'il n'y a pas de conflits horaires
+   - Utiliser la validation automatique pour modifications
 
 5. **Suivi**
-   - ✅ Enregistrer les présences réelles
-   - ✅ Analyser les statistiques d'absence
-   - ✅ Garder une trace pour les futures sessions
+   - Enregistrer les présences réelles
+   - Analyser les statistiques d'absence
+   - Garder une trace pour les futures sessions
 
 #### ❌ À ÉVITER
 
 1. **Configuration incorrecte**
 
-   - ❌ Oublier d'importer les fichiers
-   - ❌ Oublier de vérifier la configuration des grades
-   - ❌ Avoir des doublons dans les codes SmartEx
-   - ❌ Définir des quotas trop faibles par rapport au besoin
-   - ❌ Ignorer les recommandations de l'Aide à la Décision
+   - Oublier d'importer les fichiers
+   - Oublier de vérifier la configuration des grades
+   - Avoir des doublons dans les codes SmartEx
+   - Définir des quotas trop faibles par rapport au besoin
+   - Ignorer les recommandations de l'Aide à la Décision
 
 2. **Modifications manuelles**
 
-   - ❌ Ignorer les avertissements de validation
-   - ❌ Forcer des affectations impossibles
-   - ❌ Ne pas vérifier les contraintes après modification
+   - Ignorer les avertissements de validation
+   - Forcer des affectations impossibles
+   - Ne pas vérifier les contraintes après modification
 
 3. **Souhaits**
-   - ❌ Autoriser trop de souhaits par rapport au quota
-   - ❌ Ne pas communiquer les limites aux enseignants
+   - Autoriser trop de souhaits par rapport au quota
+   - Ne pas communiquer les limites aux enseignants
 
 ---
 
@@ -1333,13 +1312,11 @@ Les souhaits sont des contraintes **souples** (SOFT). Si nécessaire pour trouve
 **Symptômes :**
 
 - Message d'erreur lors de l'ajout manuel
-- "Quota dépassé" ou "Conflit horaire"
+- "Conflit horaire"
 
 **Causes :**
 
-- L'enseignant a déjà atteint son quota
 - L'enseignant a déjà une séance au même moment
-- L'enseignant dépasse son nombre max de séances/jour
 
 **Solutions :**
 
@@ -1348,12 +1325,7 @@ Les souhaits sont des contraintes **souples** (SOFT). Si nécessaire pour trouve
    - Consulter son emploi du temps
    - Identifier les conflits
 
-2. **Augmenter le quota** (si justifié)
-
-   - Utiliser les quotas d'exception
-   - Ou augmenter le quota du grade
-
-3. **Choisir un autre enseignant**
+2. **Choisir un autre enseignant**
    - Utiliser la liste des enseignants disponibles
    - Le système suggère des alternatives
 
