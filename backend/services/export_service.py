@@ -21,6 +21,8 @@ import re
 import unicodedata
 from config import EXPORT_DIR
 import logging
+import pythoncom
+
 
 logger = logging.getLogger(__name__)
 
@@ -1071,8 +1073,14 @@ class ExportService:
         """
         pdf_path = docx_path.replace('.docx', '.pdf')
         try:
-            convert(docx_path, pdf_path)
-            # Supprimer le fichier DOCX temporaire
+            # Initialiser COM pour le thread courant
+            pythoncom.CoInitialize()
+            try:
+                convert(docx_path, pdf_path)
+            finally:
+                # Toujours nettoyer COM, même en cas d'erreur
+                pythoncom.CoUninitialize()
+                        # Supprimer le fichier DOCX temporaire
             if os.path.exists(docx_path):
                 os.remove(docx_path)
             return pdf_path
