@@ -7,6 +7,46 @@ let mainWindow;
 let pythonProcess;
 let backendReady = false;
 
+// Fonction pour tuer le processus backend de manière robuste
+function killBackendProcess() {
+  if (!pythonProcess) {
+    return;
+  }
+
+  console.log('Stopping backend process...');
+  
+  if (process.platform === 'win32') {
+    // Sur Windows, utiliser taskkill pour tuer le processus et ses enfants
+    try {
+      const { execSync } = require('child_process');
+      execSync(`taskkill /pid ${pythonProcess.pid} /T /F`, { stdio: 'ignore' });
+      console.log('Backend process killed successfully');
+    } catch (error) {
+      console.error('Error killing backend process:', error);
+      // Fallback: essayer kill simple
+      try {
+        pythonProcess.kill('SIGKILL');
+      } catch (e) {
+        console.error('Fallback kill failed:', e);
+      }
+    }
+  } else {
+    // Sur Unix/Mac, utiliser SIGTERM puis SIGKILL si nécessaire
+    try {
+      pythonProcess.kill('SIGTERM');
+      setTimeout(() => {
+        if (pythonProcess && !pythonProcess.killed) {
+          pythonProcess.kill('SIGKILL');
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Error killing backend process:', error);
+    }
+  }
+  
+  pythonProcess = null;
+}
+
 // Démarrer le backend Python
 function startPythonBackend() {
   const isDev = !app.isPackaged;
@@ -219,6 +259,8 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    // Tuer le backend quand la fenêtre principale est fermée
+    killBackendProcess();
   });
 }
 
@@ -247,16 +289,22 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  // Tuer le backend avant de quitter
+  killBackendProcess();
+  
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-app.on('before-quit', () => {
-  // Arrêter le processus Python
-  if (pythonProcess) {
-    pythonProcess.kill();
-  }
+app.on('before-quit', (event) => {
+  // Arrêter le processus Python de manière robuste
+  killBackendProcess();
+});
+
+app.on('will-quit', () => {
+  // Dernière tentative pour s'assurer que le backend est arrêté
+  killBackendProcess();
 });
 
 // IPC Handlers

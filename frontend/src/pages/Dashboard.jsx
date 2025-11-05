@@ -59,21 +59,8 @@ export default function Dashboard() {
   }
 
   if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 gap-4">
-        <div className="text-red-500 text-center">
-          <div className="text-4xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2">Erreur de chargement</h2>
-          <p className="text-sm">Impossible de charger les statistiques. Vérifiez que le backend est démarré.</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Réessayer
-          </button>
-        </div>
-      </div>
-    );
+    window.location.reload();
+    return null;
   }
 
   const cards = [
