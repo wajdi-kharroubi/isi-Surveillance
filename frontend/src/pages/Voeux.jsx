@@ -24,6 +24,8 @@ export default function Voeux() {
   const { data: voeux, isLoading } = useQuery({
     queryKey: ['voeux'],
     queryFn: () => voeuxAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes - données rarement modifiées
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
   });
 
   // Get unique values for filters
@@ -67,7 +69,7 @@ export default function Voeux() {
     mutationFn: (file) => importAPI.importVoeux(file),
     onSuccess: (response) => {
       toast.success(response.data.message);
-      queryClient.invalidateQueries(['voeux']);
+      queryClient.invalidateQueries({ queryKey: ['voeux'] });
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -86,7 +88,7 @@ export default function Voeux() {
     mutationFn: () => voeuxAPI.vider(),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Table souhaits vidée avec succès!');
-      queryClient.invalidateQueries(['voeux']);
+      queryClient.invalidateQueries({ queryKey: ['voeux'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');

@@ -30,16 +30,22 @@ export default function DataManager() {
   const { data: enseignants } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
   });
 
   const { data: examens } = useQuery({
     queryKey: ['examens'],
     queryFn: () => examensAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
   });
 
   const { data: voeux } = useQuery({
     queryKey: ['voeux'],
     queryFn: () => voeuxAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
   });
 
   // Import mutations
@@ -47,7 +53,7 @@ export default function DataManager() {
     mutationFn: (file) => importAPI.importEnseignants(file),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Enseignants importés avec succès!');
-      queryClient.invalidateQueries(['enseignants']);
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de l\'import des enseignants');
@@ -58,7 +64,7 @@ export default function DataManager() {
     mutationFn: (file) => importAPI.importExamens(file),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Examens importés avec succès!');
-      queryClient.invalidateQueries(['examens']);
+      queryClient.invalidateQueries({ queryKey: ['examens'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de l\'import des examens');
@@ -69,7 +75,7 @@ export default function DataManager() {
     mutationFn: (file) => importAPI.importVoeux(file),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Souhaits importés avec succès!');
-      queryClient.invalidateQueries(['voeux']);
+      queryClient.invalidateQueries({ queryKey: ['voeux'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de l\'import des souhaits');
@@ -81,7 +87,7 @@ export default function DataManager() {
     mutationFn: () => enseignantsAPI.vider(),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Table enseignants vidée avec succès!');
-      queryClient.invalidateQueries(['enseignants']);
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');
@@ -92,7 +98,7 @@ export default function DataManager() {
     mutationFn: () => examensAPI.vider(),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Table examens vidée avec succès!');
-      queryClient.invalidateQueries(['examens']);
+      queryClient.invalidateQueries({ queryKey: ['examens'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');
@@ -103,7 +109,7 @@ export default function DataManager() {
     mutationFn: () => voeuxAPI.vider(),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Table souhaits vidée avec succès!');
-      queryClient.invalidateQueries(['voeux']);
+      queryClient.invalidateQueries({ queryKey: ['voeux'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');

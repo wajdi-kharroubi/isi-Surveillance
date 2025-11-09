@@ -40,6 +40,8 @@ export default function Enseignants() {
   const { data: enseignants, isLoading } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes - données rarement modifiées
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
   });
 
   // Get unique grades for filter
@@ -125,7 +127,7 @@ export default function Enseignants() {
     mutationFn: (file) => importAPI.importEnseignants(file),
     onSuccess: (response) => {
       toast.success(response.data.message);
-      queryClient.invalidateQueries(['enseignants']);
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -144,7 +146,7 @@ export default function Enseignants() {
     mutationFn: () => enseignantsAPI.vider(),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Table enseignants vidée avec succès!');
-      queryClient.invalidateQueries(['enseignants']);
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');

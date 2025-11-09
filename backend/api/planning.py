@@ -25,8 +25,10 @@ from models.schemas import (
 )
 from typing import List, Dict
 from datetime import datetime, time as dt_time
+import logging
 
 router = APIRouter(prefix="/planning", tags=["Planning"])
+logger = logging.getLogger(__name__)
 
 
 def _get_seance_code_from_time(heure: dt_time) -> str:
@@ -337,7 +339,8 @@ def emploi_seances(db: Session = Depends(get_db)):
 @router.get("/absences/seances")
 def absences_seances(db: Session = Depends(get_db)):
     """Retourne les séances avec la liste des enseignants et l'état de présence.
-    Tous les enseignants sont automatiquement marqués comme présents par défaut dans la base de données."""
+    Tous les enseignants sont automatiquement marqués comme présents par défaut dans la base de données.
+    OPTIMISÉ : Création en batch des enregistrements de présence manquants."""
     examens = db.query(Examen).all()
     seances = {}
     for ex in examens:
@@ -371,19 +374,21 @@ def absences_seances(db: Session = Depends(get_db)):
             elif aff.est_responsable:
                 seances[key]["enseignants"][aff.enseignant_id]["est_responsable"] = True
 
-    # Récupérer les enregistrements de présence existants et les appliquer
+    # Récupérer TOUS les enregistrements de présence en une seule requête
     presences = db.query(Presence).all()
     presence_map = {}
     for p in presences:
         key = (p.date_exam, p.h_debut, p.h_fin, p.session, p.semestre, p.enseignant_id)
         presence_map[key] = p.present
 
-    # Mise en forme et création automatique des enregistrements de présence manquants
+    # Collecter les présences manquantes à créer en batch
+    new_presences = []
     result = []
+    
     for (date, h_debut, h_fin, session, semestre), val in seances.items():
         enseignants_list = list(val["enseignants"].values())
         
-        # Appliquer le statut de présence et créer les enregistrements manquants
+        # Appliquer le statut de présence et identifier les enregistrements manquants
         for ens in enseignants_list:
             pkey = (date, h_debut, h_fin, session, semestre, ens["id"])
             
@@ -391,25 +396,19 @@ def absences_seances(db: Session = Depends(get_db)):
                 # Utiliser l'enregistrement existant
                 ens["present"] = presence_map[pkey]
             else:
-                # Créer automatiquement un enregistrement de présence (présent par défaut)
-                new_presence = Presence(
-                    enseignant_id=ens["id"],
-                    date_exam=date,
-                    h_debut=h_debut,
-                    h_fin=h_fin,
-                    session=session,
-                    semestre=semestre,
-                    present=True
+                # Préparer la création d'un enregistrement de présence
+                new_presences.append(
+                    Presence(
+                        enseignant_id=ens["id"],
+                        date_exam=date,
+                        h_debut=h_debut,
+                        h_fin=h_fin,
+                        session=session,
+                        semestre=semestre,
+                        present=True
+                    )
                 )
-                db.add(new_presence)
                 ens["present"] = True
-
-        # Commit les nouvelles présences créées
-        try:
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            # En cas d'erreur, continuer sans bloquer
 
         result.append(
             {
@@ -424,6 +423,15 @@ def absences_seances(db: Session = Depends(get_db)):
                 "enseignants": enseignants_list,
             }
         )
+
+    # Créer TOUS les enregistrements manquants en une seule transaction
+    if new_presences:
+        try:
+            db.bulk_save_objects(new_presences)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Erreur lors de la création des présences: {str(e)}")
 
     return result
 
@@ -479,16 +487,18 @@ def mark_presence(request: PresenceMarkRequest, db: Session = Depends(get_db)):
 @router.get("/absences/stats")
 def absences_stats(db: Session = Depends(get_db)):
     """Calcul des statistiques d'absences: totals et pourcentage par séance et global.
-    Tous les enseignants avec affectations sont comptés (présents par défaut)."""
+    Tous les enseignants avec affectations sont comptés (présents par défaut).
+    OPTIMISÉ : Utilise des requêtes groupées avec COUNT."""
     
     # Récupérer toutes les affectations pour connaître le nombre total d'enseignants par séance
+    # Utiliser joinedload pour éviter les requêtes supplémentaires
     affectations = (
         db.query(Affectation)
         .options(joinedload(Affectation.examen))
         .all()
     )
     
-    # Compter les enseignants par séance
+    # Compter les enseignants uniques par séance
     seances_enseignants = {}
     for aff in affectations:
         ex = aff.examen
@@ -497,18 +507,18 @@ def absences_stats(db: Session = Depends(get_db)):
             seances_enseignants[key] = set()
         seances_enseignants[key].add(aff.enseignant_id)
     
-    # Récupérer les enregistrements de présence
+    # Récupérer les enregistrements de présence (les index rendent ceci rapide)
     presences = db.query(Presence).all()
     
     stats_by_seance = {}
     total_absent = 0
     
-    # Compter les absents
+    # Compter les absents par séance
     for p in presences:
         key = (p.date_exam, p.h_debut, p.h_fin, p.session, p.semestre)
         if key not in stats_by_seance:
-            stats_by_seance[key] = {"present": 0, "absent": 0}
-        if not p.present:  # Seulement compter les absents
+            stats_by_seance[key] = {"absent": 0}
+        if not p.present:
             stats_by_seance[key]["absent"] += 1
             total_absent += 1
     

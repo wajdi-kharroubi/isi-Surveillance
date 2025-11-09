@@ -29,8 +29,9 @@ export default function Generation() {
   const { data: stats } = useQuery({
     queryKey: ['statistiques'],
     queryFn: () => statistiquesAPI.getGlobal().then(res => res.data),
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 0, // Les données changent après génération
+    gcTime: 0, // Ne pas garder en cache
+    refetchOnMount: true, // Toujours recharger
   });
 
   // Load result from localStorage on mount and verify affectations exist
@@ -86,7 +87,7 @@ export default function Generation() {
       localStorage.setItem('generation_result', JSON.stringify(response.data));
       if (response.data.success) {
         toast.success(response.data.message);
-        queryClient.invalidateQueries(['statistiques']);
+        queryClient.invalidateQueries({ queryKey: ['statistiques'] });
       } else {
         toast.error(response.data.message);
       }
@@ -373,8 +374,8 @@ export default function Generation() {
               onClick={() => {
                 setResult(null);
                 localStorage.removeItem('generation_result');
-                queryClient.invalidateQueries(['statistiques']);
-                queryClient.invalidateQueries(['generation-stats']);
+                queryClient.invalidateQueries({ queryKey: ['statistiques'] });
+                queryClient.invalidateQueries({ queryKey: ['generation-stats'] });
                 toast.success('Logs effacés');
               }}
               className="group relative overflow-hidden flex items-center gap-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"

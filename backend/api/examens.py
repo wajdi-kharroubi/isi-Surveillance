@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from database import get_db
 from models import ExamenResponse, Examen, Affectation, Enseignant
@@ -49,13 +49,19 @@ def lister_examens(
     else:
         examens = query.offset(skip).limit(limit).all()
 
+    # Charger tous les enseignants en une seule requête
+    codes_smartex = [examen.enseignant for examen in examens if examen.enseignant]
+    responsables_dict = {}
+    if codes_smartex:
+        responsables = db.query(Enseignant).filter(
+            Enseignant.code_smartex.in_(codes_smartex)
+        ).all()
+        responsables_dict = {ens.code_smartex: ens for ens in responsables}
+
     # Enrichir chaque examen avec le nom et prénom du responsable
     result = []
     for examen in examens:
-        # Chercher l'enseignant responsable par code_smartex
-        responsable = db.query(Enseignant).filter(
-            Enseignant.code_smartex == examen.enseignant
-        ).first()
+        responsable = responsables_dict.get(examen.enseignant)
         
         examen_dict = {
             "id": examen.id,

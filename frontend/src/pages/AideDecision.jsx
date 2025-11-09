@@ -49,8 +49,8 @@ export default function AideDecision() {
   const appliquerQuotasMutation = useMutation({
     mutationFn: decisionAPI.appliquerQuotas,
     onSuccess: () => {
-      queryClient.invalidateQueries(['grades-config']);
-      queryClient.invalidateQueries(['quotas-actuels']);
+      queryClient.invalidateQueries({ queryKey: ['grades-config'] });
+      queryClient.invalidateQueries({ queryKey: ['quotas-actuels'] });
       alert('✅ Quotas appliqués avec succès !');
     },
     onError: (error) => {

@@ -60,24 +60,24 @@ class Voeu(Base):
     __tablename__ = "voeux"
 
     id = Column(Integer, primary_key=True, index=True)
-    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
+    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False, index=True)
     code_smartex_ens = Column(
         String(50), nullable=True, index=True
     )  # Code smartex de l'enseignant
     semestre_code_libelle = Column(
-        String(50), nullable=True
+        String(50), nullable=True, index=True  # Index ajouté pour filtres fréquents
     )  # "Semestre1", "Semestre2" - colonne "Semestre" dans Excel
     session_libelle = Column(
-        String(50), nullable=True
+        String(50), nullable=True, index=True  # Index ajouté pour filtres fréquents
     )  # "Partiel", "Examen", "Rattrapage" - colonne "Session" dans Excel
     date_voeu = Column(
         Date, nullable=True
     )  # Date du vœu (format j/m/a) - colonne "Date" dans Excel
     jour = Column(
-        String(20), nullable=False
+        String(20), nullable=False, index=True  # Index ajouté pour filtres fréquents
     )  # Nom du jour (Lundi, Mardi, Mercredi, Jeudi, Vendredi, Samedi) - colonne "Jour" dans Excel
     seance = Column(
-        String(10), nullable=False
+        String(10), nullable=False, index=True  # Index ajouté pour filtres fréquents
     )  # Code séance (S1, S2, S3, S4) - colonne "Séances" dans Excel (peut être multiple, un vœu par séance)
     motif = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -97,16 +97,16 @@ class Examen(Base):
     h_debut = Column(Time, nullable=False)  # Correspond à colonne Excel
     h_fin = Column(Time, nullable=False)  # Correspond à colonne Excel
     session = Column(
-        String(10), nullable=False
+        String(10), nullable=False, index=True  # Index ajouté pour filtres fréquents
     )  # P ou C dans Excel → transformé en Principale/Contrôle
     type_ex = Column(
         String(50), nullable=False
     )  # Écrit, TP, Oral - correspond à colonne Excel
     semestre = Column(
-        String(20), nullable=False
+        String(20), nullable=False, index=True  # Index ajouté pour filtres fréquents
     )  # SEMESTRE 1, SEMESTRE 2 - correspond à colonne Excel
     enseignant = Column(
-        String(50), nullable=False
+        String(50), nullable=False, index=True  # Index ajouté pour jointures fréquentes
     )  # Code smartex de l'enseignant - correspond à colonne Excel
     cod_salle = Column(
         String(50), nullable=False, index=True
@@ -125,10 +125,10 @@ class Affectation(Base):
     __tablename__ = "affectations"
 
     id = Column(Integer, primary_key=True, index=True)
-    examen_id = Column(Integer, ForeignKey("examens.id"), nullable=False)
-    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
+    examen_id = Column(Integer, ForeignKey("examens.id"), nullable=False, index=True)
+    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False, index=True)
     cod_salle = Column(
-        String(50), nullable=False
+        String(50), nullable=False, index=True
     )  # Code salle directement au lieu de salle_id
     est_responsable = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -320,13 +320,13 @@ class Presence(Base):
     __tablename__ = "presences"
 
     id = Column(Integer, primary_key=True, index=True)
-    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
-    date_exam = Column(Date, nullable=False)
+    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False, index=True)
+    date_exam = Column(Date, nullable=False, index=True)
     h_debut = Column(Time, nullable=False)
     h_fin = Column(Time, nullable=False)
-    session = Column(String(20), nullable=False)
-    semestre = Column(String(20), nullable=False)
-    present = Column(Boolean, nullable=False, default=True)
+    session = Column(String(20), nullable=False, index=True)
+    semestre = Column(String(20), nullable=False, index=True)
+    present = Column(Boolean, nullable=False, default=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relations

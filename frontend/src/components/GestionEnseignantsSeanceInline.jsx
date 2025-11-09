@@ -30,12 +30,16 @@ export default function GestionEnseignantsSeanceInline({
   const { data: enseignants } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
+    refetchOnMount: 'always', // Force le rechargement pour voir les exceptions à jour
   });
 
   // Récupérer les configurations de grades avec leurs quotas
   const { data: gradesConfig = [] } = useQuery({
     queryKey: ['grades'],
     queryFn: () => gradesAPI.getAll().then(res => res.data),
+    staleTime: 0, // Pas de cache - toujours à jour
+    gcTime: 0, // Pas de conservation en mémoire
+    refetchOnMount: true, // Toujours recharger
   });
 
   // Récupérer les statistiques de charge des enseignants
@@ -78,8 +82,8 @@ export default function GestionEnseignantsSeanceInline({
   const supprimerMutation = useMutation({
     mutationFn: planningAPI.supprimerEnseignantSeance,
     onSuccess: () => {
-      queryClient.invalidateQueries(['emploi-seances']);
-      queryClient.invalidateQueries(['statistiques']);
+      queryClient.invalidateQueries({ queryKey: ['emploi-seances'] });
+      queryClient.invalidateQueries({ queryKey: ['statistiques'] });
       toast.success('Enseignant retiré de la séance avec succès');
       if (onUpdate) onUpdate();
     },
@@ -94,8 +98,8 @@ export default function GestionEnseignantsSeanceInline({
     onSuccess: () => {
       setIsAdding(false);
       setSelectedEnseignantId('');
-      queryClient.invalidateQueries(['emploi-seances']);
-      queryClient.invalidateQueries(['statistiques']);
+      queryClient.invalidateQueries({ queryKey: ['emploi-seances'] });
+      queryClient.invalidateQueries({ queryKey: ['statistiques'] });
       toast.success('Enseignant ajouté à la séance avec succès');
       if (onUpdate) onUpdate();
     },

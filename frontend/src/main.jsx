@@ -11,7 +11,11 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000, // 5 minutes - données considérées fraîches
+      gcTime: 10 * 60 * 1000, // 10 minutes - temps de cache (anciennement cacheTime)
+      // Désactiver le refetch automatique pour les données statiques
+      refetchOnMount: false,
+      refetchOnReconnect: false,
     },
   },
 });

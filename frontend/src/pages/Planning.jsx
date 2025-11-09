@@ -57,18 +57,27 @@ export default function Planning() {
   const { data: enseignants = [] } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes - les enseignants changent rarement
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
+    refetchOnMount: 'always', // Force le rechargement pour voir les exceptions à jour
   });
 
   // Récupérer les configurations de grades avec leurs quotas
   const { data: gradesConfig = [] } = useQuery({
     queryKey: ['grades'],
     queryFn: () => gradesAPI.getAll().then(res => res.data),
+    staleTime: 0, // Pas de cache - toujours à jour
+    gcTime: 0, // Pas de conservation en mémoire
+    refetchOnMount: true, // Toujours recharger
   });
 
   // Récupérer les statistiques de charge des enseignants
   const { data: chargeEnseignantsData } = useQuery({
     queryKey: ['charge-enseignants'],
     queryFn: () => statistiquesAPI.getChargeEnseignants().then(res => res.data),
+    staleTime: 0, // Toujours recharger - données dynamiques du planning
+    gcTime: 0, // Ne pas garder en cache
+    refetchOnMount: true, // Recharger à chaque montage
   });
 
   // S'assurer que chargeEnseignants est un tableau (l'API retourne {charges: [...]})
@@ -105,6 +114,9 @@ export default function Planning() {
     queryKey: ['emploi-seances'],
     queryFn: () => planningAPI.getEmploiSeances().then(res => res.data),
     enabled: activeTab === 'seances',
+    staleTime: 0, // Toujours recharger pour le planning (données dynamiques)
+    gcTime: 0, // Ne pas garder en cache (données changeantes)
+    refetchOnMount: true, // Toujours recharger au montage
   });
 
   // Récupérer la liste des séances disponibles pour le formulaire d'ajout
@@ -113,13 +125,17 @@ export default function Planning() {
     queryFn: () => planningAPI.getEmploiSeances().then(res => res.data),
     enabled: activeTab === 'enseignant' && showAddSeanceForm,
     staleTime: 0, // Force le rechargement des données
-    cacheTime: 0, // Ne pas garder en cache
+    gcTime: 0, // Ne pas garder en cache
+    refetchOnMount: true, // Toujours recharger
   });
 
   const { data: emploiEnseignant, isLoading: loadingEnseignant } = useQuery({
     queryKey: ['emploi-enseignant', selectedEnseignant],
     queryFn: () => planningAPI.getEmploiEnseignant(selectedEnseignant).then(res => res.data),
     enabled: activeTab === 'enseignant' && selectedEnseignant !== null,
+    staleTime: 0, // Toujours recharger pour le planning
+    gcTime: 0, // Ne pas garder en cache
+    refetchOnMount: true, // Toujours recharger
   });
 
   // Filtrer les séances pour n'afficher que celles non affectées à l'enseignant
@@ -147,9 +163,9 @@ export default function Planning() {
     mutationFn: planningAPI.supprimerEnseignantSeance,
     onSuccess: () => {
       // Recharger les données de l'enseignant
-      queryClient.invalidateQueries(['emploi-enseignant', selectedEnseignant]);
-      queryClient.invalidateQueries(['emploi-seances']);
-      queryClient.invalidateQueries(['statistiques']);
+      queryClient.invalidateQueries({ queryKey: ['emploi-enseignant', selectedEnseignant] });
+      queryClient.invalidateQueries({ queryKey: ['emploi-seances'] });
+      queryClient.invalidateQueries({ queryKey: ['statistiques'] });
     },
   });
 
@@ -158,9 +174,9 @@ export default function Planning() {
     mutationFn: planningAPI.ajouterEnseignantParDateHeure,
     onSuccess: (response) => {
       // Recharger les données
-      queryClient.invalidateQueries(['emploi-enseignant', selectedEnseignant]);
-      queryClient.invalidateQueries(['emploi-seances']);
-      queryClient.invalidateQueries(['statistiques']);
+      queryClient.invalidateQueries({ queryKey: ['emploi-enseignant', selectedEnseignant] });
+      queryClient.invalidateQueries({ queryKey: ['emploi-seances'] });
+      queryClient.invalidateQueries({ queryKey: ['statistiques'] });
       
       // Réinitialiser le formulaire
       setShowAddSeanceForm(false);
@@ -179,10 +195,10 @@ export default function Planning() {
     mutationFn: planningAPI.exchangeEnseignants,
     onSuccess: (response) => {
       // Recharger les données
-      queryClient.invalidateQueries(['emploi-enseignant']);
-      queryClient.invalidateQueries(['emploi-seances']);
-      queryClient.invalidateQueries(['statistiques']);
-      queryClient.invalidateQueries(['charge-enseignants']);
+      queryClient.invalidateQueries({ queryKey: ['emploi-enseignant'] });
+      queryClient.invalidateQueries({ queryKey: ['emploi-seances'] });
+      queryClient.invalidateQueries({ queryKey: ['statistiques'] });
+      queryClient.invalidateQueries({ queryKey: ['charge-enseignants'] });
       
       // Réinitialiser le mode échange
       setExchangeMode(false);

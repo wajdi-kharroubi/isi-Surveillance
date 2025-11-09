@@ -23,8 +23,9 @@ export default function Dashboard() {
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['statistiques'],
     queryFn: () => statistiquesAPI.getGlobal().then(res => res.data),
-    staleTime: 0, // Les données deviennent obsolètes immédiatement
-    refetchOnMount: 'always', // Toujours rafraîchir au montage du composant
+    staleTime: 0, // Les données changent fréquemment après génération
+    gcTime: 0, // Ne pas garder en cache
+    refetchOnMount: true, // Toujours rafraîchir au montage du composant
   });
 
   // Fetch dernière génération stats
@@ -39,14 +40,17 @@ export default function Dashboard() {
         return null;
       }
     },
-    staleTime: 0, // Les données deviennent obsolètes immédiatement
-    gcTime: 0, // Supprimer du cache immédiatement après démontage
-    refetchOnMount: 'always', // Toujours rafraîchir au montage du composant
+    staleTime: 0, // Les données changent après génération
+    gcTime: 0, // Ne pas garder en cache
+    refetchOnMount: true, // Toujours rafraîchir au montage du composant
   });
 
   const { data: grades } = useQuery({
     queryKey: ['grades'],
     queryFn: () => gradesAPI.getAll().then(res => res.data),
+    staleTime: 0, // Pas de cache - toujours à jour
+    gcTime: 0, // Pas de conservation en mémoire
+    refetchOnMount: true, // Toujours recharger
   });
 
   if (isLoading) {

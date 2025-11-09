@@ -23,6 +23,8 @@ export default function Examens() {
   const { data: examens, isLoading } = useQuery({
     queryKey: ['examens'],
     queryFn: () => examensAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes - données rarement modifiées
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
   });
 
   // Get unique values for filters
@@ -45,7 +47,7 @@ export default function Examens() {
     mutationFn: (file) => importAPI.importExamens(file),
     onSuccess: (response) => {
       toast.success(response.data.message);
-      queryClient.invalidateQueries(['examens']);
+      queryClient.invalidateQueries({ queryKey: ['examens'] });
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -64,7 +66,7 @@ export default function Examens() {
     mutationFn: () => examensAPI.vider(),
     onSuccess: (response) => {
       toast.success(response.data.message || 'Table examens vidée avec succès!');
-      queryClient.invalidateQueries(['examens']);
+      queryClient.invalidateQueries({ queryKey: ['examens'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la suppression');

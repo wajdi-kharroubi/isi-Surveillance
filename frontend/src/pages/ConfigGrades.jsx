@@ -35,18 +35,24 @@ export default function ConfigGrades() {
   const { data: grades, isLoading } = useQuery({
     queryKey: ['grades'],
     queryFn: () => gradesAPI.getAll().then(res => res.data),
+    staleTime: 0, // Pas de cache - toujours refetch
+    gcTime: 0, // Pas de conservation en mémoire
+    refetchOnMount: true, // Toujours recharger au montage
   });
 
   const { data: enseignants, isLoading: isLoadingEnseignants } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes en cache
+    refetchOnMount: 'always', // Force le rechargement dans cette page pour voir les exceptions à jour
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ code, data }) => gradesAPI.update(code, data),
     onSuccess: () => {
       toast.success('Configuration mise à jour');
-      queryClient.invalidateQueries(['grades']);
+      queryClient.invalidateQueries({ queryKey: ['grades'] });
       setEditingGrade(null);
     },
     onError: (error) => {
@@ -58,7 +64,7 @@ export default function ConfigGrades() {
     mutationFn: () => gradesAPI.reset(),
     onSuccess: () => {
       toast.success('Configurations réinitialisées');
-      queryClient.invalidateQueries(['grades']);
+      queryClient.invalidateQueries({ queryKey: ['grades'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la réinitialisation');
@@ -69,7 +75,7 @@ export default function ConfigGrades() {
     mutationFn: ({ enseignantId, data }) => enseignantsAPI.updateException(enseignantId, data),
     onSuccess: () => {
       toast.success('Exception mise à jour');
-      queryClient.invalidateQueries(['enseignants']);
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
       setEditingEnseignant(null);
     },
     onError: (error) => {
@@ -81,7 +87,7 @@ export default function ConfigGrades() {
     mutationFn: (enseignantId) => enseignantsAPI.resetException(enseignantId),
     onSuccess: () => {
       toast.success('Exception réinitialisée');
-      queryClient.invalidateQueries(['enseignants']);
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Erreur lors de la réinitialisation');
