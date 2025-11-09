@@ -336,7 +336,8 @@ def emploi_seances(db: Session = Depends(get_db)):
 
 @router.get("/absences/seances")
 def absences_seances(db: Session = Depends(get_db)):
-    """Retourne les séances avec la liste des enseignants et l'état de présence si enregistré."""
+    """Retourne les séances avec la liste des enseignants et l'état de présence.
+    Tous les enseignants sont automatiquement marqués comme présents par défaut dans la base de données."""
     examens = db.query(Examen).all()
     seances = {}
     for ex in examens:
@@ -363,28 +364,52 @@ def absences_seances(db: Session = Depends(get_db)):
                     "id": aff.enseignant_id,
                     "nom": aff.enseignant.nom,
                     "prenom": aff.enseignant.prenom,
+                    "grade_code": aff.enseignant.grade_code,
                     "est_responsable": aff.est_responsable,
-                    "present": None,
+                    "present": True,  # Par défaut présent
                 }
             elif aff.est_responsable:
                 seances[key]["enseignants"][aff.enseignant_id]["est_responsable"] = True
 
-    # Récupérer les enregistrements de présence et les appliquer
+    # Récupérer les enregistrements de présence existants et les appliquer
     presences = db.query(Presence).all()
     presence_map = {}
     for p in presences:
         key = (p.date_exam, p.h_debut, p.h_fin, p.session, p.semestre, p.enseignant_id)
         presence_map[key] = p.present
 
-    # Mise en forme
+    # Mise en forme et création automatique des enregistrements de présence manquants
     result = []
     for (date, h_debut, h_fin, session, semestre), val in seances.items():
         enseignants_list = list(val["enseignants"].values())
-        # Appliquer le statut de présence
+        
+        # Appliquer le statut de présence et créer les enregistrements manquants
         for ens in enseignants_list:
             pkey = (date, h_debut, h_fin, session, semestre, ens["id"])
+            
             if pkey in presence_map:
+                # Utiliser l'enregistrement existant
                 ens["present"] = presence_map[pkey]
+            else:
+                # Créer automatiquement un enregistrement de présence (présent par défaut)
+                new_presence = Presence(
+                    enseignant_id=ens["id"],
+                    date_exam=date,
+                    h_debut=h_debut,
+                    h_fin=h_fin,
+                    session=session,
+                    semestre=semestre,
+                    present=True
+                )
+                db.add(new_presence)
+                ens["present"] = True
+
+        # Commit les nouvelles présences créées
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            # En cas d'erreur, continuer sans bloquer
 
         result.append(
             {
@@ -453,28 +478,52 @@ def mark_presence(request: PresenceMarkRequest, db: Session = Depends(get_db)):
 
 @router.get("/absences/stats")
 def absences_stats(db: Session = Depends(get_db)):
-    """Calcul rapide de statistiques d'absences: totals et pourcentage par séance et global."""
+    """Calcul des statistiques d'absences: totals et pourcentage par séance et global.
+    Tous les enseignants avec affectations sont comptés (présents par défaut)."""
+    
+    # Récupérer toutes les affectations pour connaître le nombre total d'enseignants par séance
+    affectations = (
+        db.query(Affectation)
+        .options(joinedload(Affectation.examen))
+        .all()
+    )
+    
+    # Compter les enseignants par séance
+    seances_enseignants = {}
+    for aff in affectations:
+        ex = aff.examen
+        key = (ex.dateExam, ex.h_debut, ex.h_fin, ex.session, ex.semestre)
+        if key not in seances_enseignants:
+            seances_enseignants[key] = set()
+        seances_enseignants[key].add(aff.enseignant_id)
+    
+    # Récupérer les enregistrements de présence
     presences = db.query(Presence).all()
+    
     stats_by_seance = {}
-    total_present = 0
     total_absent = 0
-
+    
+    # Compter les absents
     for p in presences:
         key = (p.date_exam, p.h_debut, p.h_fin, p.session, p.semestre)
         if key not in stats_by_seance:
             stats_by_seance[key] = {"present": 0, "absent": 0}
-        if p.present:
-            stats_by_seance[key]["present"] += 1
-            total_present += 1
-        else:
+        if not p.present:  # Seulement compter les absents
             stats_by_seance[key]["absent"] += 1
             total_absent += 1
+    
+    # Calculer le total des enseignants et le nombre de présents
+    total_enseignants = sum(len(ens_set) for ens_set in seances_enseignants.values())
+    total_present = total_enseignants - total_absent
 
     seances = []
-    for (date, h_debut, h_fin, session, semestre), counts in stats_by_seance.items():
-        total = counts["present"] + counts["absent"]
+    for (date, h_debut, h_fin, session, semestre), ens_set in seances_enseignants.items():
+        total_seance = len(ens_set)
+        absent_seance = stats_by_seance.get((date, h_debut, h_fin, session, semestre), {}).get("absent", 0)
+        present_seance = total_seance - absent_seance
+        
         taux_presence = (
-            round((counts["present"] / total * 100), 2) if total > 0 else None
+            round((present_seance / total_seance * 100), 2) if total_seance > 0 else 100
         )
         seances.append(
             {
@@ -483,15 +532,14 @@ def absences_stats(db: Session = Depends(get_db)):
                 "h_fin": h_fin,
                 "session": session,
                 "semestre": semestre,
-                "present": counts["present"],
-                "absent": counts["absent"],
+                "present": present_seance,
+                "absent": absent_seance,
                 "taux_presence": taux_presence,
             }
         )
 
-    global_total = total_present + total_absent
     global_taux = (
-        round((total_present / global_total * 100), 2) if global_total > 0 else None
+        round((total_present / total_enseignants * 100), 2) if total_enseignants > 0 else 100
     )
 
     return {

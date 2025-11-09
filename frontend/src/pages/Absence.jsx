@@ -447,11 +447,11 @@ export default function Absence() {
                    code.includes(searchLower) || grade.includes(searchLower);
           });
           
+          // Tous les enseignants sont présents par défaut dans la base de données
           const presentCount = (s.enseignants || []).filter(e => e.present === true).length;
           const absentCount = (s.enseignants || []).filter(e => e.present === false).length;
-          const unknownCount = (s.enseignants || []).filter(e => e.present === null || e.present === undefined).length;
           const total = s.enseignants?.length || 0;
-          const tauxPresence = total > 0 ? Math.round((presentCount / total) * 100) : 0;
+          const tauxPresence = total > 0 ? Math.round((presentCount / total) * 100) : 100;
 
           return (
             <div key={idx} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
@@ -493,10 +493,6 @@ export default function Absence() {
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-500"></div>
                     <span className="text-sm font-semibold text-gray-700">Absents: <span className="text-red-600">{absentCount}</span></span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                    <span className="text-sm font-semibold text-gray-700">Non marqués: <span className="text-gray-600">{unknownCount}</span></span>
                   </div>
                   <div className="ml-auto text-sm text-gray-600 font-medium">
                     Total: {total} enseignant{total > 1 ? 's' : ''}
@@ -559,11 +555,9 @@ export default function Absence() {
                     <div 
                       key={e.id} 
                       className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                        e.present === true 
-                          ? 'bg-green-50 border-green-200 hover:border-green-300' 
-                          : e.present === false 
+                        e.present === false 
                           ? 'bg-red-50 border-red-200 hover:border-red-300' 
-                          : 'bg-white border-gray-200 hover:border-gray-300'
+                          : 'bg-green-50 border-green-200 hover:border-green-300'
                       }`}
                     >
                       <div className="flex items-center gap-4 flex-1">
@@ -584,46 +578,39 @@ export default function Absence() {
                           </div>
                         </div>
 
-                        {/* Status */}
+                        {/* Status - Tous sont présents par défaut */}
                         <div className="flex items-center gap-3">
-                          {e.present === null || e.present === undefined ? (
-                            <span className="text-gray-400 text-sm font-medium">Non marqué</span>
-                          ) : e.present ? (
-                            <span className="flex items-center gap-2 text-green-700 font-bold">
-                              <CheckCircleIcon className="w-5 h-5" />
-                              Présent
-                            </span>
-                          ) : (
+                          {e.present === false ? (
                             <span className="flex items-center gap-2 text-red-700 font-bold">
                               <XCircleIcon className="w-5 h-5" />
                               Absent
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-2 text-green-700 font-bold">
+                              <CheckCircleIcon className="w-5 h-5" />
+                              Présent
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Actions */}
+                      {/* Actions - Bouton conditionnel selon l'état */}
                       <div className="flex items-center gap-2 ml-4">
-                        <button
-                          onClick={() => setPresence(s, e, true)}
-                          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                            e.present === true
-                              ? 'bg-green-600 text-white shadow-md'
-                              : 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300'
-                          }`}
-                        >
-                          ✓ Présent
-                        </button>
-                        <button
-                          onClick={() => setPresence(s, e, false)}
-                          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                            e.present === false
-                              ? 'bg-red-600 text-white shadow-md'
-                              : 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
-                          }`}
-                        >
-                          ✕ Absent
-                        </button>
+                        {e.present === false ? (
+                          <button
+                            onClick={() => setPresence(s, e, true)}
+                            className="px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 border border-green-300 rounded-lg font-semibold text-sm transition-all"
+                          >
+                            ↺ Marquer Présent
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setPresence(s, e, false)}
+                            className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 border border-red-300 rounded-lg font-semibold text-sm transition-all"
+                          >
+                            ✕ Marquer Absent
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
