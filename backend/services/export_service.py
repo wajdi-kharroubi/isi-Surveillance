@@ -104,6 +104,54 @@ class ExportService:
         return conversions.get(code_session, code_session)
     
     @staticmethod
+    def _determiner_type_session_fichier(affectations: List[Affectation]) -> str:
+        """Détermine le type de session pour le nom du fichier (Partiel, Examen, etc.)
+        
+        Args:
+            affectations: Liste des affectations de l'enseignant
+            
+        Returns:
+            Type de session normalisé pour le nom du fichier
+        """
+        if not affectations:
+            return "Examen"
+        
+        # Récupérer le type de session du premier examen (supposé homogène)
+        code_session = affectations[0].examen.session
+        
+        # Mapper les codes vers les types de session pour les noms de fichiers
+        conversions = {
+            'P': 'Partiel',
+            'R': 'Rattrapage',
+            'C': 'Controle'
+        }
+        return conversions.get(code_session, 'Examen')
+    
+    @staticmethod
+    def _determiner_semestre_fichier(affectations: List[Affectation]) -> str:
+        """Détermine le semestre pour le nom du fichier (S1, S2)
+        
+        Args:
+            affectations: Liste des affectations de l'enseignant
+            
+        Returns:
+            Semestre normalisé pour le nom du fichier (S1 ou S2)
+        """
+        if not affectations:
+            return "S1"
+        
+        # Récupérer le semestre du premier examen (supposé homogène)
+        semestre = affectations[0].examen.semestre.upper()
+        
+        # Extraire S1 ou S2 du format "SEMESTRE 1" ou "SEMESTRE 2"
+        if '1' in semestre:
+            return 'S1'
+        elif '2' in semestre:
+            return 'S2'
+        else:
+            return 'S1'  # Par défaut
+    
+    @staticmethod
     def _determiner_numero_seance(h_debut) -> str:
         """Détermine le numéro de séance en fonction de l'heure de début
         
@@ -296,8 +344,12 @@ class ExportService:
             nom_propre = nettoyer_nom_fichier(enseignant.nom)
             prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
             
-            # Générer Word
-            filename_word = f"convocation_{nom_propre}_{prenom_propre}_{datetime.now().strftime('%Y%m%d')}.docx"
+            # Déterminer le type de session et le semestre
+            type_session = self._determiner_type_session_fichier(affectations)
+            semestre = self._determiner_semestre_fichier(affectations)
+            
+            # Générer Word avec le nouveau format de nom
+            filename_word = f"Convocation-Surveillance-Session-{type_session}-{semestre}-{prenom_propre}-{nom_propre}.docx"
             filepath_word = os.path.join(self.export_dir, filename_word)
             self._generer_convocation_word(enseignant, affectations, filepath_word)
             filepaths.append(filepath_word)
@@ -1001,8 +1053,12 @@ class ExportService:
         nom_propre = nettoyer_nom_fichier(enseignant.nom)
         prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
         
-        # Générer Word
-        filename_word = f"convocation_{nom_propre}_{prenom_propre}.docx"
+        # Déterminer le type de session et le semestre
+        type_session = self._determiner_type_session_fichier(affectations)
+        semestre = self._determiner_semestre_fichier(affectations)
+        
+        # Générer Word avec le nouveau format de nom
+        filename_word = f"Convocation-Surveillance-Session-{type_session}-{semestre}-{prenom_propre}-{nom_propre}.docx"
         filepath_word = os.path.join(self.export_dir, filename_word)
         self._generer_convocation_word(enseignant, affectations, filepath_word)
         
@@ -1109,8 +1165,12 @@ class ExportService:
             nom_propre = nettoyer_nom_fichier(enseignant.nom)
             prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
             
-            # Générer DOCX d'abord
-            filename_docx = f"convocation_{nom_propre}_{prenom_propre}_{datetime.now().strftime('%Y%m%d')}.docx"
+            # Déterminer le type de session et le semestre
+            type_session = self._determiner_type_session_fichier(affectations)
+            semestre = self._determiner_semestre_fichier(affectations)
+            
+            # Générer DOCX d'abord avec le nouveau format de nom
+            filename_docx = f"Convocation-Surveillance-Session-{type_session}-{semestre}-{prenom_propre}-{nom_propre}.docx"
             filepath_docx = os.path.join(self.export_dir, filename_docx)
             self._generer_convocation_word(enseignant, affectations, filepath_docx)
             
