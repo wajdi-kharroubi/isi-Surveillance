@@ -39,7 +39,7 @@ def estimate(request: DecisionRequest):
         return res
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from database import get_db
@@ -469,4 +469,170 @@ def exporter_voeux_autorises(request: DecisionRequest, db: Session = Depends(get
         raise HTTPException(
             status_code=500,
             detail=f"Erreur lors de l'exportation: {str(e)}"
+        )
+
+
+@router.post("/importer-exceptions")
+async def importer_exceptions(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    📥 IMPORTE LES EXCEPTIONS D'ENSEIGNANTS DEPUIS UN FICHIER EXCEL
+
+    Permet d'importer un fichier Excel contenant les exceptions d'enseignants
+    basées sur les absences. Le quota de chaque enseignant sera ajusté selon
+    les absences indiquées.
+
+    ⚠️ **ATTENTION** : Cette opération supprime toutes les exceptions existantes
+    avant d'importer les nouvelles. Seuls les enseignants listés dans le fichier
+    auront des exceptions après l'import.
+
+    **Colonnes attendues:**
+    - Nom: Nom de famille de l'enseignant
+    - Prénom: Prénom de l'enseignant
+    - Code: Code de l'enseignant (code_smartex)
+    - Absences: Nombre d'absences (positif ou négatif)
+
+    **Règles d'ajustement:**
+    - Si Absences > 0: L'enseignant est marqué comme exception et son quota
+      est augmenté de ce nombre (quota_grade + absences)
+    - Si Absences < 0: L'enseignant est marqué comme exception et son quota
+      est diminué de ce nombre (quota_grade - |absences|)
+    - Si Absences = 0 ou vide: L'enseignant n'est pas marqué comme exception
+
+    **Exemple:**
+    ```
+    Nom       | Prénom | Code | Absences
+    Belhouene | Imen   | 100  | 1
+    Dupont    | Jean   | 101  | -2
+    ```
+
+    **Retour:**
+    - Nombre d'exceptions importées
+    - Liste des erreurs éventuelles
+    """
+    from config import UPLOAD_DIR
+    import os
+    import shutil
+
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=400,
+            detail="Le fichier doit être au format Excel (.xlsx ou .xls)"
+        )
+
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+
+    try:
+        # Sauvegarder temporairement le fichier
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Traiter le fichier
+        decision_service = DecisionService(db)
+        count, erreurs = decision_service.importer_exceptions_absences(file_path)
+
+        # Nettoyer
+        os.remove(file_path)
+
+        return {
+            "success": True,
+            "message": f"{count} exceptions importées avec succès",
+            "nb_importes": count,
+            "erreurs": erreurs
+        }
+
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de l'import: {str(e)}"
+        )
+
+
+@router.delete("/supprimer-exceptions")
+def supprimer_exceptions(db: Session = Depends(get_db)):
+    """
+    🗑️  SUPPRIME TOUTES LES EXCEPTIONS D'ENSEIGNANTS
+
+    Remet tous les enseignants marqués comme exceptions à l'état normal.
+    Les quotas exceptionnels sont supprimés et les quotas de grade sont rétablis.
+
+    **Retour:**
+    - Nombre d'exceptions supprimées
+    """
+    try:
+        decision_service = DecisionService(db)
+        nb_supprimes = decision_service.supprimer_exceptions()
+        
+        return {
+            "success": True,
+            "message": f"{nb_supprimes} exception(s) supprimée(s) avec succès",
+            "nb_supprimes": nb_supprimes
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la suppression: {str(e)}"
+        )
+
+
+@router.get("/enseignants-exceptions")
+def obtenir_enseignants_exceptions(db: Session = Depends(get_db)):
+    """
+    📋 RÉCUPÈRE LA LISTE DES ENSEIGNANTS AVEC EXCEPTIONS
+
+    Retourne tous les enseignants marqués comme exceptions avec leurs quotas personnalisés.
+
+    **Retour:**
+    - Liste des enseignants avec exceptions
+    - Détails : nom, prénom, code, grade, quota_grade, quota_exception
+    """
+    from models.models import Enseignant, GradeConfig
+    from config import GRADES
+
+    try:
+        enseignants_exceptions = db.query(Enseignant).filter(
+            Enseignant.is_Exception == True
+        ).all()
+
+        resultats = []
+        for ens in enseignants_exceptions:
+            # Récupérer le quota du grade
+            grade_config = db.query(GradeConfig).filter(
+                GradeConfig.grade_code == ens.grade_code
+            ).first()
+            
+            if grade_config:
+                quota_grade = grade_config.nb_surveillances
+            elif ens.grade_code in GRADES:
+                quota_grade = GRADES[ens.grade_code]["nb_surveillances"]
+            else:
+                quota_grade = 0
+            
+            difference = ens.quota_Exception - quota_grade if ens.quota_Exception is not None else 0
+            
+            resultats.append({
+                "id": ens.id,
+                "nom": ens.nom,
+                "prenom": ens.prenom,
+                "code_smartex": ens.code_smartex,
+                "grade_code": ens.grade_code,
+                "grade_nom": ens.grade,
+                "quota_grade": quota_grade,
+                "quota_exception": ens.quota_Exception,
+                "difference": difference,
+                "type_exception": "augmentation" if difference > 0 else "diminution" if difference < 0 else "egal"
+            })
+
+        return {
+            "success": True,
+            "nb_exceptions": len(resultats),
+            "exceptions": resultats
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la récupération des exceptions: {str(e)}"
         )

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Calculator, 
@@ -14,12 +14,16 @@ import {
   AlertTriangle,
   XCircle,
   Settings,
-  Download
+  Download,
+  Upload,
+  Trash2,
+  X
 } from 'lucide-react';
 import { decisionAPI } from '../services/api';
 
 export default function AideDecision() {
   const queryClient = useQueryClient();
+  const fileInputRef = useRef(null);
 
   // Paramètres configurables
   const [parametres, setParametres] = useState({
@@ -33,7 +37,10 @@ export default function AideDecision() {
   });
 
   // Pourcentage de majoration (pour l'affichage)
-  const [pourcentageMajoration, setPourcentageMajoration] = useState(20); // 20%
+  const [pourcentageMajoration, setPourcentageMajoration] = useState(20); // 20% par défaut
+
+  // Modal des exceptions
+  const [showExceptionsModal, setShowExceptionsModal] = useState(false);
 
   // Quotas modifiés manuellement
   const [quotasModifies, setQuotasModifies] = useState({});
@@ -43,6 +50,12 @@ export default function AideDecision() {
     queryKey: ['recommandations-decision', parametres],
     queryFn: () => decisionAPI.calculerRecommandations(parametres).then(res => res.data),
     enabled: false, // Ne pas exécuter automatiquement
+  });
+
+  // Charger les enseignants avec exceptions
+  const { data: enseignantsExceptions, refetch: refetchExceptions } = useQuery({
+    queryKey: ['enseignants-exceptions'],
+    queryFn: () => decisionAPI.getEnseignantsExceptions().then(res => res.data),
   });
 
   // Mutation pour appliquer les quotas
@@ -77,6 +90,43 @@ export default function AideDecision() {
     },
   });
 
+  // Mutation pour importer les exceptions
+  const importerExceptionsMutation = useMutation({
+    mutationFn: decisionAPI.importerExceptions,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
+      queryClient.invalidateQueries({ queryKey: ['enseignants-exceptions'] });
+      alert(`✅ ${response.data.message}`);
+      if (response.data.erreurs && response.data.erreurs.length > 0) {
+        alert('⚠️ Erreurs:\n' + response.data.erreurs.join('\n'));
+      }
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    onError: (error) => {
+      alert(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+  });
+
+  // Mutation pour supprimer les exceptions
+  const supprimerExceptionsMutation = useMutation({
+    mutationFn: decisionAPI.supprimerExceptions,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
+      queryClient.invalidateQueries({ queryKey: ['enseignants-exceptions'] });
+      alert(`✅ ${response.data.message}`);
+    },
+    onError: (error) => {
+      alert(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
+    },
+  });
+
   // Fonction pour calculer les recommandations
   const handleCalculer = () => {
     refetch();
@@ -89,6 +139,42 @@ export default function AideDecision() {
       return;
     }
     exporterVoeuxMutation.mutate(parametres);
+  };
+
+  // Fonction pour importer les exceptions
+  const handleImporterExceptions = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Vérifier le format
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      alert('❌ Le fichier doit être au format Excel (.xlsx ou .xls)');
+      return;
+    }
+
+    if (confirm('⚠️ ATTENTION : Cette opération va :\n\n' +
+                '1. SUPPRIMER toutes les exceptions existantes\n' +
+                '2. Marquer comme exceptions uniquement les enseignants listés dans le fichier\n' +
+                '3. Ajuster leurs quotas selon les absences indiquées\n\n' +
+                'Voulez-vous continuer ?')) {
+      importerExceptionsMutation.mutate(file);
+    } else {
+      // Reset file input if cancelled
+      event.target.value = '';
+    }
+  };
+
+  // Fonction pour supprimer toutes les exceptions
+  const handleSupprimerExceptions = () => {
+    if (!enseignantsExceptions || enseignantsExceptions.nb_exceptions === 0) {
+      alert('ℹ️ Aucune exception à supprimer');
+      return;
+    }
+
+    if (confirm(`⚠️ ATTENTION : Voulez-vous vraiment supprimer toutes les ${enseignantsExceptions.nb_exceptions} exception(s) ?\n\n` +
+                'Les enseignants concernés retrouveront leurs quotas de grade normaux.')) {
+      supprimerExceptionsMutation.mutate();
+    }
   };
 
   // Fonction pour modifier un quota
@@ -219,13 +305,14 @@ export default function AideDecision() {
       </div>
 
       {/* Paramètres de Configuration */}
-      <div className="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-200">
-        <div className="flex items-center gap-2 mb-4">
+      <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+        <div className="flex items-center gap-2 mb-6">
           <Settings className="w-5 h-5 text-purple-600" />
           <h2 className="text-xl font-bold text-gray-900">Paramètres de Configuration</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Paramètres de Calcul */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Min surveillants par salle */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -250,7 +337,7 @@ export default function AideDecision() {
               <input
                 type="number"
                 min="0"
-                max="50"
+                max="100"
                 step="5"
                 value={pourcentageMajoration}
                 onChange={(e) => {
@@ -264,10 +351,10 @@ export default function AideDecision() {
             </div>
           </div>
 
-          {/* Quota minimal pour PR/MC/V */}
+          {/* Quota min groupe 1 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quota minimal pour PR/MC/V
+              Quota minimum Groupe 1 (PR/MC/V)
             </label>
             <input
               type="number"
@@ -278,11 +365,10 @@ export default function AideDecision() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
             />
           </div>
-
-          {/* Différence PR/MC/V → MA */}
+          {/* Différence PR → MA */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Différence minimale PR/MC/V → MA
+              Différence minimale PR → MA
             </label>
             <input
               type="number"
@@ -324,8 +410,92 @@ export default function AideDecision() {
             />
           </div>
 
+
         </div>
 
+        {/* Section Import des Exceptions - Version Compacte
+        <div className="mt-6 p-5 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Gestion des Exceptions (Optionnel)</h3>
+                <p className="text-xs text-gray-600">Importez les ajustements de quotas</p>
+              </div>
+            </div>
+            {enseignantsExceptions && enseignantsExceptions.nb_exceptions > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowExceptionsModal(true)}
+                  className="flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-700 rounded-lg text-sm font-semibold hover:bg-orange-200 transition-colors cursor-pointer"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  {enseignantsExceptions.nb_exceptions} exception{enseignantsExceptions.nb_exceptions > 1 ? 's' : ''}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSupprimerExceptions();
+                  }}
+                  disabled={supprimerExceptionsMutation.isPending}
+                  className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {supprimerExceptionsMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Suppression...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Vider
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div
+            className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-orange-400 hover:bg-orange-50/30 transition-all cursor-pointer bg-white"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleImporterExceptions}
+              className="hidden"
+              disabled={importerExceptionsMutation.isPending}
+            />
+            
+            {importerExceptionsMutation.isPending ? (
+              <div className="flex items-center justify-center gap-3">
+                <RefreshCw className="w-8 h-8 text-orange-500 animate-spin" />
+                <p className="text-sm font-semibold text-orange-700">Import en cours...</p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Upload className="w-10 h-10 text-gray-400" />
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-gray-700">
+                      Glissez-déposez votre fichier Excel ou cliquez ici
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Colonnes: Nom, Prénom, Code, Absences • Formats: .xlsx, .xls
+                    </p>
+                  </div>
+                </div>
+                <button className="btn bg-gradient-to-r from-orange-500 to-red-500 text-white hover:opacity-90 flex items-center shadow-lg">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Choisir
+                </button>
+              </div>
+            )}
+          </div>
+
+        </div>
+        */}
         {/* Bouton Calculer */}
         <div className="mt-6">
           <button
@@ -628,8 +798,92 @@ export default function AideDecision() {
             Configurez les paramètres et cliquez sur "Calculer les Recommandations"
           </p>
           <p className="text-sm text-blue-700">
-            Le système analysera votre situation et vous proposera les quotas optimaux
-          </p>
+          Le système analysera votre situation et vous proposera les quotas optimaux
+        </p>
+      </div>
+    )}
+
+      {/* Modal Exceptions */}
+      {showExceptionsModal && enseignantsExceptions && enseignantsExceptions.nb_exceptions > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-8 h-8" />
+                <div>
+                  <h2 className="text-2xl font-bold">Enseignants avec Exceptions</h2>
+                  <p className="text-orange-100 text-sm">{enseignantsExceptions.nb_exceptions} exception{enseignantsExceptions.nb_exceptions > 1 ? 's' : ''} active{enseignantsExceptions.nb_exceptions > 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExceptionsModal(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-orange-100 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Enseignant</th>
+                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Code</th>
+                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Grade</th>
+                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Quota Grade</th>
+                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Quota Exception</th>
+                      <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Différence</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {enseignantsExceptions.exceptions.map((exception) => (
+                      <tr key={exception.id} className="border-b border-gray-200 hover:bg-orange-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900">{exception.prenom} {exception.nom}</div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-sm text-gray-600">{exception.code_smartex}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-sm font-semibold text-gray-700">{exception.grade_code}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-lg font-bold text-gray-500">{exception.quota_grade}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-lg font-bold text-orange-600">{exception.quota_exception}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold ${
+                            exception.type_exception === 'augmentation' 
+                              ? 'bg-green-100 text-green-800 border border-green-200' 
+                              : exception.type_exception === 'diminution'
+                              ? 'bg-red-100 text-red-800 border border-red-200'
+                              : 'bg-gray-100 text-gray-800 border border-gray-200'
+                          }`}>
+                            {exception.difference > 0 ? '+' : ''}{exception.difference}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 p-4 flex justify-end border-t border-gray-200">
+              <button
+                onClick={() => setShowExceptionsModal(false)}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

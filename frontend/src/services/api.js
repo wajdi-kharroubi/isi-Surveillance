@@ -195,6 +195,15 @@ export const decisionAPI = {
     api.post('/decision/exporter-voeux-autorises', params, {
       responseType: 'blob'
     }),
+  importerExceptions: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/decision/importer-exceptions', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getEnseignantsExceptions: () => api.get('/decision/enseignants-exceptions'),
+  supprimerExceptions: () => api.delete('/decision/supprimer-exceptions'),
 };
 
 // ========== Health Check ==========

@@ -1326,3 +1326,183 @@ class DecisionService:
             )
 
         return alertes
+
+
+    def importer_exceptions_absences(self, file_path: str) -> Tuple[int, List[str]]:
+        """
+        Importe les exceptions d'enseignants depuis un fichier Excel basé sur les absences.
+        ATTENTION : Supprime toutes les exceptions existantes avant l'import !
+        
+        Colonnes attendues:
+        - Nom: Nom de famille (optionnel, pour référence)
+        - Prénom: Prénom (optionnel, pour référence)
+        - Code: Code de l'enseignant (code_smartex) - OBLIGATOIRE
+        - Absences: Nombre d'absences (positif ou négatif) - OBLIGATOIRE
+        
+        Règles:
+        - Si Absences > 0: quota_Exception = quota_grade + Absences
+        - Si Absences < 0: quota_Exception = quota_grade + Absences (diminution)
+        - Si Absences = 0 ou vide: pas d'exception
+        
+        Args:
+            file_path: Chemin du fichier Excel
+            
+        Returns:
+            (nombre_exceptions_importees, liste_erreurs)
+        """
+        import pandas as pd
+        from models.models import Enseignant, GradeConfig
+        from config import GRADES
+        
+        erreurs = []
+        count = 0
+        
+        try:
+            # SUPPRIMER TOUTES LES EXCEPTIONS EXISTANTES
+            nb_exceptions_supprimees = self.db.query(Enseignant).filter(
+                Enseignant.is_Exception == True
+            ).update({
+                "is_Exception": False,
+                "quota_Exception": None
+            })
+            self.db.commit()
+            logger.info(f"🗑️  {nb_exceptions_supprimees} exceptions supprimées avant import")
+            
+            df = pd.read_excel(file_path)
+            
+            # Vérifier les colonnes obligatoires
+            colonnes_requises = ['Code', 'Absences']
+            colonnes_manquantes = [col for col in colonnes_requises if col not in df.columns]
+            
+            if colonnes_manquantes:
+                erreurs.append(f"Colonnes manquantes: {', '.join(colonnes_manquantes)}")
+                return 0, erreurs
+            
+            # Traiter ligne par ligne
+            for idx, row in df.iterrows():
+                try:
+                    # Récupérer le code de l'enseignant
+                    code_smartex = str(row['Code']).strip()
+                    
+                    # Vérifier que le code n'est pas vide
+                    if not code_smartex or code_smartex.lower() == 'nan':
+                        erreurs.append(f"Ligne {idx + 2}: Code enseignant manquant")
+                        continue
+                    
+                    # Récupérer les absences
+                    absences_val = row['Absences']
+                    
+                    # Vérifier que la valeur d'absences est valide
+                    if pd.isna(absences_val) or str(absences_val).strip() == '':
+                        # Pas d'absences, ignorer cette ligne
+                        continue
+                    
+                    try:
+                        absences = int(float(absences_val))
+                    except (ValueError, TypeError):
+                        erreurs.append(f"Ligne {idx + 2}: Valeur 'Absences' invalide: {absences_val}")
+                        continue
+                    
+                    # Si absences = 0, ignorer
+                    if absences == 0:
+                        continue
+                    
+                    # Chercher l'enseignant dans la base de données
+                    enseignant = self.db.query(Enseignant).filter(
+                        Enseignant.code_smartex == code_smartex
+                    ).first()
+                    
+                    if not enseignant:
+                        erreurs.append(
+                            f"Ligne {idx + 2}: Enseignant avec code {code_smartex} introuvable"
+                        )
+                        continue
+                    
+                    # Récupérer le quota du grade de l'enseignant
+                    grade_code = enseignant.grade_code
+                    
+                    # D'abord chercher dans GradeConfig
+                    grade_config = self.db.query(GradeConfig).filter(
+                        GradeConfig.grade_code == grade_code
+                    ).first()
+                    
+                    if grade_config:
+                        quota_grade = grade_config.nb_surveillances
+                    elif grade_code in GRADES:
+                        quota_grade = GRADES[grade_code]["nb_surveillances"]
+                    else:
+                        erreurs.append(
+                            f"Ligne {idx + 2}: Grade {grade_code} introuvable dans la configuration"
+                        )
+                        continue
+                    
+                    # Calculer le nouveau quota exceptionnel
+                    quota_exception = quota_grade + absences
+                    
+                    # S'assurer que le quota ne devient pas négatif
+                    if quota_exception < 0:
+                        quota_exception = 0
+                        erreurs.append(
+                            f"Ligne {idx + 2}: Quota ajusté à 0 (quota_grade={quota_grade}, absences={absences})"
+                        )
+                    
+                    # Marquer l'enseignant comme exception
+                    enseignant.is_Exception = True
+                    enseignant.quota_Exception = quota_exception
+                    
+                    count += 1
+                    
+                    logger.info(
+                        f"Exception appliquée pour {enseignant.prenom} {enseignant.nom} "
+                        f"({grade_code}): quota_grade={quota_grade}, absences={absences}, "
+                        f"quota_exception={quota_exception}"
+                    )
+                    
+                except Exception as e:
+                    erreurs.append(f"Ligne {idx + 2}: {str(e)}")
+            
+            # Valider les changements
+            self.db.commit()
+            logger.info(f"✅ {count} exceptions importées avec succès")
+            
+        except Exception as e:
+            self.db.rollback()
+            erreurs.append(f"Erreur lors de la lecture du fichier: {str(e)}")
+            logger.error(f"Erreur import exceptions: {str(e)}")
+        
+        return count, erreurs
+
+
+    def supprimer_exceptions(self) -> int:
+        """
+        Supprime toutes les exceptions d'enseignants.
+        Remet tous les enseignants marqués comme exceptions à l'état normal.
+        
+        Returns:
+            Nombre d'exceptions supprimées
+        """
+        from models.models import Enseignant
+        
+        try:
+            # Compter le nombre d'exceptions avant suppression
+            nb_exceptions = self.db.query(Enseignant).filter(
+                Enseignant.is_Exception == True
+            ).count()
+            
+            # Supprimer toutes les exceptions
+            self.db.query(Enseignant).filter(
+                Enseignant.is_Exception == True
+            ).update({
+                "is_Exception": False,
+                "quota_Exception": None
+            })
+            
+            self.db.commit()
+            logger.info(f"🗑️  {nb_exceptions} exceptions supprimées")
+            
+            return nb_exceptions
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Erreur suppression exceptions: {str(e)}")
+            raise Exception(f"Erreur lors de la suppression: {str(e)}")

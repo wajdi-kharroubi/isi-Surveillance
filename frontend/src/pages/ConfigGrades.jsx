@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { gradesAPI, enseignantsAPI } from '../services/api';
+import { gradesAPI, enseignantsAPI, decisionAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import { 
   RefreshCw, 
@@ -15,6 +15,7 @@ import {
   Users,
   ShieldAlert,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import {
   MagnifyingGlassIcon,
@@ -30,6 +31,7 @@ export default function ConfigGrades() {
   const [filterNom, setFilterNom] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
   const [filterException, setFilterException] = useState('all'); // 'all', 'with', 'without'
+  const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
   const { data: grades, isLoading } = useQuery({
@@ -94,6 +96,43 @@ export default function ConfigGrades() {
     },
   });
 
+  // Mutation pour importer les exceptions
+  const importerExceptionsMutation = useMutation({
+    mutationFn: decisionAPI.importerExceptions,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
+      toast.success(`✅ ${response.data.message}`);
+      if (response.data.erreurs && response.data.erreurs.length > 0) {
+        toast.error('⚠️ Erreurs:\n' + response.data.erreurs.join('\n'), {
+          duration: 6000,
+        });
+      }
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    onError: (error) => {
+      toast.error(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+  });
+
+  // Mutation pour supprimer toutes les exceptions
+  const supprimerExceptionsMutation = useMutation({
+    mutationFn: decisionAPI.supprimerExceptions,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['enseignants'] });
+      toast.success(`✅ ${response.data.message}`);
+    },
+    onError: (error) => {
+      toast.error(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
+    },
+  });
+
   const handleEdit = (grade) => {
     setEditingGrade(grade.grade_code);
     setEditValue(grade.nb_surveillances.toString());
@@ -143,6 +182,44 @@ export default function ConfigGrades() {
   const handleCancelException = () => {
     setEditingEnseignant(null);
     setQuotaExceptionValue('');
+  };
+
+  // Fonction pour importer les exceptions
+  const handleImporterExceptions = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Vérifier le format
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error('❌ Le fichier doit être au format Excel (.xlsx ou .xls)');
+      return;
+    }
+
+    if (confirm('⚠️ ATTENTION : Cette opération va :\n\n' +
+                '1. SUPPRIMER toutes les exceptions existantes\n' +
+                '2. Marquer comme exceptions uniquement les enseignants listés dans le fichier\n' +
+                '3. Ajuster leurs quotas selon les absences indiquées\n\n' +
+                'Voulez-vous continuer ?')) {
+      importerExceptionsMutation.mutate(file);
+    } else {
+      // Reset file input if cancelled
+      event.target.value = '';
+    }
+  };
+
+  // Fonction pour supprimer toutes les exceptions
+  const handleSupprimerExceptions = () => {
+    const nbExceptionsActuelles = enseignants?.filter(e => e.is_Exception).length || 0;
+    
+    if (nbExceptionsActuelles === 0) {
+      toast.info('ℹ️ Aucune exception à supprimer');
+      return;
+    }
+
+    if (confirm(`⚠️ ATTENTION : Voulez-vous vraiment supprimer toutes les ${nbExceptionsActuelles} exception(s) ?\n\n` +
+                'Les enseignants concernés retrouveront leurs quotas de grade normaux.')) {
+      supprimerExceptionsMutation.mutate();
+    }
   };
 
   const handleResetException = (enseignantId, nom, prenom) => {
@@ -399,15 +476,66 @@ export default function ConfigGrades() {
 
           {/* Tableau des Enseignants */}
           <div className="card">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
-                <Users className="w-8 h-8 text-white" />
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
+                  <Users className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Gestion des Exceptions</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {nbEnseignantsActifs} enseignant(s) actif(s) · {nbExceptions} exception(s) active(s)
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Gestion des Exceptions</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  {nbEnseignantsActifs} enseignant(s) actif(s) · {nbExceptions} exception(s) active(s)
-                </p>
+              
+              {/* Boutons Import et Suppression */}
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImporterExceptions}
+                  className="hidden"
+                  disabled={importerExceptionsMutation.isPending}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importerExceptionsMutation.isPending}
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl transition-all font-semibold shadow-lg disabled:opacity-50"
+                >
+                  {importerExceptionsMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      <span>Import en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5" />
+                      <span>Importer Excel</span>
+                    </>
+                  )}
+                </button>
+                
+                {nbExceptions > 0 && (
+                  <button
+                    onClick={handleSupprimerExceptions}
+                    disabled={supprimerExceptionsMutation.isPending}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-red-600 to-red-600 hover:from-red-700 hover:to-red-700 text-white rounded-xl transition-all font-semibold shadow-lg disabled:opacity-50"
+                  >
+                    {supprimerExceptionsMutation.isPending ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <span>Suppression...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-5 h-5" />
+                        <span>Supprimer tout ({nbExceptions})</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
