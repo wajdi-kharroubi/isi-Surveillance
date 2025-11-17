@@ -10,6 +10,7 @@ import {
   AcademicCapIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function Examens() {
   const fileInputRef = useRef(null);
@@ -18,13 +19,14 @@ export default function Examens() {
   const [filterSemestre, setFilterSemestre] = useState('all');
   const [filterSession, setFilterSession] = useState('all');
   const [filterSalle, setFilterSalle] = useState('all');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: examens, isLoading } = useQuery({
     queryKey: ['examens'],
     queryFn: () => examensAPI.getAll().then(res => res.data),
-    staleTime: 10 * 60 * 1000, // 10 minutes - données rarement modifiées
-    gcTime: 30 * 60 * 1000, // 30 minutes en cache
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Get unique values for filters
@@ -74,9 +76,11 @@ export default function Examens() {
   });
 
   const handleDeleteAll = () => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer tous les examens ? Cette action est irréversible.')) {
-      deleteAllMutation.mutate();
-    }
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    deleteAllMutation.mutate();
   };
 
   const handleFileUpload = (e) => {
@@ -467,6 +471,16 @@ export default function Examens() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Supprimer tous les examens ?"
+        message="Cette action est irréversible. Tous les examens seront supprimés définitivement."
+        confirmText="Supprimer"
+        type="danger"
+      />
     </div>
   );
 }

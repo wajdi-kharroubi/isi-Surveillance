@@ -10,6 +10,7 @@ import {
   UserGroupIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function Enseignants() {
   const fileInputRef = useRef(null);
@@ -17,6 +18,7 @@ export default function Enseignants() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState('all');
   const [filterSurveillance, setFilterSurveillance] = useState('all');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const queryClient = useQueryClient();
 
   // Grade code to full name mapping
@@ -40,8 +42,8 @@ export default function Enseignants() {
   const { data: enseignants, isLoading } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
-    staleTime: 10 * 60 * 1000, // 10 minutes - données rarement modifiées
-    gcTime: 30 * 60 * 1000, // 30 minutes en cache
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Get unique grades for filter
@@ -154,9 +156,11 @@ export default function Enseignants() {
   });
 
   const handleDeleteAll = () => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer tous les enseignants ? Cette action est irréversible.')) {
-      deleteAllMutation.mutate();
-    }
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    deleteAllMutation.mutate();
   };
 
   const handleFileUpload = (e) => {
@@ -431,6 +435,16 @@ export default function Enseignants() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Supprimer tous les enseignants ?"
+        message="Cette action est irréversible. Tous les enseignants seront supprimés définitivement."
+        confirmText="Supprimer"
+        type="danger"
+      />
     </div>
   );
 }

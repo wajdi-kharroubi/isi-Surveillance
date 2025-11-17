@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { importAPI, enseignantsAPI, examensAPI, voeuxAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
+import ConfirmModal from '../components/ConfirmModal';
 import {
   CloudArrowUpIcon,
   DocumentTextIcon,
@@ -19,6 +20,9 @@ export default function DataManager() {
     examens: false,
     voeux: false,
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteType, setDeleteType] = useState(null);
+  const [deleteMutation, setDeleteMutation] = useState(null);
   const fileInputRefs = {
     enseignants: useRef(null),
     examens: useRef(null),
@@ -30,22 +34,22 @@ export default function DataManager() {
   const { data: enseignants } = useQuery({
     queryKey: ['enseignants'],
     queryFn: () => enseignantsAPI.getAll().then(res => res.data),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes en cache
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const { data: examens } = useQuery({
     queryKey: ['examens'],
     queryFn: () => examensAPI.getAll().then(res => res.data),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes en cache
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const { data: voeux } = useQuery({
     queryKey: ['voeux'],
     queryFn: () => voeuxAPI.getAll().then(res => res.data),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes en cache
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // Import mutations
@@ -117,8 +121,14 @@ export default function DataManager() {
   });
 
   const handleDelete = (type, mutation) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer toutes les données de ${type} ?`)) {
-      mutation.mutate();
+    setDeleteType(type);
+    setDeleteMutation(() => mutation);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (deleteMutation) {
+      deleteMutation.mutate();
     }
   };
 
@@ -348,11 +358,25 @@ export default function DataManager() {
           <p className="flex items-start gap-2">
             <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
             <span>
-              <strong>Génération :</strong> Une fois toutes les données importées, rendez-vous sur la page "Génération"
+              <strong>Vérification :</strong> Consultez les pages dédiées après import pour vérifier les données
             </span>
           </p>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setDeleteType(null);
+          setDeleteMutation(null);
+        }}
+        onConfirm={confirmDelete}
+        title={`Supprimer toutes les données de ${deleteType} ?`}
+        message="Cette action est irréversible. Toutes les données seront supprimées définitivement."
+        confirmText="Supprimer"
+        type="danger"
+      />
     </div>
   );
 }

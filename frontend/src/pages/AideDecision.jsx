@@ -20,10 +20,16 @@ import {
   X
 } from 'lucide-react';
 import { decisionAPI } from '../services/api';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function AideDecision() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [pendingQuotas, setPendingQuotas] = useState(null);
 
   // Paramètres configurables
   const [parametres, setParametres] = useState({
@@ -152,15 +158,18 @@ export default function AideDecision() {
       return;
     }
 
-    if (confirm('⚠️ ATTENTION : Cette opération va :\n\n' +
-                '1. SUPPRIMER toutes les exceptions existantes\n' +
-                '2. Marquer comme exceptions uniquement les enseignants listés dans le fichier\n' +
-                '3. Ajuster leurs quotas selon les absences indiquées\n\n' +
-                'Voulez-vous continuer ?')) {
-      importerExceptionsMutation.mutate(file);
-    } else {
-      // Reset file input if cancelled
-      event.target.value = '';
+    setPendingFile(file);
+    setShowImportConfirm(true);
+  };
+
+  const confirmImportExceptions = () => {
+    if (pendingFile) {
+      importerExceptionsMutation.mutate(pendingFile);
+    }
+    setPendingFile(null);
+    setShowImportConfirm(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -171,10 +180,12 @@ export default function AideDecision() {
       return;
     }
 
-    if (confirm(`⚠️ ATTENTION : Voulez-vous vraiment supprimer toutes les ${enseignantsExceptions.nb_exceptions} exception(s) ?\n\n` +
-                'Les enseignants concernés retrouveront leurs quotas de grade normaux.')) {
-      supprimerExceptionsMutation.mutate();
-    }
+    setShowDeleteAllConfirm(true);
+  };
+
+  const confirmDeleteExceptions = () => {
+    supprimerExceptionsMutation.mutate();
+    setShowDeleteAllConfirm(false);
   };
 
   // Fonction pour modifier un quota
@@ -249,9 +260,16 @@ export default function AideDecision() {
       return;
     }
 
-    if (confirm('Voulez-vous vraiment appliquer ces quotas ? Cette action mettra à jour la configuration du système.')) {
-      appliquerQuotasMutation.mutate(quotasAAppliquer);
+    setPendingQuotas(quotasAAppliquer);
+    setShowApplyConfirm(true);
+  };
+
+  const confirmApplyQuotas = () => {
+    if (pendingQuotas) {
+      appliquerQuotasMutation.mutate(pendingQuotas);
     }
+    setPendingQuotas(null);
+    setShowApplyConfirm(false);
   };
 
   // Fonction pour obtenir la couleur selon le niveau de risque
@@ -886,6 +904,57 @@ export default function AideDecision() {
           </div>
         </div>
       )}
+
+      {/* Modal de confirmation - Import des exceptions */}
+      <ConfirmModal
+        isOpen={showImportConfirm}
+        onClose={() => {
+          setShowImportConfirm(false);
+          setPendingFile(null);
+        }}
+        onConfirm={() => {
+          confirmImportExceptions();
+          setShowImportConfirm(false);
+        }}
+        title="Importer les exceptions"
+        message="Voulez-vous vraiment importer ce fichier d'exceptions ? Cette action remplacera les exceptions existantes."
+        confirmText="Importer"
+        cancelText="Annuler"
+        type="warning"
+      />
+
+      {/* Modal de confirmation - Suppression des exceptions */}
+      <ConfirmModal
+        isOpen={showDeleteAllConfirm}
+        onClose={() => setShowDeleteAllConfirm(false)}
+        onConfirm={() => {
+          confirmDeleteExceptions();
+          setShowDeleteAllConfirm(false);
+        }}
+        title="Supprimer toutes les exceptions"
+        message="Êtes-vous sûr de vouloir supprimer toutes les exceptions ? Cette action est irréversible."
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        type="danger"
+      />
+
+      {/* Modal de confirmation - Application des quotas */}
+      <ConfirmModal
+        isOpen={showApplyConfirm}
+        onClose={() => {
+          setShowApplyConfirm(false);
+          setPendingQuotas(null);
+        }}
+        onConfirm={() => {
+          confirmApplyQuotas();
+          setShowApplyConfirm(false);
+        }}
+        title="Appliquer les quotas"
+        message="Voulez-vous vraiment appliquer ces quotas ? Cela mettra à jour les quotas de tous les enseignants."
+        confirmText="Appliquer"
+        cancelText="Annuler"
+        type="info"
+      />
     </div>
   );
 }

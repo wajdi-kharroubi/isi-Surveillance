@@ -8,6 +8,7 @@ from sqlalchemy import (
     Date,
     Time,
     Text,
+    Index,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -332,5 +333,60 @@ class Presence(Base):
     # Relations
     enseignant = relationship("Enseignant", back_populates="presences")
 
+    # Index composite pour optimiser les recherches par séance
+    __table_args__ = (
+        Index('idx_presence_composite', 'date_exam', 'h_debut', 'h_fin', 'session', 'semestre', 'enseignant_id'),
+    )
+
     def __repr__(self):
         return f"<Presence Enseignant:{self.enseignant_id} {self.date_exam} {self.h_debut}-{self.h_fin} present:{self.present}>"
+
+
+class SessionArchive(Base):
+    """Archive d'une session de planning validée avec snapshot complet des données"""
+
+    __tablename__ = "sessions_archives"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nom_session = Column(String(200), nullable=False, index=True)  # Ex: "Session Partiel - Semestre 1 - 2024"
+    semestre = Column(String(20), nullable=False, index=True)  # SEMESTRE 1, SEMESTRE 2
+    session = Column(String(10), nullable=False, index=True)  # P (Partiel), Pr (Principale), C (Contrôle), R (Rattrapage)
+    annee_universitaire = Column(String(20), nullable=False, index=True)  # Ex: "2024-2025"
+    date_debut = Column(Date, nullable=False, index=True)
+    date_fin = Column(Date, nullable=False, index=True)
+    date_archivage = Column(DateTime, default=datetime.utcnow, nullable=False)
+    date_validation = Column(DateTime, nullable=True)  # Date de la validation avant archivage
+    
+    # Métadonnées
+    nb_examens = Column(Integer, nullable=False, default=0)
+    nb_affectations = Column(Integer, nullable=False, default=0)
+    nb_enseignants = Column(Integer, nullable=False, default=0)
+    nb_voeux = Column(Integer, nullable=False, default=0)
+    
+    # Snapshot des données en JSON
+    snapshot_examens = Column(Text, nullable=False)  # JSON des examens
+    snapshot_affectations = Column(Text, nullable=False)  # JSON des affectations
+    snapshot_enseignants = Column(Text, nullable=False)  # JSON des enseignants participant
+    snapshot_voeux = Column(Text, nullable=True)  # JSON des vœux des enseignants
+    snapshot_presences = Column(Text, nullable=True)  # JSON des présences/absences
+    snapshot_quotas_grades = Column(Text, nullable=True)  # JSON des quotas par grade
+    snapshot_exceptions = Column(Text, nullable=True)  # JSON des exceptions (souhaits violés, responsables absents, dépassements)
+    snapshot_generation_statistique = Column(Text, nullable=True)  # JSON de la dernière génération statistique complète
+    
+    # Statistiques de la génération (si disponibles)
+    generation_statistique_id = Column(
+        Integer, ForeignKey("generation_statistiques.id"), nullable=True
+    )
+    
+    # Notes et commentaires
+    commentaire = Column(Text, nullable=True)
+    archive_par = Column(String(100), nullable=True)  # Nom de l'utilisateur ayant archivé
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relations
+    generation_statistique = relationship("GenerationStatistique", foreign_keys=[generation_statistique_id])
+
+    def __repr__(self):
+        return f"<SessionArchive {self.nom_session} - {self.annee_universitaire}>"

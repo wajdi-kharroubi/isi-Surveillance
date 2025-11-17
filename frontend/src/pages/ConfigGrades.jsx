@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { gradesAPI, enseignantsAPI, decisionAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
+import ConfirmModal from '../components/ConfirmModal';
 import { 
   RefreshCw, 
   Check, 
@@ -31,6 +32,11 @@ export default function ConfigGrades() {
   const [filterNom, setFilterNom] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
   const [filterException, setFilterException] = useState('all'); // 'all', 'with', 'without'
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [showDeleteOneConfirm, setShowDeleteOneConfirm] = useState(false);
+  const [enseignantToDelete, setEnseignantToDelete] = useState(null);
   const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -152,10 +158,14 @@ export default function ConfigGrades() {
     setEditValue('');
   };
 
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
   const handleReset = () => {
-    if (confirm('⚠️ Êtes-vous sûr de vouloir réinitialiser toutes les configurations aux valeurs par défaut ?')) {
-      resetMutation.mutate();
-    }
+    setShowResetConfirm(true);
+  };
+
+  const confirmReset = () => {
+    resetMutation.mutate();
   };
 
   const handleEditEnseignant = (enseignant) => {
@@ -195,15 +205,23 @@ export default function ConfigGrades() {
       return;
     }
 
-    if (confirm('⚠️ ATTENTION : Cette opération va :\n\n' +
-                '1. SUPPRIMER toutes les exceptions existantes\n' +
-                '2. Marquer comme exceptions uniquement les enseignants listés dans le fichier\n' +
-                '3. Ajuster leurs quotas selon les absences indiquées\n\n' +
-                'Voulez-vous continuer ?')) {
-      importerExceptionsMutation.mutate(file);
-    } else {
-      // Reset file input if cancelled
-      event.target.value = '';
+    setPendingFile(file);
+    setShowImportConfirm(true);
+  };
+
+  const confirmImport = () => {
+    if (pendingFile) {
+      importerExceptionsMutation.mutate(pendingFile);
+    }
+    setShowImportConfirm(false);
+    setPendingFile(null);
+  };
+
+  const cancelImport = () => {
+    setShowImportConfirm(false);
+    setPendingFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -216,16 +234,34 @@ export default function ConfigGrades() {
       return;
     }
 
-    if (confirm(`⚠️ ATTENTION : Voulez-vous vraiment supprimer toutes les ${nbExceptionsActuelles} exception(s) ?\n\n` +
-                'Les enseignants concernés retrouveront leurs quotas de grade normaux.')) {
-      supprimerExceptionsMutation.mutate();
-    }
+    setShowDeleteAllConfirm(true);
+  };
+
+  const confirmDeleteAll = () => {
+    supprimerExceptionsMutation.mutate();
+    setShowDeleteAllConfirm(false);
+  };
+
+  const cancelDeleteAll = () => {
+    setShowDeleteAllConfirm(false);
   };
 
   const handleResetException = (enseignantId, nom, prenom) => {
-    if (confirm(`Voulez-vous réinitialiser l'exception pour ${prenom} ${nom} ?`)) {
-      resetExceptionMutation.mutate(enseignantId);
+    setEnseignantToDelete({ id: enseignantId, nom, prenom });
+    setShowDeleteOneConfirm(true);
+  };
+
+  const confirmDeleteOne = () => {
+    if (enseignantToDelete) {
+      resetExceptionMutation.mutate(enseignantToDelete.id);
     }
+    setShowDeleteOneConfirm(false);
+    setEnseignantToDelete(null);
+  };
+
+  const cancelDeleteOne = () => {
+    setShowDeleteOneConfirm(false);
+    setEnseignantToDelete(null);
   };
 
   if (isLoading || isLoadingEnseignants) {
@@ -769,6 +805,122 @@ export default function ConfigGrades() {
           </div>
         </div>
       )}
+
+      {/* Modal de confirmation d'import */}
+      {showImportConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-scale-in">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="w-6 h-6 text-yellow-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Importer les exceptions depuis le fichier Excel ?
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  Cela remplacera les exceptions actuelles.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={cancelImport}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmImport}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation de suppression de toutes les exceptions */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-scale-in">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="w-6 h-6 text-red-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Supprimer toutes les exceptions ?
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  {enseignants?.filter(e => e.is_Exception).length || 0} exception(s) seront supprimées. Les enseignants concernés retrouveront leurs quotas de grade normaux.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={cancelDeleteAll}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmDeleteAll}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation de suppression d'une exception */}
+      {showDeleteOneConfirm && enseignantToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 animate-scale-in">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="w-6 h-6 text-yellow-500" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Réinitialiser l'exception ?
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  L'exception pour <span className="font-semibold">{enseignantToDelete.prenom} {enseignantToDelete.nom}</span> sera supprimée et le quota de grade normal sera appliqué.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={cancelDeleteOne}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmDeleteOne}
+                className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium"
+              >
+                Réinitialiser
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation de réinitialisation */}
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={confirmReset}
+        title="Réinitialiser toutes les configurations ?"
+        message="Toutes les configurations seront réinitialisées aux valeurs par défaut."
+        confirmText="Réinitialiser"
+        type="warning"
+      />
     </div>
   );
 }

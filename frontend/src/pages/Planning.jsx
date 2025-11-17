@@ -20,8 +20,10 @@ import {
   List,
   Trash2,
   ArrowLeftRight,
+  Archive,
 } from 'lucide-react';
 import GestionEnseignantsSeanceInline from '../components/GestionEnseignantsSeanceInline';
+import ArchiveSessionModal from '../components/ArchiveSessionModal';
 
 export default function Planning() {
   const navigate = useNavigate();
@@ -53,6 +55,9 @@ export default function Planning() {
   // États pour la suppression
   const [showSuppressionModal, setShowSuppressionModal] = useState(false); // Modal de confirmation de suppression
   const [pendingSuppressionData, setPendingSuppressionData] = useState(null); // Données de suppression en attente
+
+  // État pour le modal d'archivage
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
 
   const { data: enseignants = [] } = useQuery({
     queryKey: ['enseignants'],
@@ -569,13 +574,23 @@ export default function Planning() {
             </div>
           </div>
           
-          <button 
-            onClick={() => navigate('/export')}
-            className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105"
-          >
-            <Download className="w-4 h-4" />
-            Exporter
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => setShowArchiveModal(true)}
+              className="px-4 py-2 bg-white/10 text-white hover:bg-white/20 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105 border border-white/30"
+            >
+              <Archive className="w-4 h-4" />
+              Archiver
+            </button>
+            
+            <button 
+              onClick={() => navigate('/export')}
+              className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105"
+            >
+              <Download className="w-4 h-4" />
+              Exporter
+            </button>
+          </div>
             </div>
           </div>
         </div>
@@ -2205,6 +2220,17 @@ export default function Planning() {
           </div>
         </div>
       )}
+
+      {/* Modal d'archivage */}
+      <ArchiveSessionModal
+        isOpen={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onSuccess={() => {
+          toast.success('Session archivée avec succès!');
+          // Optionnel: rediriger vers la page des archives
+          // navigate('/archives');
+        }}
+      />
     </div>
   );
 }

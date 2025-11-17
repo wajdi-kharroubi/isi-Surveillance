@@ -1463,7 +1463,7 @@ class DecisionService:
             
             # Valider les changements
             self.db.commit()
-            logger.info(f"✅ {count} exceptions importées avec succès")
+            logger.info(f" {count} exceptions importées avec succès")
             
         except Exception as e:
             self.db.rollback()

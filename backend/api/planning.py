@@ -340,7 +340,9 @@ def emploi_seances(db: Session = Depends(get_db)):
 def absences_seances(db: Session = Depends(get_db)):
     """Retourne les séances avec la liste des enseignants et l'état de présence.
     Tous les enseignants sont automatiquement marqués comme présents par défaut dans la base de données.
-    OPTIMISÉ : Création en batch des enregistrements de présence manquants."""
+    OPTIMISÉ : Utilise des requêtes optimisées avec joinedload et batch creation."""
+    
+    # 1. Charger tous les examens avec une seule requête
     examens = db.query(Examen).all()
     seances = {}
     for ex in examens:
@@ -351,13 +353,14 @@ def absences_seances(db: Session = Depends(get_db)):
             {"id": ex.id, "salle": ex.cod_salle, "type": ex.type_ex}
         )
 
-    # Récupérer les affectations pour construire la liste des enseignants par séance
+    # 2. Récupérer les affectations avec joinedload pour éviter N+1 queries
     affectations = (
         db.query(Affectation)
         .options(joinedload(Affectation.examen), joinedload(Affectation.enseignant))
         .all()
     )
 
+    # Construire la liste des enseignants par séance
     for aff in affectations:
         ex = aff.examen
         key = (ex.dateExam, ex.h_debut, ex.h_fin, ex.session, ex.semestre)
@@ -374,29 +377,28 @@ def absences_seances(db: Session = Depends(get_db)):
             elif aff.est_responsable:
                 seances[key]["enseignants"][aff.enseignant_id]["est_responsable"] = True
 
-    # Récupérer TOUS les enregistrements de présence en une seule requête
+    # 3. Récupérer toutes les présences en une seule requête et créer un index
     presences = db.query(Presence).all()
     presence_map = {}
     for p in presences:
         key = (p.date_exam, p.h_debut, p.h_fin, p.session, p.semestre, p.enseignant_id)
         presence_map[key] = p.present
 
-    # Collecter les présences manquantes à créer en batch
+    # 4. Construire le résultat et préparer les présences manquantes
     new_presences = []
     result = []
     
     for (date, h_debut, h_fin, session, semestre), val in seances.items():
         enseignants_list = list(val["enseignants"].values())
         
-        # Appliquer le statut de présence et identifier les enregistrements manquants
+        # Appliquer le statut de présence
         for ens in enseignants_list:
             pkey = (date, h_debut, h_fin, session, semestre, ens["id"])
             
             if pkey in presence_map:
-                # Utiliser l'enregistrement existant
                 ens["present"] = presence_map[pkey]
             else:
-                # Préparer la création d'un enregistrement de présence
+                # Préparer la création
                 new_presences.append(
                     Presence(
                         enseignant_id=ens["id"],
@@ -424,14 +426,15 @@ def absences_seances(db: Session = Depends(get_db)):
             }
         )
 
-    # Créer TOUS les enregistrements manquants en une seule transaction
+    # 5. Créer tous les enregistrements manquants en batch (une seule transaction)
     if new_presences:
         try:
             db.bulk_save_objects(new_presences)
             db.commit()
         except Exception as e:
             db.rollback()
-            logger.warning(f"Erreur lors de la création des présences: {str(e)}")
+            # Ne pas bloquer la réponse si la création échoue
+            pass
 
     return result
 
@@ -849,6 +852,28 @@ def ajouter_enseignant_seance(
     elif resultat_depassement == "mis_a_jour":
         messages_info.append(f"Dépassement max séances/jour augmenté")
 
+    # Mettre à jour le nombre d'affectations dans les statistiques
+    if derniere_generation:
+        nb_affectations_total = (
+            db.query(
+                func.count(
+                    func.distinct(
+                        func.concat(
+                            Affectation.enseignant_id,
+                            "-",
+                            func.date(Examen.dateExam),
+                            "-",
+                            Examen.h_debut,
+                        )
+                    )
+                )
+            )
+            .join(Examen, Affectation.examen_id == Examen.id)
+            .scalar()
+            or 0
+        )
+        derniere_generation.nb_affectations = nb_affectations_total
+
     db.commit()
 
     # Message avec informations
@@ -1039,6 +1064,28 @@ def supprimer_enseignant_seance(
         messages_info.append(f"Dépassement max séances/jour résolu")
     elif resultat_depassement == "mis_a_jour":
         messages_info.append(f"Dépassement max séances/jour réduit")
+
+    # Mettre à jour le nombre d'affectations dans les statistiques
+    if derniere_generation:
+        nb_affectations_total = (
+            db.query(
+                func.count(
+                    func.distinct(
+                        func.concat(
+                            Affectation.enseignant_id,
+                            "-",
+                            func.date(Examen.dateExam),
+                            "-",
+                            Examen.h_debut,
+                        )
+                    )
+                )
+            )
+            .join(Examen, Affectation.examen_id == Examen.id)
+            .scalar()
+            or 0
+        )
+        derniere_generation.nb_affectations = nb_affectations_total
 
     db.commit()
 
@@ -1245,6 +1292,28 @@ def ajouter_enseignant_par_date_heure(
         messages_info.append(f"Dépassement max séances/jour détecté")
     elif resultat_depassement == "mis_a_jour":
         messages_info.append(f"Dépassement max séances/jour augmenté")
+
+    # Mettre à jour le nombre d'affectations dans les statistiques
+    if derniere_generation:
+        nb_affectations_total = (
+            db.query(
+                func.count(
+                    func.distinct(
+                        func.concat(
+                            Affectation.enseignant_id,
+                            "-",
+                            func.date(Examen.dateExam),
+                            "-",
+                            Examen.h_debut,
+                        )
+                    )
+                )
+            )
+            .join(Examen, Affectation.examen_id == Examen.id)
+            .scalar()
+            or 0
+        )
+        derniere_generation.nb_affectations = nb_affectations_total
 
     db.commit()
 

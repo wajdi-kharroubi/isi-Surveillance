@@ -12,6 +12,7 @@ import Statistiques from './pages/Statistiques';
 import ConfigGrades from './pages/ConfigGrades';
 import AideDecision from './pages/AideDecision';
 import Absence from './pages/Absence';
+import Archives from './pages/Archives';
 
 function App() {
   return (
@@ -25,10 +26,11 @@ function App() {
         <Route path="/aide-decision" element={<AideDecision />} />
         <Route path="/generation" element={<Generation />} />
         <Route path="/planning" element={<Planning />} />
-  <Route path="/absences" element={<Absence />} />
+        <Route path="/absences" element={<Absence />} />
         <Route path="/export" element={<Export />} />
         <Route path="/statistiques" element={<Statistiques />} />
         <Route path="/config-grades" element={<ConfigGrades />} />
+        <Route path="/archives" element={<Archives />} />
       </Routes>
     </Layout>
   );

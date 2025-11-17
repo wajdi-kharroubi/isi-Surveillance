@@ -173,6 +173,15 @@ Pour une installation rapide et simple, installez la version desktop de l'applic
 - **Export Excel des absences** pour suivi administratif
 - Recherche rapide d'enseignants
 
+### 1️⃣1️⃣ Archivage des Sessions
+
+- **Archivage automatique** des sessions validées
+- **Snapshot complet** des examens, affectations et enseignants
+- Historique permanent et consultable
+- Filtres par année, semestre et session
+- Statistiques globales des archives
+- Documentation complète de chaque session archivée
+
 ---
 
 ## 🏗️ Structure du Projet
@@ -201,7 +210,8 @@ isi-Surveillance/
 │   │   ├── statistiques.py          # Statistiques
 │   │   ├── grades.py                # Configuration grades
 │   │   ├── planning.py              # Consultation et modification planning
-│   │   └── decision.py              # Aide à la décision
+│   │   ├── decision.py              # Aide à la décision
+│   │   └── archives.py              # Archivage des sessions
 │   │
 │   ├── 📁 algorithms/               # Algorithmes d'optimisation
 │   │   └── optimizer_v3.py          # Optimiseur OR-Tools
@@ -238,13 +248,15 @@ isi-Surveillance/
 │   │   │   ├── Statistiques.jsx     # Statistiques
 │   │   │   ├── ConfigGrades.jsx     # Configuration grades et exceptions
 │   │   │   ├── AideDecision.jsx     # Aide à la décision
+│   │   │   ├── Archives.jsx         # Consultation des archives
 │   │   │   └── DataManager.jsx      # Import/Export données
 │   │   │
 │   │   ├── 📁 components/           # Composants réutilisables
 │   │   │   ├── Layout.jsx           # Layout principal
 │   │   │   ├── GestionEnseignantsSeanceInline.jsx  # Gestion manuelle
 │   │   │   ├── GmailOAuthModal.jsx  # Modal OAuth Gmail
-│   │   │   └── EmailConvocationsModal.jsx  # Modal envoi emails
+│   │   │   ├── EmailConvocationsModal.jsx  # Modal envoi emails
+│   │   │   └── ArchiveSessionModal.jsx  # Modal archivage session
 │   │   │
 │   │   └── 📁 services/             # Services API
 │   │       └── api.js               # Client API
@@ -853,6 +865,95 @@ Export complet au format `.xlsx` contenant :
 3. **Statistiques RH** : Analyser les taux d'absentéisme
 4. **Planification future** : Identifier les enseignants fiables
 
+---
+
+## 📦 Archivage des Sessions
+
+### Concept
+
+Système d'**archivage automatique** permettant de sauvegarder les sessions de surveillance validées pour créer un **historique permanent** et consultable.
+
+### Fonctionnalités
+
+#### 1. Archivage d'une Session
+
+**Depuis la page Planning :**
+
+1. Cliquer sur le bouton **"Archiver"** dans l'en-tête
+2. Remplir le formulaire d'archivage :
+   - **Nom de la session** : Nom descriptif (ex: "Session Partiel - Semestre 1 - 2024")
+   - **Année universitaire** : Format YYYY-YYYY (ex: "2024-2025")
+   - **Semestre** : Semestre 1 ou 2
+   - **Session** : Principale, Contrôle ou Rattrapage
+   - **Dates** : Période de début et fin
+   - **Commentaire** : Notes optionnelles
+   - **Archivé par** : Nom de l'archiveur (optionnel)
+3. Valider l'archivage
+
+**Données sauvegardées :**
+
+- ✅ Tous les examens de la période
+- ✅ Toutes les affectations des enseignants
+- ✅ Liste complète des enseignants participants
+- ✅ Statistiques de génération (si disponibles)
+- ✅ Métadonnées (dates, commentaires, archiveur)
+
+#### 2. Consultation des Archives
+
+**Page dédiée "Archives" :**
+
+- 📋 Liste complète des archives créées
+- 🔍 **Filtres** : Année universitaire, Semestre, Session
+- 📊 **Statistiques globales** : Total archives, examens, affectations
+- 👁️ **Détails complets** : Cliquer sur l'œil pour voir les détails
+- 🗑️ **Suppression** : Avec confirmation (action irréversible)
+
+#### 3. Statistiques des Archives
+
+**Cartes de statistiques :**
+
+- Total des archives créées
+- Total des examens archivés
+- Total des affectations archivées  
+- Date de la dernière archive
+
+### Format des Archives
+
+Chaque archive contient :
+
+```
+{
+  "id": 1,
+  "nom_session": "Session Partiel - Semestre 1 - 2024",
+  "semestre": "SEMESTRE 1",
+  "session": "P",
+  "annee_universitaire": "2024-2025",
+  "date_debut": "2024-01-15",
+  "date_fin": "2024-01-30",
+  "nb_examens": 45,
+  "nb_affectations": 120,
+  "nb_enseignants": 35,
+  "snapshot_examens": "[JSON complet des examens]",
+  "snapshot_affectations": "[JSON complet des affectations]",
+  "snapshot_enseignants": "[JSON des enseignants]",
+  "commentaire": "Session validée avec 95% de souhaits respectés",
+  "archive_par": "Admin",
+  "date_archivage": "2024-01-31T10:30:00"
+}
+```
+
+### Bonnes Pratiques
+
+1. **Nommage cohérent** : "Session [Type] - Semestre [N] - [Année]"
+2. **Archivage après validation** : Archiver chaque session après finalisation
+3. **Commentaires utiles** : Noter les points importants (taux de souhaits, ajustements)
+4. **Vérification des dates** : S'assurer qu'elles correspondent à la période réelle
+
+### Documentation Complète
+
+Pour plus de détails, consultez :
+- 📖 **[GUIDE_ARCHIVAGE.md](GUIDE_ARCHIVAGE.md)** : Guide d'utilisation complet
+- 📖 **[ARCHIVAGE.md](ARCHIVAGE.md)** : Documentation technique
 
 ---
 

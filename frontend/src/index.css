@@ -211,6 +211,17 @@
   }
 }
 
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 @keyframes pulse-delay {
   0%, 100% {
     opacity: 1;
@@ -230,6 +241,10 @@
 
 .animate-slideDown {
   animation: slideDown 0.3s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
 }
 
 .animation-delay-200 {

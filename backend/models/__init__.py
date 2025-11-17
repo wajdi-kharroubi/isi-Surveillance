@@ -4,7 +4,8 @@ from .models import (
     Voeu,
     Examen,
     Affectation,
-    GradeConfig
+    GradeConfig,
+    SessionArchive,
 )
 
 from .schemas import (
@@ -33,6 +34,7 @@ __all__ = [
     "Examen",
     "Affectation",
     "GradeConfig",
+    "SessionArchive",
     # Schemas
     "EnseignantCreate",
     "EnseignantUpdate",

@@ -18,6 +18,7 @@ import {
   ChevronRightIcon,
   Bars3Icon,
   XMarkIcon,
+  ArchiveBoxIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -61,11 +62,18 @@ const navigation = [
       { name: 'Quotas', href: '/config-grades', description: 'Configurer les quotas', icon: Cog6ToothIcon },
     ]
   },
-    { 
+  { 
     name: 'Absences', 
     href: '/absences', 
     icon: ClockIcon, 
     description: 'Marquer présences/absences',
+    highlight: true
+  },
+  { 
+    name: 'Archives', 
+    href: '/archives', 
+    icon: ArchiveBoxIcon, 
+    description: 'Historique des sessions',
     highlight: true
   },
 ];

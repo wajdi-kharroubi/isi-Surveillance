@@ -308,3 +308,74 @@ class PresenceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============ Session Archive Schemas ============
+class SessionArchiveCreate(BaseModel):
+    """Schéma pour créer une archive de session"""
+    nom_session: str = Field(..., min_length=1, max_length=200, description="Nom descriptif de la session")
+    semestre: str = Field(..., description="SEMESTRE 1 ou SEMESTRE 2")
+    session: str = Field(..., description="P (Partiel), Pr (Principale), C (Contrôle), ou R (Rattrapage)")
+    annee_universitaire: str = Field(..., pattern=r"^\d{4}-\d{4}$", description="Format: 2024-2025")
+    date_debut: date = Field(..., description="Date de début de la session")
+    date_fin: date = Field(..., description="Date de fin de la session")
+    commentaire: Optional[str] = Field(None, description="Commentaire optionnel")
+    archive_par: Optional[str] = Field(None, max_length=100, description="Nom de l'archiveur")
+
+
+class SessionArchiveResponse(BaseModel):
+    """Schéma de réponse pour une archive de session"""
+    id: int
+    nom_session: str
+    semestre: str
+    session: str
+    annee_universitaire: str
+    date_debut: date
+    date_fin: date
+    date_archivage: datetime
+    date_validation: Optional[datetime] = None
+    nb_examens: int
+    nb_affectations: int
+    nb_enseignants: int
+    nb_voeux: int
+    commentaire: Optional[str] = None
+    archive_par: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class SessionArchiveDetail(SessionArchiveResponse):
+    """Schéma détaillé incluant les snapshots JSON"""
+    snapshot_examens: str
+    snapshot_affectations: str
+    snapshot_enseignants: str
+    snapshot_voeux: Optional[str] = None
+    snapshot_presences: Optional[str] = None
+    snapshot_quotas_grades: Optional[str] = None
+    snapshot_exceptions: Optional[str] = None
+    snapshot_generation_statistique: Optional[str] = None
+    generation_statistique_id: Optional[int] = None
+
+
+class SessionArchiveListItem(BaseModel):
+    """Schéma pour liste d'archives (version allégée)"""
+    id: int
+    nom_session: str
+    semestre: str
+    session: str
+    annee_universitaire: str
+    date_debut: date
+    date_fin: date
+    date_archivage: datetime
+    nb_examens: int
+    nb_affectations: int
+    nb_enseignants: int
+    nb_voeux: int
+    archive_par: Optional[str] = None
+    commentaire: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
