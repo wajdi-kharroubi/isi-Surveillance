@@ -111,7 +111,7 @@ class ExamenBase(BaseModel):
     dateExam: date
     h_debut: time
     h_fin: time
-    session: str = Field(..., max_length=50)  # P, C, Principale, Contrôle
+    session: str = Field(..., max_length=50)  # Pa (Partiel), P (Principale), C (Contrôle), R (Rattrapage)
     type_ex: str = Field(..., max_length=50)
     semestre: str = Field(..., max_length=20)
     enseignant: str = Field(..., max_length=50)  # code_smartex
@@ -223,7 +223,7 @@ class AjouterEnseignantSeanceRequest(BaseModel):
     date_examen: date = Field(..., description="Date de la séance")
     h_debut: time = Field(..., description="Heure de début de la séance")
     h_fin: time = Field(..., description="Heure de fin de la séance")
-    session: str = Field(..., description="Session (P=Principale, R=Rattrapage)")
+    session: str = Field(..., description="Session (Pa=Partiel, P=Principale, C=Contrôle, R=Rattrapage)")
     semestre: str = Field(..., description="Semestre (SEMESTRE 1 ou SEMESTRE 2)")
 
 
@@ -232,7 +232,7 @@ class SupprimerEnseignantSeanceRequest(BaseModel):
     date_examen: date = Field(..., description="Date de la séance")
     h_debut: time = Field(..., description="Heure de début de la séance")
     h_fin: time = Field(..., description="Heure de fin de la séance")
-    session: str = Field(..., description="Session (P=Principale, R=Rattrapage)")
+    session: str = Field(..., description="Session (Pa=Partiel, P=Principale, C=Contrôle, R=Rattrapage)")
     semestre: str = Field(..., description="Semestre (SEMESTRE 1 ou SEMESTRE 2)")
 
 
@@ -315,7 +315,7 @@ class SessionArchiveCreate(BaseModel):
     """Schéma pour créer une archive de session"""
     nom_session: str = Field(..., min_length=1, max_length=200, description="Nom descriptif de la session")
     semestre: str = Field(..., description="SEMESTRE 1 ou SEMESTRE 2")
-    session: str = Field(..., description="P (Partiel), Pr (Principale), C (Contrôle), ou R (Rattrapage)")
+    session: str = Field(..., description="Pa (Partiel), P (Principale), C (Contrôle), ou R (Rattrapage)")
     annee_universitaire: str = Field(..., pattern=r"^\d{4}-\d{4}$", description="Format: 2024-2025")
     date_debut: date = Field(..., description="Date de début de la session")
     date_fin: date = Field(..., description="Date de fin de la session")

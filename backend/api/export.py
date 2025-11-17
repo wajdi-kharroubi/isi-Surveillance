@@ -42,6 +42,8 @@ class SendEmailsRequest(BaseModel):
     token_info: Dict
     avec_pieces_jointes: bool = False
     creer_evenements_calendar: bool = False
+    session: Optional[str] = None
+    semestre: Optional[str] = None
 
 
 class EmailResult(BaseModel):
@@ -54,11 +56,18 @@ class EmailResult(BaseModel):
 
 
 @router.post("/convocations")
-def exporter_convocations(db: Session = Depends(get_db)):
+def exporter_convocations(
+    session: Optional[str] = Query(None),
+    semestre: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
     """Génère les convocations individuelles pour tous les enseignants et retourne un fichier ZIP"""
     try:
         export_service = ExportService(db)
-        filepaths = export_service.generer_convocations_individuelles()
+        filepaths = export_service.generer_convocations_individuelles(
+            session_personnalisee=session,
+            semestre_personnalise=semestre
+        )
         
         if not filepaths:
             raise HTTPException(status_code=404, detail="Aucune convocation à générer")
@@ -209,11 +218,18 @@ def exporter_liste_creneau(
 # ===== NOUVEAUX ENDPOINTS POUR EXPORT PDF =====
 
 @router.post("/convocationsPDF")
-def exporter_convocations_pdf(db: Session = Depends(get_db)):
+def exporter_convocations_pdf(
+    session: Optional[str] = Query(None),
+    semestre: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
     """Génère les convocations individuelles en PDF pour tous les enseignants et retourne un fichier ZIP"""
     try:
         export_service = ExportService(db)
-        filepaths = export_service.generer_convocations_individuelles_pdf()
+        filepaths = export_service.generer_convocations_individuelles_pdf(
+            session_personnalisee=session,
+            semestre_personnalise=semestre
+        )
         
         if not filepaths:
             raise HTTPException(status_code=404, detail="Aucune convocation à générer")
@@ -496,7 +512,9 @@ def envoyer_convocations_gmail(
         # Envoyer toutes les convocations
         resultats = convocation_service.envoyer_toutes_convocations(
             avec_pieces_jointes=request.avec_pieces_jointes,
-            creer_evenements_calendar=request.creer_evenements_calendar
+            creer_evenements_calendar=request.creer_evenements_calendar,
+            session_personnalisee=request.session,
+            semestre_personnalise=request.semestre
         )
         
         return resultats

@@ -108,7 +108,11 @@ export default function Absence() {
 
   const formatSessionLabel = (session) => {
     if (!session) return '';
-    return session === 'P' ? 'Principale' : session === 'R' ? 'Rattrapage' : session;
+    if (session === 'Pa') return 'Partiel';
+    if (session === 'P') return 'Principale';
+    if (session === 'R') return 'Rattrapage';
+    if (session === 'C') return 'Contrôle';
+    return session;
   };
 
   const formatSemestreLabel = (sem) => {
@@ -382,7 +386,9 @@ export default function Absence() {
                 className="border-none bg-transparent focus:ring-0 text-sm font-medium cursor-pointer"
               >
                 <option value="all">Toutes les sessions</option>
+                <option value="Pa">Partiel</option>
                 <option value="P">Principale</option>
+                <option value="C">Contrôle</option>
                 <option value="R">Rattrapage</option>
               </select>
             </div>

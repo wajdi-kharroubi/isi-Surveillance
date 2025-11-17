@@ -301,7 +301,7 @@ export default function Examens() {
                 <option value="all">Toutes les sessions</option>
                 {sessions.map(sess => (
                   <option key={sess} value={sess}>
-                    {sess === 'P' ? 'Principale' : sess === 'R' ? 'Rattrapage' : sess}
+                    {sess === 'Pa' ? 'Partiel' : sess === 'P' ? 'Principale' : sess === 'C' ? 'Contrôle' : sess === 'R' ? 'Rattrapage' : sess}
                   </option>
                 ))}
               </select>
@@ -437,8 +437,8 @@ export default function Examens() {
                   <span className="badge badge-info">Semestre {exam.semestre.replace('SEMESTRE ', '')}</span>
                 </td>
                 <td>
-                  <span className={`badge ${exam.session === 'P' || exam.session === 'Principale' ? 'badge-success' : 'badge-warning'}`}>
-                    {exam.session === 'P' ? 'Principale' : 'Rattrapage'}
+                  <span className={`badge ${exam.session === 'P' || exam.session === 'Principale' ? 'badge-success' : exam.session === 'Pa' || exam.session === 'Partiel' ? 'badge-primary' : 'badge-warning'}`}>
+                    {exam.session === 'Pa' ? 'Partiel' : exam.session === 'P' ? 'Principale' : exam.session === 'C' ? 'Contrôle' : exam.session === 'R' ? 'Rattrapage' : exam.session}
                   </span>
                 </td>
                 <td className="text-gray-700">{exam.type_ex === 'E' ? 'Examen' : 'DS'}</td>

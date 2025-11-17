@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { exportAPI } from '../services/api';
+import { exportAPI, examensAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import {
   X,
@@ -21,6 +21,8 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
   const [creerEvenementsCalendar, setCreerEvenementsCalendar] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendResults, setSendResults] = useState(null);
+  const [session, setSession] = useState('Partiel');
+  const [semestre, setSemestre] = useState('S1');
 
   // Vérifier si on a un token sauvegardé
   useEffect(() => {
@@ -35,6 +37,38 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
       }
     }
   }, []);
+
+  // Récupérer les valeurs par défaut du premier examen
+  useEffect(() => {
+    if (isOpen) {
+      fetchDefaultValues();
+    }
+  }, [isOpen]);
+
+  const fetchDefaultValues = async () => {
+    try {
+      const response = await examensAPI.getAll({ limit: 1 });
+      if (response.data && response.data.length > 0) {
+        const firstExam = response.data[0];
+        
+        // Déterminer la session
+        const sessionMap = {
+          'Pa': 'Partiel',
+          'P': 'Principale',
+          'R': 'Rattrapage',
+          'C': 'Controle'
+        };
+        const sessionValue = sessionMap[firstExam.session] || 'Partiel';
+        setSession(sessionValue);
+        
+        // Déterminer le semestre
+        const semestreValue = firstExam.semestre?.includes('2') ? 'S2' : 'S1';
+        setSemestre(semestreValue);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des valeurs par défaut:', error);
+    }
+  };
 
   const verifyToken = async (token) => {
     try {
@@ -176,6 +210,8 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
         token_info: tokenInfo,
         avec_pieces_jointes: true,
         creer_evenements_calendar: creerEvenementsCalendar,
+        session: session,
+        semestre: semestre,
       });
 
       setSendResults(response.data);
@@ -304,6 +340,48 @@ export default function GmailOAuthModal({ isOpen, onClose }) {
                   >
                     Déconnexion
                   </button>
+                </div>
+              </div>
+
+              {/* Configuration de la session et du semestre */}
+              <div className="bg-blue-50 rounded-lg border-2 border-blue-200 p-4 space-y-4">
+                <h3 className="font-semibold text-blue-900 text-sm">Configuration des convocations</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="session-input" className="block text-sm font-medium text-gray-700 mb-2">
+                      Session
+                    </label>
+                    <input
+                      type="text"
+                      id="session-input"
+                      value={session}
+                      onChange={(e) => setSession(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Ex: Partiel"
+                      disabled={isSending}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="semestre-input" className="block text-sm font-medium text-gray-700 mb-2">
+                      Semestre
+                    </label>
+                    <select
+                      id="semestre-input"
+                      value={semestre}
+                      onChange={(e) => setSemestre(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isSending}
+                    >
+                      <option value="S1">S1</option>
+                      <option value="S2">S2</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                  Le nom des fichiers sera: <strong>Convocation-Surveillance-Session-{session}-{semestre}-Prenom-Nom</strong>
                 </div>
               </div>
 

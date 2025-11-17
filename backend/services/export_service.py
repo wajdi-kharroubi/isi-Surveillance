@@ -91,15 +91,16 @@ class ExportService:
         """Convertit le code de session en texte complet
         
         Args:
-            code_session: Code de la session (P, R, etc.)
+            code_session: Code de la session (Pa, P, C, R)
             
         Returns:
-            Texte complet de la session (Principale, Rattrapage, etc.)
+            Texte complet de la session (Partiel, Principale, Contrôle, Rattrapage)
         """
         conversions = {
+            'Pa': 'Partiel',
             'P': 'Principale',
-            'R': 'Rattrapage',
-            'C': 'Contrôle'  # Au cas où
+            'C': 'Contrôle',
+            'R': 'Rattrapage'
         }
         return conversions.get(code_session, code_session)
     
@@ -121,9 +122,10 @@ class ExportService:
         
         # Mapper les codes vers les types de session pour les noms de fichiers
         conversions = {
-            'P': 'Partiel',
-            'R': 'Rattrapage',
-            'C': 'Controle'
+            'Pa': 'Partiel',
+            'P': 'Principale',
+            'C': 'Controle',
+            'R': 'Rattrapage'
         }
         return conversions.get(code_session, 'Examen')
     
@@ -323,8 +325,17 @@ class ExportService:
         logger.info(f"✅ Planning global PDF généré: {filepath}")
         return filepath
     
-    def generer_convocations_individuelles(self) -> List[str]:
-        """Génère les convocations individuelles pour chaque enseignant (Word + PDF)"""
+    def generer_convocations_individuelles(
+        self, 
+        session_personnalisee: str = None, 
+        semestre_personnalise: str = None
+    ) -> List[str]:
+        """Génère les convocations individuelles pour chaque enseignant (Word + PDF)
+        
+        Args:
+            session_personnalisee: Session personnalisée à utiliser pour le nom de fichier (ex: "Partiel", "Rattrapage")
+            semestre_personnalise: Semestre personnalisé à utiliser pour le nom de fichier (ex: "S1", "S2")
+        """
         filepaths = []
         
         enseignants = self.db.query(Enseignant).all()
@@ -344,9 +355,16 @@ class ExportService:
             nom_propre = nettoyer_nom_fichier(enseignant.nom)
             prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
             
-            # Déterminer le type de session et le semestre
-            type_session = self._determiner_type_session_fichier(affectations)
-            semestre = self._determiner_semestre_fichier(affectations)
+            # Utiliser les valeurs personnalisées si fournies, sinon déterminer automatiquement
+            if session_personnalisee:
+                type_session = session_personnalisee
+            else:
+                type_session = self._determiner_type_session_fichier(affectations)
+            
+            if semestre_personnalise:
+                semestre = semestre_personnalise
+            else:
+                semestre = self._determiner_semestre_fichier(affectations)
             
             # Générer Word avec le nouveau format de nom
             filename_word = f"Convocation-Surveillance-Session-{type_session}-{semestre}-{prenom_propre}-{nom_propre}.docx"
@@ -1025,11 +1043,18 @@ class ExportService:
         logger.info(f"✅ Planning Excel généré: {filepath}")
         return filepath
     
-    def generer_convocation_enseignant(self, enseignant_id: int) -> str:
+    def generer_convocation_enseignant(
+        self,
+        enseignant_id: int,
+        session_personnalisee: str = None,
+        semestre_personnalise: str = None
+    ) -> str:
         """Génère la convocation pour un enseignant spécifique
         
         Args:
             enseignant_id: ID de l'enseignant
+            session_personnalisee: Session personnalisée à utiliser pour le nom de fichier
+            semestre_personnalise: Semestre personnalisé à utiliser pour le nom de fichier
             
         Returns:
             Chemin du fichier Word généré
@@ -1053,9 +1078,16 @@ class ExportService:
         nom_propre = nettoyer_nom_fichier(enseignant.nom)
         prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
         
-        # Déterminer le type de session et le semestre
-        type_session = self._determiner_type_session_fichier(affectations)
-        semestre = self._determiner_semestre_fichier(affectations)
+        # Utiliser les valeurs personnalisées si fournies, sinon déterminer automatiquement
+        if session_personnalisee:
+            type_session = session_personnalisee
+        else:
+            type_session = self._determiner_type_session_fichier(affectations)
+        
+        if semestre_personnalise:
+            semestre = semestre_personnalise
+        else:
+            semestre = self._determiner_semestre_fichier(affectations)
         
         # Générer Word avec le nouveau format de nom
         filename_word = f"Convocation-Surveillance-Session-{type_session}-{semestre}-{prenom_propre}-{nom_propre}.docx"
@@ -1144,8 +1176,17 @@ class ExportService:
             logger.error(f"Erreur lors de la conversion DOCX -> PDF: {str(e)}")
             raise
     
-    def generer_convocations_individuelles_pdf(self) -> List[str]:
-        """Génère les convocations individuelles en PDF pour chaque enseignant"""
+    def generer_convocations_individuelles_pdf(
+        self,
+        session_personnalisee: str = None,
+        semestre_personnalise: str = None
+    ) -> List[str]:
+        """Génère les convocations individuelles en PDF pour chaque enseignant
+        
+        Args:
+            session_personnalisee: Session personnalisée à utiliser pour le nom de fichier (ex: "Partiel", "Rattrapage")
+            semestre_personnalise: Semestre personnalisé à utiliser pour le nom de fichier (ex: "S1", "S2")
+        """
         filepaths = []
         
         enseignants = self.db.query(Enseignant).all()
@@ -1165,9 +1206,16 @@ class ExportService:
             nom_propre = nettoyer_nom_fichier(enseignant.nom)
             prenom_propre = nettoyer_nom_fichier(enseignant.prenom)
             
-            # Déterminer le type de session et le semestre
-            type_session = self._determiner_type_session_fichier(affectations)
-            semestre = self._determiner_semestre_fichier(affectations)
+            # Utiliser les valeurs personnalisées si fournies, sinon déterminer automatiquement
+            if session_personnalisee:
+                type_session = session_personnalisee
+            else:
+                type_session = self._determiner_type_session_fichier(affectations)
+            
+            if semestre_personnalise:
+                semestre = semestre_personnalise
+            else:
+                semestre = self._determiner_semestre_fichier(affectations)
             
             # Générer DOCX d'abord avec le nouveau format de nom
             filename_docx = f"Convocation-Surveillance-Session-{type_session}-{semestre}-{prenom_propre}-{nom_propre}.docx"
@@ -1203,10 +1251,25 @@ class ExportService:
     
 
     
-    def generer_convocation_enseignant_pdf(self, enseignant_id: int) -> str:
-        """Génère la convocation PDF pour un enseignant spécifique"""
+    def generer_convocation_enseignant_pdf(
+        self,
+        enseignant_id: int,
+        session_personnalisee: str = None,
+        semestre_personnalise: str = None
+    ) -> str:
+        """Génère la convocation PDF pour un enseignant spécifique
+        
+        Args:
+            enseignant_id: ID de l'enseignant
+            session_personnalisee: Session personnalisée à utiliser pour le nom de fichier
+            semestre_personnalise: Semestre personnalisé à utiliser pour le nom de fichier
+        """
         # Générer d'abord le DOCX
-        filepath_docx = self.generer_convocation_enseignant(enseignant_id)
+        filepath_docx = self.generer_convocation_enseignant(
+            enseignant_id,
+            session_personnalisee=session_personnalisee,
+            semestre_personnalise=semestre_personnalise
+        )
         
         # Convertir en PDF
         filepath_pdf = self._convertir_docx_vers_pdf(filepath_docx)

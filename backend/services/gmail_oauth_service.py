@@ -598,7 +598,9 @@ class GmailConvocationService:
     def envoyer_toutes_convocations(
         self,
         avec_pieces_jointes: bool = False,
-        creer_evenements_calendar: bool = False
+        creer_evenements_calendar: bool = False,
+        session_personnalisee: str = None,
+        semestre_personnalise: str = None
     ) -> Dict[str, any]:
         """
         Envoie les convocations à tous les enseignants ayant des affectations
@@ -606,6 +608,8 @@ class GmailConvocationService:
         Args:
             avec_pieces_jointes: Si True, attache les fichiers PDF
             creer_evenements_calendar: Si True, crée des événements Google Calendar
+            session_personnalisee: Session personnalisée à utiliser pour le nom de fichier
+            semestre_personnalise: Semestre personnalisé à utiliser pour le nom de fichier
             
         Returns:
             Dictionnaire avec les résultats de l'envoi
@@ -633,7 +637,11 @@ class GmailConvocationService:
                 try:
                     from services.export_service import ExportService
                     export_service = ExportService(self.db)
-                    filepath_convocation = export_service.generer_convocation_enseignant_pdf(enseignant.id)
+                    filepath_convocation = export_service.generer_convocation_enseignant_pdf(
+                        enseignant.id,
+                        session_personnalisee=session_personnalisee,
+                        semestre_personnalise=semestre_personnalise
+                    )
                 except Exception as e:
                     logger.error(f"Erreur génération convocation PDF pour {enseignant.nom}: {str(e)}")
             

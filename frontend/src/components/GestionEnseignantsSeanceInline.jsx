@@ -763,7 +763,7 @@ export default function GestionEnseignantsSeanceInline({
                     </span>
                   </div>
                   <div className="text-sm text-purple-700">
-                    <span className="font-semibold">Session:</span> {seance.session === 'P' ? 'Principale' : 'Rattrapage'}
+                    <span className="font-semibold">Session:</span> {seance.session === 'Pa' ? 'Partiel' : seance.session === 'P' ? 'Principale' : seance.session === 'C' ? 'Contrôle' : seance.session === 'R' ? 'Rattrapage' : seance.session}
                   </div>
                   <div className="text-sm text-purple-700">
                     <span className="font-semibold">Semestre:</span> {seance.semestre}

@@ -159,8 +159,8 @@ export default function Archives() {
 
   const getSessionLabel = (session) => {
     const labels = {
-      'P': 'Partiel',
-      'Pr': 'Principale',
+      'Pa': 'Partiel',
+      'P': 'Principale',
       'C': 'Contrôle',
       'R': 'Rattrapage',
     };
@@ -272,8 +272,8 @@ export default function Archives() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Toutes les sessions</option>
-              <option value="P">Partiel</option>
-              <option value="Pr">Principale</option>
+              <option value="Pa">Partiel</option>
+              <option value="P">Principale</option>
               <option value="C">Contrôle</option>
               <option value="R">Rattrapage</option>
             </select>

@@ -567,7 +567,7 @@ export default function ConfigGrades() {
                     ) : (
                       <>
                         <Trash2 className="w-5 h-5" />
-                        <span>Supprimer tout ({nbExceptions})</span>
+                        <span>Réinitialiser</span>
                       </>
                     )}
                   </button>

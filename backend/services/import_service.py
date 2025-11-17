@@ -418,7 +418,7 @@ class ImportService:
                     h_fin = pd.to_datetime(row['h_fin'], dayfirst=True).time()
                     logger.debug(f"  heures parsées: {h_debut} - {h_fin}")
                     
-                    # Session : garder tel quel (P, C, Principale, Contrôle)
+                    # Session : garder tel quel (Pa, P, C, R pour Partiel, Principale, Contrôle, Rattrapage)
                     session = str(row['session']).strip()
                     
                     # Type d'examen : garder tel quel

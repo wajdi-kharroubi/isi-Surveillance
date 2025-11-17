@@ -99,7 +99,7 @@ class Examen(Base):
     h_fin = Column(Time, nullable=False)  # Correspond à colonne Excel
     session = Column(
         String(10), nullable=False, index=True  # Index ajouté pour filtres fréquents
-    )  # P ou C dans Excel → transformé en Principale/Contrôle
+    )  # Pa (Partiel), P (Principale), C (Contrôle), R (Rattrapage)
     type_ex = Column(
         String(50), nullable=False
     )  # Écrit, TP, Oral - correspond à colonne Excel
@@ -350,7 +350,7 @@ class SessionArchive(Base):
     id = Column(Integer, primary_key=True, index=True)
     nom_session = Column(String(200), nullable=False, index=True)  # Ex: "Session Partiel - Semestre 1 - 2024"
     semestre = Column(String(20), nullable=False, index=True)  # SEMESTRE 1, SEMESTRE 2
-    session = Column(String(10), nullable=False, index=True)  # P (Partiel), Pr (Principale), C (Contrôle), R (Rattrapage)
+    session = Column(String(10), nullable=False, index=True)  # Pa (Partiel), P (Principale), C (Contrôle), R (Rattrapage)
     annee_universitaire = Column(String(20), nullable=False, index=True)  # Ex: "2024-2025"
     date_debut = Column(Date, nullable=False, index=True)
     date_fin = Column(Date, nullable=False, index=True)

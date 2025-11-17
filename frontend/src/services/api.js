@@ -78,12 +78,14 @@ export const exportAPI = {
       params, 
       responseType: 'blob' 
     }),
-  convocations: () => 
+  convocations: (params) => 
     api.post('/export/convocations', null, { 
+      params,
       responseType: 'blob' 
     }),
-  convocationsPDF: () => 
+  convocationsPDF: (params) => 
     api.post('/export/convocationsPDF', null, { 
+      params,
       responseType: 'blob' 
     }),
   convocationEnseignant: (enseignantId) =>

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { exportAPI } from '../services/api';
+import { exportAPI, examensAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 import GmailOAuthModal from '../components/GmailOAuthModal';
+import ConfigExportModal from '../components/ConfigExportModal';
 import {
   ArrowDownTrayIcon,
   DocumentTextIcon,
@@ -17,8 +18,61 @@ export default function Export() {
   const [listesFormat, setListesFormat] = useState('docx');
   const [dataFormat, setDataFormat] = useState('csv');
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
+  const [session, setSession] = useState('Partiel');
+  const [semestre, setSemestre] = useState('S1');
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [pendingExport, setPendingExport] = useState(null);
 
-  const handleExport = async (type, format) => {
+  // Récupérer les valeurs par défaut du premier examen
+  useEffect(() => {
+    fetchDefaultValues();
+  }, []);
+
+  const fetchDefaultValues = async () => {
+    try {
+      const response = await examensAPI.getAll({ limit: 1 });
+      if (response.data && response.data.length > 0) {
+        const firstExam = response.data[0];
+        
+        // Déterminer la session
+        const sessionMap = {
+          'Pa': 'Partiel',
+          'P': 'Principale',
+          'R': 'Rattrapage',
+          'C': 'Controle'
+        };
+        const sessionValue = sessionMap[firstExam.session] || 'Partiel';
+        setSession(sessionValue);
+        
+        // Déterminer le semestre
+        const semestreValue = firstExam.semestre?.includes('2') ? 'S2' : 'S1';
+        setSemestre(semestreValue);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des valeurs par défaut:', error);
+    }
+  };
+
+  const handleExportWithConfig = (type, format) => {
+    // Ouvrir le modal de configuration pour les convocations
+    if (type === 'convocations') {
+      setPendingExport({ type, format });
+      setIsConfigModalOpen(true);
+    } else {
+      handleExport(type, format);
+    }
+  };
+
+  const handleConfigConfirm = (sessionValue, semestreValue) => {
+    setSession(sessionValue);
+    setSemestre(semestreValue);
+    if (pendingExport) {
+      handleExport(pendingExport.type, pendingExport.format, sessionValue, semestreValue);
+      setPendingExport(null);
+    }
+  };
+
+  const handleExport = async (type, format, sessionParam = session, semestreParam = semestre) => {
     setIsExporting(true);
     try {
       let response;
@@ -38,10 +92,10 @@ export default function Export() {
           break;
         case 'convocations':
           if (format === 'pdf') {
-            response = await exportAPI.convocationsPDF();
+            response = await exportAPI.convocationsPDF({ session: sessionParam, semestre: semestreParam });
             filename = `convocations_PDF_${new Date().toISOString().split('T')[0]}.zip`;
           } else {
-            response = await exportAPI.convocations();
+            response = await exportAPI.convocations({ session: sessionParam, semestre: semestreParam });
             filename = `convocations_${new Date().toISOString().split('T')[0]}.zip`;
           }
           contentType = 'application/zip';
@@ -99,7 +153,7 @@ export default function Export() {
       color: 'blue',
       formatState: convocationsFormat,
       setFormatState: setConvocationsFormat,
-      action: (format) => handleExport('convocations', format),
+      action: (format) => handleExportWithConfig('convocations', format),
     },
     {
       id: 'listes',
@@ -374,6 +428,19 @@ export default function Export() {
       <GmailOAuthModal
         isOpen={isGmailModalOpen}
         onClose={() => setIsGmailModalOpen(false)}
+      />
+
+      {/* Modal de configuration d'export */}
+      <ConfigExportModal
+        isOpen={isConfigModalOpen}
+        onClose={() => {
+          setIsConfigModalOpen(false);
+          setPendingExport(null);
+        }}
+        onConfirm={handleConfigConfirm}
+        defaultSession={session}
+        defaultSemestre={semestre}
+        format={pendingExport?.format || 'docx'}
       />
     </div>
   );

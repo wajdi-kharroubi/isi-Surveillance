@@ -30,6 +30,19 @@ export default function Planning() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('seances');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+
+  // Fonction pour formater la session
+  const formatSession = (session) => {
+    if (!session) return '';
+    const sessionMap = {
+      'Pa': 'Partiel',
+      'P': 'Principale',
+      'C': 'Contrôle',
+      'R': 'Rattrapage'
+    };
+    return sessionMap[session] || session;
+  };
+
   const [selectedEnseignant, setSelectedEnseignant] = useState(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [sessionFilter, setSessionFilter] = useState('all');
@@ -682,7 +695,9 @@ export default function Planning() {
                     className="border-none focus:ring-0 font-semibold text-sm bg-transparent cursor-pointer"
                   >
                     <option value="all">Toutes les sessions</option>
+                    <option value="Pa">Partiel</option>
                     <option value="P">Principale</option>
+                    <option value="C">Contrôle</option>
                     <option value="R">Rattrapage</option>
                   </select>
                 </div>
@@ -823,7 +838,7 @@ export default function Planning() {
                                   {formatTime(seance.h_debut)} - {formatTime(seance.h_fin)}
                                 </span>
                                 <span className="px-3 py-1.5 bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-800 rounded-lg font-bold text-xs border-2 border-cyan-200">
-                                  {seance.session === 'P' ? 'Principale' : 'Rattrapage'}
+                                  {formatSession(seance.session)}
                                 </span>
                                 <span className="px-3 py-1.5 bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 rounded-lg font-bold text-xs border-2 border-green-200">
                                   {seance.semestre}
@@ -901,7 +916,7 @@ export default function Planning() {
                                     {formatTime(seance.h_debut)} - {formatTime(seance.h_fin)}
                                   </span>
                                   <span className="px-3 py-1 bg-cyan-100 text-cyan-800 rounded-lg font-bold text-xs border border-cyan-200">
-                                    {seance.session === 'P' ? 'Principale' : 'Rattrapage'}
+                                    {formatSession(seance.session)}
                                   </span>
                                   <span className="px-3 py-1 bg-green-100 text-green-800 rounded-lg font-bold text-xs border border-green-200">
                                     {seance.semestre}
@@ -1428,7 +1443,7 @@ export default function Planning() {
                                                 {/* Session */}
                                                 <td className="px-4 py-3 text-center">
                                                   <span className="px-2.5 py-1 bg-cyan-100 text-cyan-800 rounded-lg text-xs font-bold border border-cyan-200">
-                                                    {seance.session === 'P' ? '📝 Principale' : '🔄 Rattrapage'}
+                                                    {seance.session === 'Pa' ? '📋 Partiel' : seance.session === 'P' ? '📝 Principale' : seance.session === 'C' ? '🎯 Contrôle' : '🔄 Rattrapage'}
                                                   </span>
                                                 </td>
                                                 
@@ -1609,7 +1624,7 @@ export default function Planning() {
                                         {/* Session */}
                                         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-800 rounded-lg font-bold text-xs border-2 border-cyan-200 shadow-sm">
                                           <span className="w-2 h-2 bg-cyan-600 rounded-full"></span>
-                                          {emploi.session === 'P' ? 'Session Principale' : 'Session Rattrapage'}
+                                          {emploi.session === 'Pa' ? 'Session Partiel' : emploi.session === 'P' ? 'Session Principale' : emploi.session === 'C' ? 'Session Contrôle' : 'Session Rattrapage'}
                                         </span>
 
                                         {/* Semestre */}
@@ -2149,7 +2164,7 @@ export default function Planning() {
                     </span>
                   </div>
                   <div className="text-sm text-purple-700">
-                    <span className="font-semibold">Session:</span> {pendingSuppressionData.emploi.session === 'P' ? 'Principale' : 'Rattrapage'}
+                    <span className="font-semibold">Session:</span> {formatSession(pendingSuppressionData.emploi.session)}
                   </div>
                   <div className="text-sm text-purple-700">
                     <span className="font-semibold">Semestre:</span> {pendingSuppressionData.emploi.semestre}

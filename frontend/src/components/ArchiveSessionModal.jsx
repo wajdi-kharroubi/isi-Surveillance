@@ -8,7 +8,7 @@ export default function ArchiveSessionModal({ isOpen, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     nom_session: '',
     semestre: 'SEMESTRE 1',
-    session: 'P',
+    session: 'Pa',
     annee_universitaire: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
     date_debut: '',
     date_fin: '',
@@ -54,8 +54,8 @@ export default function ArchiveSessionModal({ isOpen, onClose, onSuccess }) {
             
             // Générer un nom de session automatique
             const sessionLabels = {
-              'P': 'Partiel',
-              'Pr': 'Principale',
+              'Pa': 'Partiel',
+              'P': 'Principale',
               'C': 'Contrôle',
               'R': 'Rattrapage'
             };
@@ -113,7 +113,7 @@ export default function ArchiveSessionModal({ isOpen, onClose, onSuccess }) {
       setFormData({
         nom_session: '',
         semestre: 'SEMESTRE 1',
-        session: 'P',
+        session: 'Pa',
         annee_universitaire: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
         date_debut: '',
         date_fin: '',
