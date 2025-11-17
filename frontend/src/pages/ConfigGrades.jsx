@@ -107,7 +107,7 @@ export default function ConfigGrades() {
     mutationFn: decisionAPI.importerExceptions,
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['enseignants'] });
-      toast.success(`✅ ${response.data.message}`);
+      toast.success(`${response.data.message}`);
       if (response.data.erreurs && response.data.erreurs.length > 0) {
         toast.error('⚠️ Erreurs:\n' + response.data.erreurs.join('\n'), {
           duration: 6000,
@@ -132,7 +132,7 @@ export default function ConfigGrades() {
     mutationFn: decisionAPI.supprimerExceptions,
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['enseignants'] });
-      toast.success(`✅ ${response.data.message}`);
+      toast.success(`${response.data.message}`);
     },
     onError: (error) => {
       toast.error(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
