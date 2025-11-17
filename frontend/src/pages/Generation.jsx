@@ -12,6 +12,8 @@ import {
   ChartBarIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
+import ConfirmGenerationModal from '../components/ConfirmGenerationModal';
+import ArchiveSessionModal from '../components/ArchiveSessionModal';
 
 export default function Generation() {
   const [config, setConfig] = useState({
@@ -23,6 +25,8 @@ export default function Generation() {
   const [result, setResult] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const queryClient = useQueryClient();
 
   // Vérifier si des affectations existent
@@ -99,6 +103,30 @@ export default function Generation() {
   });
 
   const handleGenerate = () => {
+    // Vérifier si des affectations existent
+    if (stats && stats.nb_affectations > 0) {
+      // Afficher la modal de confirmation
+      setShowConfirmModal(true);
+    } else {
+      // Pas de données, lancer directement
+      generationMutation.mutate(config);
+    }
+  };
+
+  const handleContinueWithoutArchive = () => {
+    setShowConfirmModal(false);
+    generationMutation.mutate(config);
+  };
+
+  const handleArchiveFirst = () => {
+    setShowConfirmModal(false);
+    setShowArchiveModal(true);
+  };
+
+  const handleArchiveSuccess = () => {
+    setShowArchiveModal(false);
+    toast.success('Session archivée avec succès');
+    // Lancer la génération après l'archivage
     generationMutation.mutate(config);
   };
 
@@ -873,6 +901,22 @@ export default function Generation() {
           </div>
         </div>
       )}
+
+      {/* Modal de confirmation avant génération */}
+      <ConfirmGenerationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onContinue={handleContinueWithoutArchive}
+        onArchive={handleArchiveFirst}
+        hasData={stats && stats.nb_affectations > 0}
+      />
+
+      {/* Modal d'archivage */}
+      <ArchiveSessionModal
+        isOpen={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onSuccess={handleArchiveSuccess}
+      />
     </div>
   );
 }
