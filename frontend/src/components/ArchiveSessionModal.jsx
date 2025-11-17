@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { XMarkIcon, ArchiveBoxIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
 import api from '../services/api';
 
 export default function ArchiveSessionModal({ isOpen, onClose, onSuccess }) {
@@ -102,7 +103,7 @@ export default function ArchiveSessionModal({ isOpen, onClose, onSuccess }) {
       
       // Vérifier que les dates sont définies
       if (!formData.date_debut || !formData.date_fin) {
-        alert('Les dates n\'ont pas pu être récupérées automatiquement. Veuillez réessayer.');
+        toast.error('Les dates n\'ont pas pu être récupérées automatiquement. Veuillez réessayer.');
         setLoading(false);
         return;
       }
@@ -128,7 +129,7 @@ export default function ArchiveSessionModal({ isOpen, onClose, onSuccess }) {
       onClose();
     } catch (error) {
       console.error('Erreur lors de l\'archivage:', error);
-      alert(error.response?.data?.detail || 'Erreur lors de l\'archivage de la session');
+      toast.error(error.response?.data?.detail || 'Erreur lors de l\'archivage de la session');
     } finally {
       setLoading(false);
     }

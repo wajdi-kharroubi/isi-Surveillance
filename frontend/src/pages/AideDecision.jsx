@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import { 
   Calculator, 
   CheckCircle, 
@@ -70,10 +71,10 @@ export default function AideDecision() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['grades-config'] });
       queryClient.invalidateQueries({ queryKey: ['quotas-actuels'] });
-      alert('✅ Quotas appliqués avec succès !');
+      toast.success('Quotas appliqués avec succès !');
     },
     onError: (error) => {
-      alert(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
+      toast.error(`Erreur: ${error.response?.data?.detail || error.message}`);
     },
   });
 
@@ -92,7 +93,7 @@ export default function AideDecision() {
       window.URL.revokeObjectURL(url);
     },
     onError: (error) => {
-      alert(`❌ Erreur lors de l'exportation: ${error.response?.data?.detail || error.message}`);
+      toast.error(`Erreur lors de l'exportation: ${error.response?.data?.detail || error.message}`);
     },
   });
 
@@ -102,9 +103,9 @@ export default function AideDecision() {
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['enseignants'] });
       queryClient.invalidateQueries({ queryKey: ['enseignants-exceptions'] });
-      alert(`✅ ${response.data.message}`);
+      toast.success(response.data.message);
       if (response.data.erreurs && response.data.erreurs.length > 0) {
-        alert('⚠️ Erreurs:\n' + response.data.erreurs.join('\n'));
+        toast.warning('Erreurs:\n' + response.data.erreurs.join('\n'), { duration: 6000 });
       }
       // Reset file input
       if (fileInputRef.current) {
@@ -112,7 +113,7 @@ export default function AideDecision() {
       }
     },
     onError: (error) => {
-      alert(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
+      toast.error(`Erreur: ${error.response?.data?.detail || error.message}`);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -126,10 +127,10 @@ export default function AideDecision() {
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['enseignants'] });
       queryClient.invalidateQueries({ queryKey: ['enseignants-exceptions'] });
-      alert(`✅ ${response.data.message}`);
+      toast.success(response.data.message);
     },
     onError: (error) => {
-      alert(`❌ Erreur: ${error.response?.data?.detail || error.message}`);
+      toast.error(`Erreur: ${error.response?.data?.detail || error.message}`);
     },
   });
 
@@ -141,7 +142,7 @@ export default function AideDecision() {
   // Fonction pour exporter les voeux autorisés
   const handleExporterVoeux = () => {
     if (!recommandations) {
-      alert('⚠️ Veuillez d\'abord calculer les recommandations');
+      toast.warning('Veuillez d\'abord calculer les recommandations');
       return;
     }
     exporterVoeuxMutation.mutate(parametres);
@@ -154,7 +155,7 @@ export default function AideDecision() {
 
     // Vérifier le format
     if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      alert('❌ Le fichier doit être au format Excel (.xlsx ou .xls)');
+      toast.error('Le fichier doit être au format Excel (.xlsx ou .xls)');
       return;
     }
 
@@ -176,7 +177,7 @@ export default function AideDecision() {
   // Fonction pour supprimer toutes les exceptions
   const handleSupprimerExceptions = () => {
     if (!enseignantsExceptions || enseignantsExceptions.nb_exceptions === 0) {
-      alert('ℹ️ Aucune exception à supprimer');
+      toast.info('Aucune exception à supprimer');
       return;
     }
 
@@ -256,7 +257,7 @@ export default function AideDecision() {
       : {};
 
     if (Object.keys(quotasAAppliquer).length === 0) {
-      alert('❌ Aucun quota à appliquer. Calculez d\'abord les recommandations.');
+      toast.error('Aucun quota à appliquer. Calculez d\'abord les recommandations.');
       return;
     }
 

@@ -369,9 +369,9 @@ export default function Planning() {
       // Si il y a des erreurs bloquantes, ne pas permettre l'ajout
       if (!validation.peut_ajouter) {
         toast.error('Impossible d\'ajouter cet enseignant à cette séance');
-        // Afficher les erreurs dans une alerte
+        // Afficher les erreurs détaillées
         const errorMsg = validation.errors.join('\n');
-        alert(`❌ Impossible d'ajouter l'enseignant :\n\n${errorMsg}`);
+        toast.error(errorMsg, { duration: 6000 });
         return;
       }
 
@@ -444,11 +444,11 @@ export default function Planning() {
       const filename = `liste_seance_${seance.date}_${numeroSeance}.docx`;
       downloadBlob(response.data, filename);
       
-      // Notification succès (optionnel - vous pouvez ajouter un toast)
-      console.log('✅ Liste exportée avec succès');
+      // Notification succès
+      toast.success('Liste de séance exportée avec succès');
     } catch (error) {
       console.error('❌ Erreur lors de l\'export de la séance:', error);
-      alert('Erreur lors de l\'export de la liste de séance. Veuillez réessayer.');
+      toast.error('Erreur lors de l\'export de la liste de séance. Veuillez réessayer.');
     }
   };
 
@@ -464,11 +464,11 @@ export default function Planning() {
       
       downloadBlob(response.data, filename);
       
-      // Notification succès (optionnel)
-      console.log('✅ Convocation exportée avec succès');
+      // Notification succès
+      toast.success('Convocation exportée avec succès');
     } catch (error) {
       console.error('❌ Erreur lors de l\'export de la convocation:', error);
-      alert('Erreur lors de l\'export de la convocation. Veuillez réessayer.');
+      toast.error('Erreur lors de l\'export de la convocation. Veuillez réessayer.');
     }
   };
 

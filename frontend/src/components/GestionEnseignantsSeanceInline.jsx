@@ -166,9 +166,9 @@ export default function GestionEnseignantsSeanceInline({
       // Si il y a des erreurs bloquantes, ne pas permettre l'ajout
       if (!validation.peut_ajouter) {
         toast.error('Impossible d\'ajouter cet enseignant à cette séance');
-        // Afficher les erreurs dans une alerte
+        // Afficher les erreurs détaillées
         const errorMsg = validation.errors.join('\n');
-        alert(`❌ Impossible d'ajouter l'enseignant :\n\n${errorMsg}`);
+        toast.error(errorMsg, { duration: 6000 });
         return;
       }
 

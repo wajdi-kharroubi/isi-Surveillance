@@ -12,6 +12,7 @@ import {
   XMarkIcon,
   ArrowUturnLeftIcon,
 } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -118,9 +119,10 @@ export default function Archives() {
       await api.delete(`/archives/sessions/${archiveToDelete}`);
       setArchives(archives.filter(a => a.id !== archiveToDelete));
       chargerDonnees();
+      toast.success('Archive supprimée avec succès');
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
-      alert('Erreur lors de la suppression de l\'archive');
+      toast.error('Erreur lors de la suppression de l\'archive');
     } finally {
       setArchiveToDelete(null);
     }
@@ -139,10 +141,11 @@ export default function Archives() {
     try {
       await api.post(`/archives/sessions/${archiveToRecover}/restaurer`);
       await chargerDonnees();
+      toast.success('Archive récupérée avec succès');
     } catch (err) {
       console.error('Erreur lors de la récupération:', err);
       const errorMsg = err.response?.data?.detail || 'Erreur lors de la récupération de l\'archive';
-      alert(`❌ ${errorMsg}`);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
       setArchiveToRecover(null);
