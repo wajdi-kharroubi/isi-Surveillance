@@ -149,11 +149,11 @@ class GenerationRequest(BaseModel):
     min_surveillants_par_salle: int = Field(default=2, ge=1)
     allow_single_surveillant: bool = True
     priorite_grade: bool = True
-    max_time_in_seconds: int = Field(
+    max_time_in_seconds: Optional[int] = Field(
         default=600,
         ge=1,
         le=36000,
-        description="Temps maximum de résolution en secondes (1s - 10h)",
+        description="Temps maximum de résolution en secondes (1s - 10h), ou null pour illimité",
     )
     relative_gap_limit: float = Field(
         default=0.05,

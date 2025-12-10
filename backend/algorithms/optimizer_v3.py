@@ -267,7 +267,13 @@ class SurveillanceOptimizerV3:
         self.solver.parameters.num_search_workers = min(nb_cores, 16)  # Max 16 workers
 
         # Timeout optimisé (paramètre configurable)
-        self.solver.parameters.max_time_in_seconds = max_time_in_seconds
+        # Si max_time_in_seconds est None (illimité), on met une très grande valeur
+        if max_time_in_seconds is not None:
+            self.solver.parameters.max_time_in_seconds = max_time_in_seconds
+        else:
+            # Temps illimité : on met une valeur très élevée (10 jours)
+            self.solver.parameters.max_time_in_seconds = 864000
+        
         self.solver.parameters.log_search_progress = (
             False  # Désactiver les logs verbeux
         )
@@ -281,9 +287,12 @@ class SurveillanceOptimizerV3:
         self.solver.parameters.relative_gap_limit = (
             relative_gap_limit  # Gap relatif accepté (paramètre configurable)
         )
-        self.solver.parameters.max_deterministic_time = (
-            max_time_in_seconds / 2.0  # Temps déterministe = moitié du temps max
-        )
+        
+        # Temps déterministe = moitié du temps max (ou très grande valeur si illimité)
+        if max_time_in_seconds is not None:
+            self.solver.parameters.max_deterministic_time = max_time_in_seconds / 2.0
+        else:
+            self.solver.parameters.max_deterministic_time = 432000.0  # 5 jours en secondes
 
         status = self.solver.Solve(self.model)
 

@@ -22,6 +22,7 @@ export default function Generation() {
     max_time_in_seconds: 600, // 10 minutes par défaut 
     relative_gap_limit: 0.05, // 5% de tolérance par défaut
   });
+  const [isUnlimitedTime, setIsUnlimitedTime] = useState(false);
   const [result, setResult] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -103,19 +104,29 @@ export default function Generation() {
   });
 
   const handleGenerate = () => {
+    // Préparer la configuration avec temps illimité si nécessaire
+    const finalConfig = {
+      ...config,
+      max_time_in_seconds: isUnlimitedTime ? null : config.max_time_in_seconds
+    };
+    
     // Vérifier si des affectations existent
     if (stats && stats.nb_affectations > 0) {
       // Afficher la modal de confirmation
       setShowConfirmModal(true);
     } else {
       // Pas de données, lancer directement
-      generationMutation.mutate(config);
+      generationMutation.mutate(finalConfig);
     }
   };
 
   const handleContinueWithoutArchive = () => {
     setShowConfirmModal(false);
-    generationMutation.mutate(config);
+    const finalConfig = {
+      ...config,
+      max_time_in_seconds: isUnlimitedTime ? null : config.max_time_in_seconds
+    };
+    generationMutation.mutate(finalConfig);
   };
 
   const handleArchiveFirst = () => {
@@ -127,7 +138,11 @@ export default function Generation() {
     setShowArchiveModal(false);
     toast.success('Session archivée avec succès');
     // Lancer la génération après l'archivage
-    generationMutation.mutate(config);
+    const finalConfig = {
+      ...config,
+      max_time_in_seconds: isUnlimitedTime ? null : config.max_time_in_seconds
+    };
+    generationMutation.mutate(finalConfig);
   };
 
   return (
@@ -193,31 +208,37 @@ export default function Generation() {
                         max_time_in_seconds: parseInt(e.target.value),
                       })
                     }
-                    className="w-28 text-3xl font-bold text-blue-600 border-2 border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    disabled={isUnlimitedTime}
+                    className="w-28 text-3xl font-bold text-blue-600 border-2 border-blue-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                   />
                   <div>
                     <span className="text-lg text-gray-600">secondes</span>
                     <p className="text-sm text-blue-700 font-medium">
-                      {config.max_time_in_seconds >= 3600 
-                        ? `≈ ${(config.max_time_in_seconds / 3600).toFixed(1)} heures` 
-                        : `≈ ${(config.max_time_in_seconds / 60).toFixed(0)} minutes`}
+                      {isUnlimitedTime 
+                        ? '∞ Illimité' 
+                        : config.max_time_in_seconds >= 3600 
+                          ? `≈ ${(config.max_time_in_seconds / 3600).toFixed(1)} heures` 
+                          : `≈ ${(config.max_time_in_seconds / 60).toFixed(0)} minutes`}
                     </p>
                   </div>
                 </div>
 
                 {/* Quick presets */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 mb-4">
                   {[
-                    { label: '5 min', value: 300 },
-                    { label: '10 min', value: 600 },
                     { label: '30 min', value: 1800 },
-                    { label: '1 heure', value: 3600 }
+                    { label: '1 heure', value: 3600 },
+                    { label: '2 heures', value: 7200 },
                   ].map((preset) => (
                     <button
                       key={preset.value}
-                      onClick={() => setConfig({ ...config, max_time_in_seconds: preset.value })}
-                      className={`flex-1 px-3 py-2 text-sm rounded-lg font-medium transition-all ${
-                        config.max_time_in_seconds === preset.value
+                      onClick={() => {
+                        setIsUnlimitedTime(false);
+                        setConfig({ ...config, max_time_in_seconds: preset.value });
+                      }}
+                      disabled={isUnlimitedTime}
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                        !isUnlimitedTime && config.max_time_in_seconds === preset.value
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'bg-white text-gray-700 hover:bg-blue-50 border border-blue-200'
                       }`}
@@ -225,6 +246,26 @@ export default function Generation() {
                       {preset.label}
                     </button>
                   ))}
+                </div>
+
+                {/* Option Illimité */}
+                <div className="pt-4 border-t border-blue-200">
+                  <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg hover:bg-blue-50/50 transition-all group">
+                    <input
+                      type="checkbox"
+                      checked={isUnlimitedTime}
+                      onChange={(e) => setIsUnlimitedTime(e.target.checked)}
+                      className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 mt-0.5"
+                    />
+                    <div>
+                      <span className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">
+                        ⏱️ Temps illimité
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Laisser l'algorithme s'exécuter jusqu'à trouver la solution optimale
+                      </p>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>
@@ -446,23 +487,25 @@ export default function Generation() {
               </div>
             ))}
             
-            <div className="mt-6 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 border border-blue-200">
-              <div className="flex justify-between text-sm text-gray-700 mb-3 font-medium">
-                <span>⏱️ Max: {config.max_time_in_seconds >= 3600 ? `${(config.max_time_in_seconds / 3600).toFixed(1)}h` : `${(config.max_time_in_seconds / 60).toFixed(0)}min`}</span>
-                <span>🎯 Tolérance: {(config.relative_gap_limit * 100).toFixed(0)}%</span>
+            {!isUnlimitedTime && (
+              <div className="mt-6 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 border border-blue-200">
+                <div className="flex justify-between text-sm text-gray-700 mb-3 font-medium">
+                  <span>⏱️ Max: {config.max_time_in_seconds >= 3600 ? `${(config.max_time_in_seconds / 3600).toFixed(1)}h` : `${(config.max_time_in_seconds / 60).toFixed(0)}min`}</span>
+                  <span>🎯 Tolérance: {(config.relative_gap_limit * 100).toFixed(0)}%</span>
+                </div>
+                <div className="relative w-full h-3 bg-blue-200 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${Math.min((elapsedTime / config.max_time_in_seconds) * 100, 100)}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-xs text-blue-600 mt-2 font-semibold">
+                  <span>0%</span>
+                  <span>{Math.min((elapsedTime / config.max_time_in_seconds) * 100, 100).toFixed(1)}%</span>
+                  <span>100%</span>
+                </div>
               </div>
-              <div className="relative w-full h-3 bg-blue-200 rounded-full overflow-hidden">
-                <div 
-                  className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-500 transition-all duration-300 rounded-full"
-                  style={{ width: `${Math.min((elapsedTime / config.max_time_in_seconds) * 100, 100)}%` }}
-                ></div>
-              </div>
-              <div className="flex justify-between text-xs text-blue-600 mt-2 font-semibold">
-                <span>0%</span>
-                <span>{Math.min((elapsedTime / config.max_time_in_seconds) * 100, 100).toFixed(1)}%</span>
-                <span>100%</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}
