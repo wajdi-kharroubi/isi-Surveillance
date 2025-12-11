@@ -39,21 +39,22 @@ class SurveillanceOptimizerV3:
 
     RÈGLES DE PRÉFÉRENCE (Contraintes souples - SOFT):
     1. Respect des vœux de NON-disponibilité (vœux = créneaux où l'enseignant NE VEUT PAS surveiller)
-    2. Présence des responsables d'examen (favorisée mais non obligatoire)
-    3. Équilibre entre séances de taille similaire
-    4. Interdiction première + dernière séance isolées
-    5. Regroupement des séances
+    2. Nombre maximum de séances par jour
+    3. Regroupement des séances (limiter les heures creuses)
+    4. Présence des responsables d'examen (favorisée mais non obligatoire)
+    5. Équilibre entre séances de taille similaire
+    6. Interdiction première + dernière séance isolées
 
     PRIORITÉ DES CONTRAINTES (ordre d'importance):
     1. ÉGALITÉ STRICTE par Grade (PRIORITÉ 1 - OBLIGATOIRE)
     2. Quota Maximum Strict par Grade (PRIORITÉ 1 - OBLIGATOIRE)
     3. Nombre d'Enseignants par Séance (PRIORITÉ 2 - OBLIGATOIRE)
-    4. Nombre Maximum de Séances par Jour (PRIORITÉ 2.5 - OBLIGATOIRE)
-    5. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3 - SOUPLE)
-    6. Présence des Responsables d'Examens (PRIORITÉ 4 - SOUPLE)
-    7. Équilibre entre Séances de Taille Similaire (PRIORITÉ 5)
-    8. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 6)
-    9. Regroupement des Séances (PRIORITÉ 7)
+    4. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3 - SOUPLE - POIDS LE PLUS ÉLEVÉ)
+    5. Nombre Maximum de Séances par Jour (PRIORITÉ 4 - SOUPLE)
+    6. Regroupement des Séances (PRIORITÉ 5 - SOUPLE - limiter heures creuses)
+    7. Présence des Responsables d'Examens (PRIORITÉ 6 - SOUPLE)
+    8. Équilibre entre Séances de Taille Similaire (PRIORITÉ 7)
+    9. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 8)
     """
 
     def __init__(self, db: Session):
@@ -193,7 +194,7 @@ class SurveillanceOptimizerV3:
             allow_fallback,
         )
 
-        # CONTRAINTE 3: Respect des vœux de NON-disponibilité (PRIORITÉ 3)
+        # CONTRAINTE 3: Respect des vœux de NON-disponibilité (PRIORITÉ 3 - SOUPLE - POIDS LE PLUS ÉLEVÉ)
         preferences_voeux = {}
         if respecter_voeux and list_voeux:
             preferences_voeux = self._contrainte_voeux(
@@ -204,19 +205,26 @@ class SurveillanceOptimizerV3:
         else:
             pass
 
-        # CONTRAINTE 4: Favoriser la présence des responsables (PRIORITÉ 4 - SOUPLE)
-        preferences_responsables = self._contrainte_responsables(
-            responsables_examens, seances, affectations_vars, enseignants
-        )
-
-        # CONTRAINTE 5: Non-conflit horaire (automatique avec séances)
-
-        # CONTRAINTE 5bis: Nombre maximum de séances par jour pour chaque enseignant (PRIORITÉ 5 - SOUPLE)
+        # CONTRAINTE 4: Nombre maximum de séances par jour (PRIORITÉ 4 - SOUPLE)
         penalite_max_seances = self._contrainte_nombre_max_seances_par_jour(
             enseignants, seances, affectations_vars
         )
 
-        # CONTRAINTE 6: Équilibre entre séances (PRIORITÉ 6)
+        # CONTRAINTE 5: Favoriser séances consécutives - Regroupement (PRIORITÉ 5 - SOUPLE - limiter heures creuses)
+        bonus_consecutivite = None
+        if activer_regroupement_temporel:
+            bonus_consecutivite = self._contrainte_seances_consecutives(
+                seances, enseignants, affectations_vars
+            )
+        else:
+            pass
+
+        # CONTRAINTE 6: Favoriser la présence des responsables (PRIORITÉ 6 - SOUPLE)
+        preferences_responsables = self._contrainte_responsables(
+            responsables_examens, seances, affectations_vars, enseignants
+        )
+
+        # CONTRAINTE 7: Équilibre entre séances (PRIORITÉ 7 - OBLIGATOIRE)
         self._contrainte_equilibre_entre_seances(
             seances,
             enseignants,
@@ -225,19 +233,12 @@ class SurveillanceOptimizerV3:
             min_surveillants_par_examen,
         )
 
-        # CONTRAINTE 7: Pénaliser première+dernière séance isolées (PRIORITÉ 7 - SOUPLE)
+        # CONTRAINTE 8: Pénaliser première+dernière séance isolées (PRIORITÉ 8 - SOUPLE)
         penalite_isolees = self._contrainte_interdire_premiere_derniere_isolees(
             seances, enseignants, affectations_vars
         )
 
-        # CONTRAINTE 8: Favoriser séances consécutives (PRIORITÉ 8 - OPTIONNEL)
-        bonus_consecutivite = None
-        if activer_regroupement_temporel:
-            bonus_consecutivite = self._contrainte_seances_consecutives(
-                seances, enseignants, affectations_vars
-            )
-        else:
-            pass
+        # Non-conflit horaire: automatique avec séances (pas de contrainte spécifique nécessaire)
 
         # ===== PHASE 7: FONCTION OBJECTIF =====
 
@@ -389,7 +390,7 @@ class SurveillanceOptimizerV3:
         enseignants: List[Enseignant],
     ) -> Dict:
         """
-        CONTRAINTE 4 (PRIORITÉ 4 - SOUPLE): Favoriser la présence des responsables d'examens.
+        CONTRAINTE 6 (PRIORITÉ 6 - SOUPLE): Favoriser la présence des responsables d'examens.
         
         Cette contrainte est maintenant SOUPLE pour éviter les problèmes d'infaisabilité.
         Le responsable PEUT surveiller d'autres examens pendant le même créneau.
@@ -715,7 +716,7 @@ class SurveillanceOptimizerV3:
         affectations_vars: Dict,
     ):
         """
-        CONTRAINTE 5 (PRIORITÉ 5 - SOUPLE): Nombre maximum de séances par jour pour chaque enseignant.
+        CONTRAINTE 4 (PRIORITÉ 4 - SOUPLE): Nombre maximum de séances par jour pour chaque enseignant.
 
         RÈGLE: Chaque enseignant a un attribut `nombre_max` qui indique le nombre maximum
         de séances qu'il peut surveiller dans une même journée.
@@ -903,7 +904,7 @@ class SurveillanceOptimizerV3:
         min_surveillants_par_examen: int,
     ):
         """
-        CONTRAINTE 6 (PRIORITÉ 6): Équilibre adaptatif entre séances de taille similaire.
+        CONTRAINTE 7 (PRIORITÉ 7 - OBLIGATOIRE): Équilibre adaptatif entre séances de taille similaire.
 
         Les séances ayant le même nombre d'examens doivent avoir approximativement
         le même nombre d'enseignants affectés, avec une tolérance adaptée au contexte.
@@ -1006,7 +1007,7 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 7 (PRIORITÉ 7 - SOUPLE): Pénaliser d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
+        CONTRAINTE 8 (PRIORITÉ 8 - SOUPLE): Pénaliser d'avoir UNIQUEMENT la première ET la dernière séance d'un jour.
 
         Règle souple:
         - Si un enseignant a la 1ère séance ET la dernière séance d'un jour SANS séance intermédiaire
@@ -1102,7 +1103,7 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 8 (PRIORITÉ 8 - OPTIONNELLE): Favorise le regroupement des séances par jour.
+        CONTRAINTE 5 (PRIORITÉ 5 - SOUPLE): Favorise le regroupement des séances par jour (limiter heures creuses).
         VERSION OPTIMISÉE pour performance.
 
         Objectifs:
@@ -1238,11 +1239,11 @@ class SurveillanceOptimizerV3:
         ORDRE DES PRIORITÉS (selon les contraintes définies):
         - PRIORITÉ 1-2: ÉGALITÉ par grade + Quota maximum + Nombre d'enseignants (CONTRAINTES FORTES - garanties)
         - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ - SOUPLE)
-        - PRIORITÉ 4: Présence des responsables (POIDS TRÈS ÉLEVÉ - SOUPLE)
-        - PRIORITÉ 5: Respect du nombre max de séances/jour (POIDS MOYEN - SOUPLE)
-        - PRIORITÉ 6: Équilibre entre séances (CONTRAINTE FORTE - garantie)
-        - PRIORITÉ 7: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
-        - PRIORITÉ 8: Regroupement des séances (POIDS SECONDAIRE - SOUPLE)
+        - PRIORITÉ 4: Respect du nombre max de séances/jour (POIDS ÉLEVÉ - SOUPLE)
+        - PRIORITÉ 5: Regroupement des séances (POIDS MOYEN - SOUPLE - limiter heures creuses)
+        - PRIORITÉ 6: Présence des responsables (POIDS MOYEN - SOUPLE)
+        - PRIORITÉ 7: Équilibre entre séances (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 8: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
 
         ADAPTATION SELON LE MODE:
         
@@ -1359,14 +1360,29 @@ class SurveillanceOptimizerV3:
         # PRIORITÉ 3: ÉVITER les vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ)
         if penalite_voeux is not None:
             composantes.append(penalite_voeux)
-            # MODE ADAPTATIF: Poids augmenté pour mieux respecter les vœux
-            # MODE NORMAL: Poids plus élevé car pas besoin d'optimiser les quotas
+            # MODE ADAPTATIF: Poids le plus élevé pour respecter les vœux
+            # MODE NORMAL: Poids le plus élevé car c'est la priorité absolue
             if mode_adaptatif:
-                poids.append(-45 if not activer_regroupement_temporel else -40)
+                poids.append(-50)  # Poids le plus élevé
             else:
-                poids.append(-50 if not activer_regroupement_temporel else -40)
+                poids.append(-60)  # Poids le plus élevé en mode normal
 
-        # PRIORITÉ 4: MAXIMISER la présence des responsables (POIDS TRÈS ÉLEVÉ - SOUPLE)
+        # PRIORITÉ 4: Pénalité dépassement nombre max séances/jour (POIDS ÉLEVÉ - SOUPLE)
+        if penalite_max_seances is not None:
+            composantes.append(penalite_max_seances)
+            # Deuxième priorité après les vœux
+            if mode_adaptatif:
+                poids.append(-35)  # Poids élevé
+            else:
+                poids.append(-40)  # Poids élevé en mode normal
+
+        # PRIORITÉ 5: Bonus regroupement (POIDS MOYEN pour limiter heures creuses)
+        if activer_regroupement_temporel and bonus_consecutivite is not None:
+            composantes.append(bonus_consecutivite)
+            # Troisième priorité - important pour le confort des enseignants
+            poids.append(30)  # Poids moyen positif
+
+        # PRIORITÉ 6: MAXIMISER la présence des responsables (POIDS MOYEN - SOUPLE)
         bonus_responsables = None
         if preferences_responsables and preferences_responsables.get('variables'):
             responsables_vars = preferences_responsables['variables']
@@ -1380,21 +1396,11 @@ class SurveillanceOptimizerV3:
                 self.model.Add(bonus_responsables == sum(responsables_vars))
                 
                 composantes.append(bonus_responsables)
-                # MODE ADAPTATIF: Poids augmenté pour favoriser les responsables
-                # MODE NORMAL: Poids élevé
+                # Quatrième priorité
                 if mode_adaptatif:
-                    poids.append(35 if not activer_regroupement_temporel else 30)
+                    poids.append(20)  # Poids moyen
                 else:
-                    poids.append(50 if not activer_regroupement_temporel else 30)
-
-        # PRIORITÉ 5: Pénalité dépassement nombre max séances/jour (POIDS MOYEN - SOUPLE)
-        if penalite_max_seances is not None:
-            composantes.append(penalite_max_seances)
-            # MODE ADAPTATIF: Poids réduit pour laisser priorité à la maximisation des quotas
-            if mode_adaptatif:
-                poids.append(-15)
-            else:
-                poids.append(-30)  # Poids moyen: -30 (PRIORITÉ 5)
+                    poids.append(25)  # Poids moyen en mode normal
 
         # Équilibre global de charge (minimiser dispersion globale entre TOUS les enseignants)
         # ⚠️ DÉSACTIVÉ EN MODE ADAPTATIF : La dispersion inter-grades est structurelle (quotas différents)
@@ -1455,17 +1461,12 @@ class SurveillanceOptimizerV3:
                 # Poids réduit pour laisser priorité à la maximisation des quotas
                 poids.append(-10 if activer_regroupement_temporel else -12)
 
-        # PRIORITÉ 7: Pénalité première+dernière isolées (POIDS MOYEN - SOUPLE)
+        # PRIORITÉ 8: Pénalité première+dernière isolées (POIDS FAIBLE - SOUPLE)
         if penalite_isolees is not None:
             composantes.append(penalite_isolees)
             # Poids négatif pour éviter les séances isolées (première+dernière sans intermédiaire)
-            # Poids modéré: -20 (moins important que les vœux et responsables)
-            poids.append(-20)
-
-        # PRIORITÉ 8: Bonus regroupement (POIDS FAIBLE pour meilleur confort enseignants)
-        if activer_regroupement_temporel and bonus_consecutivite is not None:
-            composantes.append(bonus_consecutivite)
-            poids.append(10)  # Poids faible: 10 (PRIORITÉ 8 - la plus basse)
+            # Poids faible car moins important que les contraintes précédentes
+            poids.append(-15)
 
         if composantes:
             # Calculer les bornes du score combiné
