@@ -382,7 +382,10 @@ def absences_seances(db: Session = Depends(get_db)):
     presence_map = {}
     for p in presences:
         key = (p.date_exam, p.h_debut, p.h_fin, p.session, p.semestre, p.enseignant_id)
-        presence_map[key] = p.present
+        presence_map[key] = {
+            "present": p.present,
+            "salle_affectee": p.salle_affectee
+        }
 
     # 4. Construire le résultat et préparer les présences manquantes
     new_presences = []
@@ -391,12 +394,13 @@ def absences_seances(db: Session = Depends(get_db)):
     for (date, h_debut, h_fin, session, semestre), val in seances.items():
         enseignants_list = list(val["enseignants"].values())
         
-        # Appliquer le statut de présence
+        # Appliquer le statut de présence et la salle affectée
         for ens in enseignants_list:
             pkey = (date, h_debut, h_fin, session, semestre, ens["id"])
             
             if pkey in presence_map:
-                ens["present"] = presence_map[pkey]
+                ens["present"] = presence_map[pkey]["present"]
+                ens["salle_affectee"] = presence_map[pkey]["salle_affectee"]
             else:
                 # Préparer la création
                 new_presences.append(
@@ -411,6 +415,7 @@ def absences_seances(db: Session = Depends(get_db)):
                     )
                 )
                 ens["present"] = True
+                ens["salle_affectee"] = None
 
         result.append(
             {
@@ -465,6 +470,7 @@ def mark_presence(request: PresenceMarkRequest, db: Session = Depends(get_db)):
 
     if existing:
         existing.present = request.present
+        existing.salle_affectee = request.salle_affectee  # Mise à jour de la salle
         db.add(existing)
         db.commit()
         db.refresh(existing)
@@ -479,6 +485,7 @@ def mark_presence(request: PresenceMarkRequest, db: Session = Depends(get_db)):
         session=request.session,
         semestre=request.semestre,
         present=request.present,
+        salle_affectee=request.salle_affectee,  # Ajout de la salle
     )
     db.add(p)
     db.commit()
@@ -561,6 +568,111 @@ def absences_stats(db: Session = Depends(get_db)):
         "global_taux_presence": global_taux,
         "seances": seances,
     }
+
+
+@router.get("/absences/export-salles-excel")
+def export_salles_surveillants_excel(
+    background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+):
+    """Exporte le nombre de surveillants par salle pour chaque séance au format Excel."""
+    import pandas as pd
+    import os
+    from config import EXPORT_DIR
+    from fastapi.responses import FileResponse
+    
+    # Récupérer tous les examens groupés par séance
+    examens = db.query(Examen).all()
+    
+    # Grouper par séance
+    seances = {}
+    for ex in examens:
+        key = (ex.dateExam, ex.h_debut, ex.h_fin, ex.session, ex.semestre)
+        if key not in seances:
+            seances[key] = []
+        seances[key].append(ex.cod_salle)
+    
+    # Récupérer toutes les présences
+    presences = db.query(Presence).all()
+    
+    # Créer un dictionnaire pour compter les surveillants par salle
+    rows = []
+    for (date, h_debut, h_fin, session, semestre), salles in seances.items():
+        # Pour chaque salle de la séance
+        for salle in salles:
+            # Compter les surveillants affectés à cette salle spécifique
+            nb_surveillants = sum(
+                1 for p in presences 
+                if p.date_exam == date 
+                and p.h_debut == h_debut 
+                and p.h_fin == h_fin 
+                and p.session == session 
+                and p.semestre == semestre
+                and p.salle_affectee == salle
+                and p.present == True
+            )
+            
+            rows.append({
+                "Date": date.strftime("%d/%m/%Y") if date else "",
+                "Heure Début": str(h_debut)[:5] if h_debut else "",
+                "Heure Fin": str(h_fin)[:5] if h_fin else "",
+                "Session": session or "",
+                "Semestre": semestre or "",
+                "Salle": salle or "",
+                "Nb Surveillants": nb_surveillants,
+            })
+    
+    # Créer le DataFrame
+    df = pd.DataFrame(rows)
+    
+    # Trier par date, heure, puis salle
+    df = df.sort_values(["Date", "Heure Début", "Salle"])
+    
+    # Générer le fichier Excel
+    filename = f"surveillants_par_salle_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filepath = os.path.join(EXPORT_DIR, filename)
+    
+    # Sauvegarder en Excel avec mise en forme
+    with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Surveillants par Salle", index=False)
+        
+        # Récupérer la feuille pour la mise en forme
+        worksheet = writer.sheets["Surveillants par Salle"]
+        
+        # Ajuster la largeur des colonnes
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        # Formater l'en-tête
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        header_fill = PatternFill(
+            start_color="1F4E78", end_color="1F4E78", fill_type="solid"
+        )
+        header_font = Font(bold=True, color="FFFFFF")
+        
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+    
+    # Ajouter une tâche en arrière-plan pour supprimer le fichier après envoi
+    background_tasks.add_task(os.remove, filepath)
+    
+    # Retourner le fichier
+    return FileResponse(
+        path=filepath,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @router.get("/absences/export-excel")

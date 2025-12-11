@@ -293,6 +293,7 @@ class PresenceMarkRequest(BaseModel):
     session: str
     semestre: str
     present: bool
+    salle_affectee: Optional[str] = None  # Code de la salle affectée à l'enseignant
 
 
 class PresenceResponse(BaseModel):
@@ -304,6 +305,7 @@ class PresenceResponse(BaseModel):
     session: str
     semestre: str
     present: bool
+    salle_affectee: Optional[str] = None  # Code de la salle affectée à l'enseignant
     created_at: datetime
 
     class Config:

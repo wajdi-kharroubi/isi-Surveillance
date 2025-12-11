@@ -13,6 +13,7 @@ import {
   Search
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import SalleSelectionModal from '../components/SalleSelectionModal';
 
 export default function Absence() {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
@@ -30,6 +31,9 @@ export default function Absence() {
     total_absent: 0,
     global_taux_presence: 0
   });
+  const [showSalleModal, setShowSalleModal] = useState(false);
+  const [selectedSeanceForSalle, setSelectedSeanceForSalle] = useState(null);
+  const [selectedEnseignantForSalle, setSelectedEnseignantForSalle] = useState(null);
 
   useEffect(() => {
     loadSeances();
@@ -79,6 +83,30 @@ export default function Absence() {
       console.error('Erreur export Excel', err);
       toast.dismiss();
       toast.error('Erreur lors de l\'export Excel');
+    }
+  };
+
+  const exportSallesToExcel = async () => {
+    try {
+      toast.loading('Génération du fichier Excel...');
+      const response = await absenceAPI.exportSallesExcel();
+      
+      // Créer un lien de téléchargement
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `surveillants_par_salle_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss();
+      toast.success('Export des salles téléchargé avec succès');
+    } catch (err) {
+      console.error('Erreur export salles', err);
+      toast.dismiss();
+      toast.error('Erreur lors de l\'export des salles');
     }
   };
 
@@ -210,6 +238,7 @@ export default function Absence() {
       session: seance.session,
       semestre: seance.semestre,
       present: value,
+      salle_affectee: value ? enseignant.salle_affectee : null, // Libérer la salle si absent
     };
 
     try {
@@ -226,15 +255,68 @@ export default function Absence() {
             return {
               ...s,
               enseignants: s.enseignants.map((e) =>
-                e.id === enseignant.id ? { ...e, present: res.data.present } : e
+                e.id === enseignant.id 
+                  ? { ...e, present: res.data.present, salle_affectee: value ? e.salle_affectee : null } 
+                  : e
               ),
             };
           }
           return s;
         })
       );
-      toast.success('Statut mis à jour');
+      toast.success(value ? 'Enseignant marqué présent' : 'Enseignant marqué absent - Salle libérée');
       refreshStats(); // Update stats after setting presence
+    } catch (err) {
+      console.error('Erreur set presence', err);
+      toast.error('Impossible de mettre à jour');
+    }
+  };
+
+  const openSalleModal = (seance, enseignant) => {
+    setSelectedSeanceForSalle(seance);
+    setSelectedEnseignantForSalle(enseignant);
+    setShowSalleModal(true);
+  };
+
+  const handleSalleSelection = async (salle) => {
+    if (!selectedSeanceForSalle || !selectedEnseignantForSalle) return;
+
+    const payload = {
+      enseignant_id: selectedEnseignantForSalle.id,
+      date_exam: selectedSeanceForSalle.date,
+      h_debut: selectedSeanceForSalle.h_debut,
+      h_fin: selectedSeanceForSalle.h_fin,
+      session: selectedSeanceForSalle.session,
+      semestre: selectedSeanceForSalle.semestre,
+      present: true,
+      salle_affectee: salle.code_salle, // Ajouter la salle sélectionnée
+    };
+
+    try {
+      const res = await absenceAPI.markPresence(payload);
+      setSeances((prev) =>
+        prev.map((s) => {
+          if (
+            s.date === selectedSeanceForSalle.date &&
+            s.h_debut === selectedSeanceForSalle.h_debut &&
+            s.h_fin === selectedSeanceForSalle.h_fin &&
+            s.session === selectedSeanceForSalle.session &&
+            s.semestre === selectedSeanceForSalle.semestre
+          ) {
+            return {
+              ...s,
+              enseignants: s.enseignants.map((e) =>
+                e.id === selectedEnseignantForSalle.id 
+                  ? { ...e, present: res.data.present, salle_affectee: salle.code_salle } 
+                  : e
+              ),
+            };
+          }
+          return s;
+        })
+      );
+      toast.success(`Présence marquée - Salle ${salle.code_salle}`);
+      refreshStats();
     } catch (err) {
       console.error('Erreur set presence', err);
       toast.error('Impossible de mettre à jour');
@@ -275,16 +357,17 @@ export default function Absence() {
             
             <div className="flex items-center gap-3">
               <button 
-                onClick={loadSeances}
-                className="px-4 py-2 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 border border-white/30"
+                onClick={exportSallesToExcel}
+                className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105"
               >
-                Actualiser
+                <Download className="w-4 h-4" />
+                Export Salles
               </button>
               <button 
                 onClick={exportToExcel}
-                className="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg shadow-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 hover:scale-105"
+                className="px-4 py-2 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg flex items-center gap-2 font-semibold text-sm transition-all duration-200 border border-white/30"
               >
-                Exporter Excel
+                Export Absences
               </button>
             </div>
           </div>
@@ -581,6 +664,12 @@ export default function Absence() {
                                 {e.grade_code}
                               </span>
                             )}
+                            {e.salle_affectee && (
+                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-semibold flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                {e.salle_affectee}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -600,8 +689,24 @@ export default function Absence() {
                         </div>
                       </div>
 
-                      {/* Actions - Bouton conditionnel selon l'état */}
+                      {/* Actions - Boutons d'affectation et de présence */}
                       <div className="flex items-center gap-2 ml-4">
+                        {/* Bouton d'affectation de salle - désactivé si absent */}
+                        <button
+                          onClick={() => openSalleModal(s, e)}
+                          disabled={e.present === false}
+                          className={`px-3 py-2 border rounded-lg font-bold text-sm transition-all flex items-center gap-1 ${
+                            e.present === false
+                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                              : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border-indigo-300'
+                          }`}
+                          title={e.present === false ? "L'enseignant doit être présent pour affecter une salle" : "Affecter une salle"}
+                        >
+                          <MapPin className="w-4 h-4" />
+                          +
+                        </button>
+
+                        {/* Boutons conditionnels de présence/absence */}
                         {e.present === false ? (
                           <button
                             onClick={() => setPresence(s, e, true)}
@@ -627,6 +732,18 @@ export default function Absence() {
           );
         })}
       </div>
+
+      {/* Modal de sélection de salle */}
+      <SalleSelectionModal
+        isOpen={showSalleModal}
+        onClose={() => {
+          setShowSalleModal(false);
+          setSelectedSeanceForSalle(null);
+          setSelectedEnseignantForSalle(null);
+        }}
+        seance={selectedSeanceForSalle}
+        onSelectSalle={handleSalleSelection}
+      />
     </div>
   );
 }

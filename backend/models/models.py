@@ -328,6 +328,7 @@ class Presence(Base):
     session = Column(String(20), nullable=False, index=True)
     semestre = Column(String(20), nullable=False, index=True)
     present = Column(Boolean, nullable=False, default=True, index=True)
+    salle_affectee = Column(String(50), nullable=True)  # Code de la salle affectée à l'enseignant
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relations
@@ -339,7 +340,7 @@ class Presence(Base):
     )
 
     def __repr__(self):
-        return f"<Presence Enseignant:{self.enseignant_id} {self.date_exam} {self.h_debut}-{self.h_fin} present:{self.present}>"
+        return f"<Presence Enseignant:{self.enseignant_id} {self.date_exam} {self.h_debut}-{self.h_fin} present:{self.present} salle:{self.salle_affectee}>"
 
 
 class SessionArchive(Base):

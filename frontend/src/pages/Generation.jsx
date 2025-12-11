@@ -19,7 +19,7 @@ export default function Generation() {
   const [config, setConfig] = useState({
     min_surveillants_par_salle: 3,
     allow_single_surveillant: true,
-    max_time_in_seconds: 600, // 10 minutes par défaut 
+    max_time_in_seconds: 3600, // 1 heure par défaut 
     relative_gap_limit: 0.05, // 5% de tolérance par défaut
   });
   const [isUnlimitedTime, setIsUnlimitedTime] = useState(false);

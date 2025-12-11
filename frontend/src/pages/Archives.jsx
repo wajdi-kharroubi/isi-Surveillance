@@ -11,10 +11,12 @@ import {
   FunnelIcon,
   XMarkIcon,
   ArrowUturnLeftIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
+import ArchiveSessionModal from '../components/ArchiveSessionModal';
 
 export default function Archives() {
   const [archives, setArchives] = useState([]);
@@ -27,6 +29,7 @@ export default function Archives() {
   const [showRecoverConfirm, setShowRecoverConfirm] = useState(false);
   const [archiveToDelete, setArchiveToDelete] = useState(null);
   const [archiveToRecover, setArchiveToRecover] = useState(null);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   
   // Filtres
   const [filtreAnnee, setFiltreAnnee] = useState('');
@@ -170,6 +173,12 @@ export default function Archives() {
     return labels[session] || session;
   };
 
+  const handleArchiveSuccess = () => {
+    setShowArchiveModal(false);
+    chargerDonnees();
+    toast.success('Archive créée avec succès');
+  };
+
   return (
     <div className="space-y-6">
       {/* En-tête */}
@@ -183,6 +192,13 @@ export default function Archives() {
             Historique complet des sessions de surveillances validées et archivées
           </p>
         </div>
+        <button
+          onClick={() => setShowArchiveModal(true)}
+          className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
+        >
+          <PlusIcon className="w-5 h-5" />
+          Nouvelle Archive
+        </button>
       </div>
 
       {/* Statistiques globales */}
@@ -427,6 +443,12 @@ export default function Archives() {
         message="Cela va restaurer les données dans le système actuel."
         confirmText="Récupérer"
         type="info"
+      />
+
+      <ArchiveSessionModal
+        isOpen={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onSuccess={handleArchiveSuccess}
       />
     </div>
   );

@@ -215,6 +215,7 @@ def _create_snapshot_presences(db: Session, semestre: str, session: str, date_de
             "semestre": pres.semestre,
             "session": pres.session,
             "present": pres.present,
+            "salle_affectee": pres.salle_affectee,
         })
     
     return json.dumps(presences_data, ensure_ascii=False)
@@ -777,6 +778,7 @@ async def restaurer_archive(
                         session=presence_data['session'],
                         semestre=presence_data['semestre'],
                         present=presence_data['present'],
+                        salle_affectee=presence_data.get('salle_affectee'),
                     )
                     db.add(nouvelle_presence)
                     nb_presences_ajoutees += 1

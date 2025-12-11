@@ -165,6 +165,10 @@ export const absenceAPI = {
     api.get('/planning/absences/export-excel', { 
       responseType: 'blob' 
     }),
+  exportSallesExcel: () => 
+    api.get('/planning/absences/export-salles-excel', { 
+      responseType: 'blob' 
+    }),
 };
 
 // ========== Statistiques ==========
