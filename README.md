@@ -1008,23 +1008,22 @@ Pour plus de détails, consultez :
 
 **Format requis :**
 
-| Colonne      | Type  | Obligatoire | Description                         | Exemple    |
-| ------------ | ----- | ----------- | ----------------------------------- | ---------- |
-| `Enseignant` | Code  | ✅          | Code enseignant                     | M.BENAMMOU |
-| `Semestre`   | Texte | ✅          | Semestre (Semestre 1/Semestre 2)    | Semestre 1 |
-| `Session`    | Texte | ✅          | Session (Partiel/Examen/Rattrapage) | Partiel    |
-| `Date`       | Date  | ✅          | Date (format j/m/a)                 | 15/01/2025 |
-| `Jour`       | Texte | ✅          | Jour de la semaine                  | Lundi      |
-| `Séances`    | Code  | ✅          | Code séance (S1/S2/S3/S4)           | S1,S2,S3   |
-|` Nombre-Max` | entier |  ✅        | nombre de seance max par jour       | 2          |
+| Colonne              | Type   | Obligatoire | Description                                    | Exemple    |
+| -------------------- | ------ | ----------- | ---------------------------------------------- | ---------- |
+| `Enseignant`         | Code   | ✅          | Code enseignant                                | M.BENAMMOU |
+| `Semestre`           | Texte  | ✅          | Semestre (1 ou 2)                              | 1          |
+| `Session`            | Texte  | ✅          | Session (Partiel/Examen/Rattrapage)            | Partiel    |
+| `Date`               | Date   | ✅          | Date (format j/m/a) - Le jour est auto-calculé | 15/01/2025 |
+| `Séance`             | Code   | ✅          | Code séance (S1/S2/S3/S4)                      | S1,S2,S3   |
+| `Nbr MaxSéances/jour`| entier | ⚪          | Nombre de séances max par jour (optionnel)     | 2          |
 
 **Exemple de fichier :**
 
-| Enseignant  | Semestre   | Session | Date       | Jour   | Séances | Nombre-Max|
-| ----------- | ---------- | ------- | ---------- | ------ | ------- |-----------|
-| M.BENAMMOU  | Semestre 1 | Partiel | 15/01/2025 | Lundi  | S1      |2          |
-| W.KHARROUBI | Semestre 1 | Partiel | 15/01/2025 | Lundi  | S3      |3          |
-| J.DUPEN     | Semestre 1 | Partiel | 20/01/2025 | Samedi | S2      |3          |
+| Enseignant  | Semestre | Session | Date       | Séance | Nbr MaxSéances/jour |
+| ----------- | -------- | ------- | ---------- | ------ | ------------------- |
+| M.BENAMMOU  | 1        | Partiel | 15/01/2025 | S1     | 2                   |
+| W.KHARROUBI | 1        | Partiel | 15/01/2025 | S3     | 3                   |
+| J.DUPEN     | 1        | Partiel | 20/01/2025 | S2     | 3                   |
 
 ### Exports Disponibles
 

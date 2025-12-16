@@ -198,7 +198,7 @@ export default function DataManager() {
       color: 'from-red-500 to-red-600',
       bgColor: 'bg-red-50',
       borderColor: 'border-red-200',
-      examples: ['Enseignant', 'Semestre', 'Session', 'Date', 'Jour', 'Séances', 'Nombre-Max'],
+      examples: ['Enseignant', 'Semestre', 'Session', 'Date', 'Séance', 'Nbr MaxSéances/jour'],
     },
   ];
 

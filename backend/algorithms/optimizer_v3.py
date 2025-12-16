@@ -272,8 +272,8 @@ class SurveillanceOptimizerV3:
         if max_time_in_seconds is not None:
             self.solver.parameters.max_time_in_seconds = max_time_in_seconds
         else:
-            # Temps illimité : on met une valeur très élevée (10 jours)
-            self.solver.parameters.max_time_in_seconds = 864000
+            # Temps illimité : on met une valeur très élevée (1 jour)
+            self.solver.parameters.max_time_in_seconds = 86400
         
         self.solver.parameters.log_search_progress = (
             False  # Désactiver les logs verbeux
