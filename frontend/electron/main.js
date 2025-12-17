@@ -7,6 +7,36 @@ let mainWindow;
 let pythonProcess;
 let backendReady = false;
 
+// Fonction pour s'assurer que la structure de dossiers existe
+function ensureDataFolderStructure() {
+  if (!app.isPackaged) {
+    // Ne rien faire en mode développement
+    return;
+  }
+
+  try {
+    const appData = process.env.APPDATA || path.join(require('os').homedir(), 'AppData', 'Roaming');
+    const dataFolder = path.join(appData, 'GestionSurveillances');
+    
+    // Créer le dossier et les sous-dossiers s'ils n'existent pas
+    if (!fs.existsSync(dataFolder)) {
+      fs.mkdirSync(dataFolder, { recursive: true });
+      console.log('Created data folder');
+    }
+    
+    const subFolders = ['database', 'uploads', 'exports'];
+    for (const folder of subFolders) {
+      const folderPath = path.join(dataFolder, folder);
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+        console.log(`Created ${folder} folder`);
+      }
+    }
+  } catch (error) {
+    console.error('Error ensuring data folder structure:', error);
+  }
+}
+
 // Fonction pour tuer le processus backend de manière robuste
 function killBackendProcess() {
   if (!pythonProcess) {
@@ -267,6 +297,9 @@ function createWindow() {
 // Lifecycle de l'application
 app.whenReady().then(async () => {
   try {
+    // S'assurer que la structure de dossiers existe
+    ensureDataFolderStructure();
+    
     // Démarrer le backend et attendre qu'il soit prêt
     await startPythonBackend();
     

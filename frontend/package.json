@@ -49,7 +49,9 @@
       "deleteAppDataOnUninstall": false,
       "perMachine": true,
       "runAfterFinish": true,
-      "license": "LICENSE.txt"
+      "license": "LICENSE.txt",
+      "include": "build-resources/installer.nsh",
+      "warningsAsErrors": false
     },
     "files": [
       "dist/**/*",

@@ -22,7 +22,7 @@ import uvicorn
 import logging
 
 from database import init_db
-from config import HOST, PORT, RELOAD, CORS_ORIGINS, LOG_LEVEL, LOG_FORMAT, DEBUG
+from config import HOST, PORT, RELOAD, CORS_ORIGINS, LOG_LEVEL, LOG_FORMAT, DEBUG, ALLOW_ALL_ORIGINS_IN_ELECTRON
 
 # Configuration du logging
 logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT)
@@ -37,12 +37,18 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
+# Detect if running as PyInstaller bundle (Electron app)
+is_frozen = getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
 # Configuration CORS
+# In Electron app, allow all origins since files are loaded from file:// or app.asar
+# In development, allow all origins to avoid CORS issues with local dev servers
+# In production web deployment, restrict to trusted origins only
+allow_origins = ["*"] if (DEBUG or (is_frozen and ALLOW_ALL_ORIGINS_IN_ELECTRON)) else CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    # In development allow all origins to avoid CORS issues with local dev servers.
-    # In production this should be restricted to trusted origins only.
-    allow_origins=(CORS_ORIGINS if not DEBUG else ["*"]),
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
