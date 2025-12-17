@@ -14,6 +14,7 @@ from models.models import (
     SouhaitViole,
     ResponsableAbsent,
     DepassementMaxJour,
+    HeureCreuse,
 )
 from models.schemas import (
     SessionArchiveCreate,
@@ -341,6 +342,26 @@ def _create_snapshot_generation_statistique(db: Session, generation_id: int) -> 
         "nb_contraintes_seances_respectees": generation.nb_contraintes_seances_respectees,
         "nb_contraintes_seances_violees": generation.nb_contraintes_seances_violees,
         "taux_contraintes_seances_respectees": generation.taux_contraintes_seances_respectees,
+        # Statistiques des heures creuses
+        "nb_heures_creuses_total": generation.nb_heures_creuses_total,
+        "nb_enseignants_heures_creuses": generation.nb_enseignants_heures_creuses,
+        # Détails des heures creuses
+        "heures_creuses": [
+            {
+                "enseignant_id": hc.enseignant_id,
+                "enseignant_nom": hc.enseignant_nom,
+                "enseignant_prenom": hc.enseignant_prenom,
+                "code_smartex": hc.code_smartex,
+                "date_exam": hc.date_exam.isoformat() if hc.date_exam else None,
+                "jour_nom": hc.jour_nom,
+                "seances_affectees": hc.seances_affectees,
+                "seance_debut": hc.seance_debut,
+                "seance_fin": hc.seance_fin,
+                "seances_manquantes": hc.seances_manquantes,
+                "nb_trous": hc.nb_trous,
+            }
+            for hc in generation.heures_creuses
+        ] if generation.heures_creuses else [],
     }
     
     return json.dumps(generation_data, ensure_ascii=False)
@@ -619,6 +640,7 @@ async def restaurer_archive(
         db.query(SouhaitViole).delete()
         db.query(ResponsableAbsent).delete()
         db.query(DepassementMaxJour).delete()
+        db.query(HeureCreuse).delete()
         
         # 2. Supprimer les générations statistiques
         db.query(GenerationStatistique).delete()
@@ -830,9 +852,36 @@ async def restaurer_archive(
                         nb_contraintes_seances_respectees=generation_data['nb_contraintes_seances_respectees'],
                         nb_contraintes_seances_violees=generation_data['nb_contraintes_seances_violees'],
                         taux_contraintes_seances_respectees=generation_data['taux_contraintes_seances_respectees'],
+                        # Statistiques des heures creuses
+                        nb_heures_creuses_total=generation_data.get('nb_heures_creuses_total', 0),
+                        nb_enseignants_heures_creuses=generation_data.get('nb_enseignants_heures_creuses', 0),
                     )
                     db.add(nouvelle_generation)
                     db.flush()  # Pour obtenir l'ID
+                    
+                    # Restaurer les heures creuses
+                    if 'heures_creuses' in generation_data and generation_data['heures_creuses']:
+                        for hc_data in generation_data['heures_creuses']:
+                            nouvel_enseignant_id = enseignants_map.get(hc_data['enseignant_id'])
+                            
+                            if nouvel_enseignant_id:
+                                date_exam = dt.fromisoformat(hc_data['date_exam']).date() if hc_data.get('date_exam') else None
+                                
+                                nouvelle_hc = HeureCreuse(
+                                    generation_statistique_id=nouvelle_generation.id,
+                                    enseignant_id=nouvel_enseignant_id,
+                                    enseignant_nom=hc_data['enseignant_nom'],
+                                    enseignant_prenom=hc_data['enseignant_prenom'],
+                                    code_smartex=hc_data['code_smartex'],
+                                    date_exam=date_exam,
+                                    jour_nom=hc_data['jour_nom'],
+                                    seances_affectees=hc_data['seances_affectees'],
+                                    seance_debut=hc_data['seance_debut'],
+                                    seance_fin=hc_data['seance_fin'],
+                                    seances_manquantes=hc_data['seances_manquantes'],
+                                    nb_trous=hc_data['nb_trous'],
+                                )
+                                db.add(nouvelle_hc)
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"Erreur lors du parsing du snapshot de génération: {e}")
                 nouvelle_generation = None

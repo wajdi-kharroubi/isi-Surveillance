@@ -84,6 +84,7 @@ export default function GestionEnseignantsSeanceInline({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emploi-seances'] });
       queryClient.invalidateQueries({ queryKey: ['statistiques'] });
+      queryClient.invalidateQueries({ queryKey: ['charge-enseignants'] });
       toast.success('Enseignant retiré de la séance avec succès');
       if (onUpdate) onUpdate();
     },
@@ -100,6 +101,7 @@ export default function GestionEnseignantsSeanceInline({
       setSelectedEnseignantId('');
       queryClient.invalidateQueries({ queryKey: ['emploi-seances'] });
       queryClient.invalidateQueries({ queryKey: ['statistiques'] });
+      queryClient.invalidateQueries({ queryKey: ['charge-enseignants'] });
       toast.success('Enseignant ajouté à la séance avec succès');
       if (onUpdate) onUpdate();
     },
@@ -108,7 +110,7 @@ export default function GestionEnseignantsSeanceInline({
     },
   });
 
-  const handleSupprimer = (enseignantId) => {
+  const handleSupprimer = async (enseignantId) => {
     // Trouver l'enseignant dans la liste de la séance
     const enseignant = seance.enseignants?.find(e => e.id === enseignantId);
     
@@ -117,21 +119,39 @@ export default function GestionEnseignantsSeanceInline({
       return;
     }
 
-    // Préparer les données de suppression
-    setPendingSuppressionData({
-      enseignant,
-      mutation: {
+    try {
+      // Vérifier les contraintes avant de supprimer
+      const response = await planningAPI.verifierContraintesSuppression({
         enseignant_id: enseignantId,
         date_examen: seance.date,
         h_debut: seance.h_debut,
         h_fin: seance.h_fin,
         session: seance.session,
         semestre: seance.semestre,
-      }
-    });
+      });
 
-    // Afficher la modale de confirmation
-    setShowSuppressionModal(true);
+      const validation = response.data;
+
+      // Préparer les données de suppression avec validation
+      setPendingSuppressionData({
+        enseignant,
+        validation,
+        mutation: {
+          enseignant_id: enseignantId,
+          date_examen: seance.date,
+          h_debut: seance.h_debut,
+          h_fin: seance.h_fin,
+          session: seance.session,
+          semestre: seance.semestre,
+        }
+      });
+
+      // Afficher la modale de confirmation
+      setShowSuppressionModal(true);
+    } catch (error) {
+      console.error('Erreur lors de la vérification des contraintes:', error);
+      toast.error('Erreur lors de la vérification des contraintes');
+    }
   };
 
   // Fonction pour confirmer la suppression
@@ -600,6 +620,26 @@ export default function GestionEnseignantsSeanceInline({
                 </div>
               )}
 
+              {/* Messages positifs */}
+              {validationData.validation.infos && validationData.validation.infos.length > 0 && (
+                <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-green-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Améliorations détectées
+                  </h3>
+                  <ul className="space-y-2">
+                    {validationData.validation.infos.map((info, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-green-800">
+                        <span className="text-green-600 font-bold mt-0.5">✓</span>
+                        <span className="font-semibold">{info}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Avertissements */}
               {validationData.validation.warnings.length > 0 && (
                 <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4">
@@ -788,8 +828,50 @@ export default function GestionEnseignantsSeanceInline({
                 </div>
               )}
 
+              {/* Avertissements sur les heures creuses */}
+              {pendingSuppressionData.validation?.warnings?.length > 0 && (
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-orange-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Avertissements
+                  </h3>
+                  <ul className="space-y-2">
+                    {pendingSuppressionData.validation.warnings.map((warning, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-orange-800">
+                        <span className="text-orange-600 font-bold mt-0.5">•</span>
+                        <span className="font-semibold">{warning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Informations positives sur les heures creuses */}
+              {pendingSuppressionData.validation?.infos?.length > 0 && (
+                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-green-900 mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Informations
+                  </h3>
+                  <ul className="space-y-2">
+                    {pendingSuppressionData.validation.infos.map((info, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-green-800">
+                        <span className="text-green-600 font-bold mt-0.5">•</span>
+                        <span className="font-semibold">{info}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Information générale */}
-              {!pendingSuppressionData.enseignant.est_responsable && (
+              {!pendingSuppressionData.enseignant.est_responsable && 
+               !pendingSuppressionData.validation?.warnings?.length &&
+               !pendingSuppressionData.validation?.infos?.length && (
                 <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
                   <p className="text-sm text-orange-800">
                     <span className="font-bold">ℹ️ Information:</span> Cette action retirera l'enseignant de la séance de surveillance.

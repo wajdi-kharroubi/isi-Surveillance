@@ -342,7 +342,8 @@ class SurveillanceOptimizerV3:
         statistiques_data = {
             'souhaits': {'total': 0, 'respectes': 0, 'violes': 0, 'details_violes': []},
             'responsables': {'total': 0, 'presents': 0, 'absents': 0, 'details_absents': []},
-            'max_seances_jour': {'total': 0, 'respectees': 0, 'violees': 0, 'details_violations': []}
+            'max_seances_jour': {'total': 0, 'respectees': 0, 'violees': 0, 'details_violations': []},
+            'heures_creuses': {'total': 0, 'enseignants_concernes': 0, 'details': []}
         }
         
         # Statistiques sur les vœux de non-disponibilité
@@ -371,6 +372,15 @@ class SurveillanceOptimizerV3:
             enseignants
         )
         statistiques_data['max_seances_jour'] = stats_max_seances
+        
+        # Statistiques sur les heures creuses (séances non consécutives)
+        if activer_regroupement_temporel:
+            stats_heures_creuses = self._generer_statistiques_heures_creuses(
+                affectations_vars,
+                seances,
+                enseignants
+            )
+            statistiques_data['heures_creuses'] = stats_heures_creuses
 
         return (
             True,
@@ -1103,91 +1113,176 @@ class SurveillanceOptimizerV3:
         self, seances: Dict, enseignants: List[Enseignant], affectations_vars: Dict
     ):
         """
-        CONTRAINTE 5 (PRIORITÉ 5 - SOUPLE): Favorise le regroupement des séances par jour (limiter heures creuses).
-        VERSION OPTIMISÉE pour performance.
+        CONTRAINTE 5 (PRIORITÉ 5 - SOUPLE): Favorise le regroupement des séances CONSÉCUTIVES par jour (limiter heures creuses).
+        VERSION AMÉLIORÉE avec détection des heures creuses.
 
         Objectifs:
-        1. Favoriser les séances regroupées dans un même jour (plusieurs séances = BONUS)
-        2. Pénaliser les séances isolées dans un jour (1 seule séance = PÉNALITÉ)
+        1. Favoriser les séances CONSÉCUTIVES dans un même jour (S1-S2, S2-S3, S3-S4) → BONUS
+        2. Pénaliser les HEURES CREUSES (S1-S3, S1-S4, S2-S4 avec des trous) → PÉNALITÉ
+        3. Pénaliser les séances isolées dans un jour (1 seule séance) → PÉNALITÉ
 
-        Règle:
-        - Si un enseignant a N >= 2 séances dans un même jour → BONUS = +N
-        - Si un enseignant a 1 seule séance dans un jour → PÉNALITÉ = -2
+        Règles:
+        - Séances consécutives (ex: S1-S2 ou S2-S3-S4) → BONUS = +3 par paire consécutive
+        - Séances avec heures creuses (ex: S1-S3) → PÉNALITÉ = -5 par trou
+        - 1 seule séance isolée dans un jour → PÉNALITÉ = -2
+
+        Exemples:
+        - S1-S2 (consécutives) → +3
+        - S1-S2-S3 (toutes consécutives) → +6 (2 paires)
+        - S1-S3 (heure creuse S2) → -5
+        - S1-S4 (heures creuses S2 et S3) → -10
+        - S1 seule → -2
 
         Retourne un score de regroupement pour la fonction objectif.
         """
 
-        # Grouper les séances par jour (date uniquement, pas par code de séance)
+        # Grouper les séances par jour et trier par code de séance (S1, S2, S3, S4)
         seances_par_jour = {}
         for seance_key in seances.keys():
             date_exam = seance_key[0]  # Date de l'examen
+            seance_code = seance_key[1]  # Code de séance (S1, S2, S3, S4)
             jour_index = seance_key[4]  # Index du jour (1, 2, 3...)
 
             if jour_index not in seances_par_jour:
-                seances_par_jour[jour_index] = []
-            seances_par_jour[jour_index].append(seance_key)
+                seances_par_jour[jour_index] = {}
+            
+            seances_par_jour[jour_index][seance_code] = seance_key
 
         bonus_total = []
 
+        # Ordre des séances dans une journée
+        ordre_seances = ["S1", "S2", "S3", "S4"]
+
         # Pour chaque enseignant et chaque jour, calculer le bonus/pénalité de regroupement
         for enseignant in enseignants:
-            for jour_index, seances_jour in seances_par_jour.items():
-                # Nombre de séances de cet enseignant ce jour
-                nb_seances_jour = sum(
-                    [
-                        affectations_vars[(seance_key, enseignant.id)]
-                        for seance_key in seances_jour
-                    ]
+            for jour_index, seances_jour_dict in seances_par_jour.items():
+                # Codes de séance disponibles ce jour (triés)
+                codes_disponibles = sorted(
+                    seances_jour_dict.keys(), 
+                    key=lambda x: ordre_seances.index(x)
                 )
+                
+                if not codes_disponibles:
+                    continue
 
-                # Variable pour savoir si l'enseignant a au moins 1 séance ce jour
-                a_une_seance = self.model.NewBoolVar(
+                # Récupérer les variables d'affectation pour chaque séance ce jour
+                affectations_jour = {}
+                for code in codes_disponibles:
+                    seance_key = seances_jour_dict[code]
+                    affectations_jour[code] = affectations_vars[(seance_key, enseignant.id)]
+
+                # Nombre total de séances de cet enseignant ce jour
+                nb_seances_jour = sum(affectations_jour.values())
+
+                # CAS 1: Si l'enseignant n'a aucune séance ce jour → neutre (0)
+                a_seance = self.model.NewBoolVar(
                     f"ens_{enseignant.id}_jour_{jour_index}_a_seance"
                 )
-                self.model.Add(nb_seances_jour >= 1).OnlyEnforceIf(a_une_seance)
-                self.model.Add(nb_seances_jour == 0).OnlyEnforceIf(a_une_seance.Not())
+                self.model.Add(nb_seances_jour >= 1).OnlyEnforceIf(a_seance)
+                self.model.Add(nb_seances_jour == 0).OnlyEnforceIf(a_seance.Not())
 
-                # Variable pour savoir si l'enseignant a au moins 2 séances ce jour (regroupées)
-                a_plusieurs_seances = self.model.NewBoolVar(
-                    f"ens_{enseignant.id}_jour_{jour_index}_a_plusieurs"
+                # CAS 2: Si l'enseignant a exactement 1 séance → pénalité -2
+                seance_unique = self.model.NewBoolVar(
+                    f"ens_{enseignant.id}_jour_{jour_index}_unique"
                 )
-                self.model.Add(nb_seances_jour >= 2).OnlyEnforceIf(a_plusieurs_seances)
-                self.model.Add(nb_seances_jour <= 1).OnlyEnforceIf(
-                    a_plusieurs_seances.Not()
-                )
+                self.model.Add(nb_seances_jour == 1).OnlyEnforceIf(seance_unique)
+                self.model.Add(nb_seances_jour != 1).OnlyEnforceIf(seance_unique.Not())
 
-                # Variable pour savoir si l'enseignant a exactement 1 séance ce jour (isolée)
-                seance_isolee = self.model.NewBoolVar(
-                    f"ens_{enseignant.id}_jour_{jour_index}_isolee"
-                )
-                # seance_isolee = a_une_seance AND NOT a_plusieurs_seances
-                self.model.AddBoolAnd(
-                    [a_une_seance, a_plusieurs_seances.Not()]
-                ).OnlyEnforceIf(seance_isolee)
-                self.model.AddBoolOr(
-                    [a_une_seance.Not(), a_plusieurs_seances]
-                ).OnlyEnforceIf(seance_isolee.Not())
+                # CAS 3: Si l'enseignant a >= 2 séances, calculer les heures creuses et les consécutivités
+                # Pour chaque paire de séances consécutives possibles
+                bonus_consecutivite = []
+                penalites_trous = []
 
-                # Contribution au score pour ce jour:
-                # - Si plusieurs séances (regroupées): bonus = +nb_seances_jour
-                # - Si séance isolée: pénalité = -2
-                # - Si aucune séance: neutre = 0
+                if len(codes_disponibles) >= 2:
+                    # Vérifier chaque paire de séances consécutives
+                    for i in range(len(codes_disponibles) - 1):
+                        code_actuel = codes_disponibles[i]
+                        code_suivant = codes_disponibles[i + 1]
+                        
+                        # Vérifier si ces deux codes sont consécutifs dans l'ordre réel (S1-S2, S2-S3, S3-S4)
+                        idx_actuel = ordre_seances.index(code_actuel)
+                        idx_suivant = ordre_seances.index(code_suivant)
+                        
+                        if idx_suivant == idx_actuel + 1:
+                            # Ces séances sont consécutives dans le planning
+                            # Bonus si l'enseignant a les deux
+                            a_les_deux = self.model.NewBoolVar(
+                                f"ens_{enseignant.id}_jour_{jour_index}_{code_actuel}_{code_suivant}"
+                            )
+                            self.model.AddMultiplicationEquality(
+                                a_les_deux, 
+                                [affectations_jour[code_actuel], affectations_jour[code_suivant]]
+                            )
+                            bonus_consecutivite.append(a_les_deux)
+                    
+                    # Détecter les heures creuses (séances non consécutives)
+                    # Pour toutes les paires de séances de l'enseignant, vérifier s'il y a un trou
+                    for i, code_i in enumerate(codes_disponibles):
+                        for j, code_j in enumerate(codes_disponibles):
+                            if j <= i:
+                                continue
+                            
+                            idx_i = ordre_seances.index(code_i)
+                            idx_j = ordre_seances.index(code_j)
+                            
+                            # Calculer le nombre de séances manquantes entre i et j
+                            nb_trous = idx_j - idx_i - 1
+                            
+                            if nb_trous > 0:
+                                # Il y a au moins une séance entre code_i et code_j
+                                # Vérifier si l'enseignant a code_i ET code_j (donc un trou)
+                                a_trou = self.model.NewBoolVar(
+                                    f"ens_{enseignant.id}_jour_{jour_index}_trou_{code_i}_{code_j}"
+                                )
+                                self.model.AddMultiplicationEquality(
+                                    a_trou, 
+                                    [affectations_jour[code_i], affectations_jour[code_j]]
+                                )
+                                # Pénalité proportionnelle au nombre de trous
+                                penalites_trous.append((a_trou, nb_trous))
 
-                max_seances_jour = len(seances_jour)
+                # Calculer la contribution pour ce jour
+                max_seances_jour = len(codes_disponibles)
                 contribution_jour = self.model.NewIntVar(
-                    -2,  # Pire cas: séance isolée
-                    max_seances_jour,  # Meilleur cas: toutes les séances du jour
+                    -20,  # Pire cas: plusieurs trous
+                    20,   # Meilleur cas: toutes consécutives
                     f"contrib_ens_{enseignant.id}_jour_{jour_index}",
                 )
 
-                # Si séance isolée: contribution = -2
-                # Si plusieurs séances: contribution = nb_seances_jour
-                # Si aucune séance: contribution = 0
-                self.model.Add(contribution_jour == -2).OnlyEnforceIf(seance_isolee)
-                self.model.Add(contribution_jour == nb_seances_jour).OnlyEnforceIf(
-                    a_plusieurs_seances
+                # Composantes du score
+                # 1. Bonus pour séances consécutives (+3 par paire)
+                score_consecutivite = self.model.NewIntVar(
+                    0, 9, f"score_consec_{enseignant.id}_jour_{jour_index}"
                 )
-                self.model.Add(contribution_jour == 0).OnlyEnforceIf(a_une_seance.Not())
+                if bonus_consecutivite:
+                    self.model.Add(score_consecutivite == 3 * sum(bonus_consecutivite))
+                else:
+                    self.model.Add(score_consecutivite == 0)
+
+                # 2. Pénalité pour heures creuses (-5 par trou)
+                score_trous = self.model.NewIntVar(
+                    -20, 0, f"score_trous_{enseignant.id}_jour_{jour_index}"
+                )
+                if penalites_trous:
+                    penalite_totale = sum([a_trou * (-5 * nb_trous) for a_trou, nb_trous in penalites_trous])
+                    self.model.Add(score_trous == penalite_totale)
+                else:
+                    self.model.Add(score_trous == 0)
+
+                # 3. Pénalité pour séance unique (-2)
+                score_unique = self.model.NewIntVar(
+                    -2, 0, f"score_unique_{enseignant.id}_jour_{jour_index}"
+                )
+                self.model.Add(score_unique == -2).OnlyEnforceIf(seance_unique)
+                self.model.Add(score_unique == 0).OnlyEnforceIf(seance_unique.Not())
+
+                # Score total pour ce jour
+                # Si aucune séance: 0
+                # Sinon: score_consecutivite + score_trous + score_unique
+                self.model.Add(contribution_jour == 0).OnlyEnforceIf(a_seance.Not())
+                self.model.Add(
+                    contribution_jour == score_consecutivite + score_trous + score_unique
+                ).OnlyEnforceIf(a_seance)
 
                 bonus_total.append(contribution_jour)
 
@@ -1198,15 +1293,17 @@ class SurveillanceOptimizerV3:
             # Calculer les bornes du score
             nb_jours = len(seances_par_jour)
             nb_enseignants = len(enseignants)
-            max_seances_par_jour = max([len(s) for s in seances_par_jour.values()])
 
-            # Pire cas: tous les enseignants ont des séances isolées dans tous les jours
-            min_score = -2 * nb_jours * nb_enseignants
-            # Meilleur cas: tous les enseignants ont toutes leurs séances regroupées
-            max_score = max_seances_par_jour * nb_jours * nb_enseignants
+            # Pire cas: tous les enseignants ont des heures creuses ou séances isolées
+            # Pénalité max: -20 par enseignant par jour (heures creuses multiples)
+            min_score = -20 * nb_jours * nb_enseignants
+            
+            # Meilleur cas: tous les enseignants ont toutes leurs séances consécutives
+            # Bonus max: +3 par paire consécutive × nb max de paires (3 paires pour S1-S2-S3-S4)
+            max_score = 9 * nb_jours * nb_enseignants
 
             score_regroupement = self.model.NewIntVar(
-                min_score, max_score, "score_regroupement_jours"
+                min_score, max_score, "score_regroupement_consecutivite"
             )
             self.model.Add(score_regroupement == sum(bonus_total))
 
@@ -2331,4 +2428,160 @@ class SurveillanceOptimizerV3:
             'respectees': nb_contraintes_respectees,
             'violees': nb_contraintes_violees,
             'details_violations': violations_details
+        }
+
+    def _generer_statistiques_heures_creuses(
+        self,
+        affectations_vars: Dict,
+        seances: Dict,
+        enseignants: List[Enseignant]
+    ):
+        """
+        Génère des statistiques détaillées sur les heures creuses (séances non consécutives).
+        
+        Une heure creuse est détectée quand un enseignant a des séances avec des trous dans le même jour.
+        Par exemple: S1 + S3 (manque S2), S1 + S4 (manque S2 et S3), etc.
+        
+        Args:
+            affectations_vars: Variables d'affectation du modèle
+            seances: Dictionnaire des séances
+            enseignants: Liste des enseignants
+        """
+        # Grouper les séances par jour
+        seances_par_jour = {}
+        for seance_key in seances.keys():
+            date_exam = seance_key[0]
+            seance_code = seance_key[1]
+            jour_index = seance_key[4]
+            
+            if jour_index not in seances_par_jour:
+                seances_par_jour[jour_index] = {
+                    'date': date_exam,
+                    'seances': {}
+                }
+            seances_par_jour[jour_index]['seances'][seance_code] = seance_key
+        
+        # Ordre des séances dans une journée
+        ordre_seances = ["S1", "S2", "S3", "S4"]
+        
+        # Détecter les heures creuses
+        heures_creuses_details = []
+        nb_enseignants_avec_heures_creuses = 0
+        nb_total_heures_creuses = 0
+        
+        for enseignant in enseignants:
+            enseignant_a_heures_creuses = False
+            
+            for jour_index, jour_info in seances_par_jour.items():
+                date_exam = jour_info['date']
+                seances_jour_dict = jour_info['seances']
+                
+                # Récupérer les séances affectées à cet enseignant ce jour
+                seances_affectees = []
+                for code in sorted(seances_jour_dict.keys(), key=lambda x: ordre_seances.index(x)):
+                    seance_key = seances_jour_dict[code]
+                    var = affectations_vars.get((seance_key, enseignant.id))
+                    if var is not None:
+                        # Récupérer la valeur de la variable
+                        valeur = self.solver.Value(var)
+                        if valeur == 1:
+                            seances_affectees.append(code)
+                
+                # Si l'enseignant a au moins 2 séances ce jour, vérifier s'il y a des trous
+                if len(seances_affectees) >= 2:
+                    # Convertir les codes en indices
+                    indices_affectes = [ordre_seances.index(code) for code in seances_affectees]
+                    indices_affectes.sort()
+                    
+                    # Vérifier s'il y a des trous entre les séances
+                    trous = []
+                    for i in range(len(indices_affectes) - 1):
+                        idx_actuel = indices_affectes[i]
+                        idx_suivant = indices_affectes[i + 1]
+                        
+                        # S'il y a un écart > 1, il y a un trou
+                        if idx_suivant - idx_actuel > 1:
+                            # Identifier les séances manquantes
+                            seances_manquantes = [ordre_seances[j] for j in range(idx_actuel + 1, idx_suivant)]
+                            trous.append({
+                                'debut': ordre_seances[idx_actuel],
+                                'fin': ordre_seances[idx_suivant],
+                                'manquantes': seances_manquantes
+                            })
+                    
+                    # Si des trous ont été détectés
+                    if trous:
+                        enseignant_a_heures_creuses = True
+                        nb_total_heures_creuses += len(trous)
+                        
+                        # Nom du jour
+                        jours_semaine = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+                        jour_nom = jours_semaine[date_exam.weekday()]
+                        
+                        # Construire la description des heures creuses
+                        for trou in trous:
+                            heures_creuses_details.append({
+                                'enseignant_id': enseignant.id,
+                                'enseignant_nom': enseignant.nom,
+                                'enseignant_prenom': enseignant.prenom,
+                                'enseignant': f"{enseignant.nom} {enseignant.prenom}",
+                                'code': enseignant.code_smartex,
+                                'date': date_exam.strftime('%d/%m/%Y'),
+                                'date_obj': date_exam,
+                                'jour': jour_nom,
+                                'seances_affectees': ', '.join(seances_affectees),
+                                'seance_debut': trou['debut'],
+                                'seance_fin': trou['fin'],
+                                'seances_manquantes': ', '.join(trou['manquantes']),
+                                'nb_trous': len(trou['manquantes'])
+                            })
+            
+            if enseignant_a_heures_creuses:
+                nb_enseignants_avec_heures_creuses += 1
+        
+        # Affichage détaillé
+        self.infos.append("\n" + "=" * 80)
+        self.infos.append("⏰ STATISTIQUES DES HEURES CREUSES (SÉANCES NON CONSÉCUTIVES)")
+        self.infos.append("=" * 80)
+        self.infos.append("")
+        
+        if nb_total_heures_creuses == 0:
+            self.infos.append("✅ Aucune heure creuse détectée ! Toutes les séances sont consécutives.")
+            self.infos.append("")
+        else:
+            self.infos.append(f"   ⚠️ Total d'heures creuses: {nb_total_heures_creuses}")
+            self.infos.append(f"   👥 Enseignants concernés: {nb_enseignants_avec_heures_creuses}")
+            self.infos.append("")
+            
+            self.infos.append("-" * 80)
+            self.infos.append(f"📋 LISTE DES {nb_total_heures_creuses} HEURES CREUSES:")
+            self.infos.append("-" * 80)
+            self.infos.append("")
+            self.infos.append("Ces enseignants ont des séances non consécutives dans la même journée:")
+            self.infos.append("")
+            
+            # Trier par date, puis par nom
+            heures_creuses_details.sort(key=lambda x: (x['date_obj'], x['enseignant']))
+            
+            for i, detail in enumerate(heures_creuses_details, 1):
+                self.infos.append(
+                    f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
+                    f"{detail['jour']:10s} {detail['date']:10s}"
+                )
+                self.infos.append(
+                    f"        → Séances affectées: [{detail['seances_affectees']}]"
+                )
+                self.infos.append(
+                    f"        → Heure creuse: {detail['seance_debut']} à {detail['seance_fin']} "
+                    f"(manque: {detail['seances_manquantes']})"
+                )
+                self.infos.append("")
+        
+        self.infos.append("=" * 80)
+        
+        # Retourner les statistiques pour la base de données
+        return {
+            'total': nb_total_heures_creuses,
+            'enseignants_concernes': nb_enseignants_avec_heures_creuses,
+            'details': heures_creuses_details
         }

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
 from models import StatistiquesResponse
-from models.models import Enseignant, Examen, Affectation, Voeu, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from models.models import Enseignant, Examen, Affectation, Voeu, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour, HeureCreuse, HeureCreuse
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -163,6 +163,22 @@ class DepassementMaxJourResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class HeureCreuseResponse(BaseModel):
+    id: int
+    enseignant_nom: str
+    enseignant_prenom: str
+    code_smartex: str
+    date_exam: str
+    jour_nom: str
+    seances_affectees: str
+    seance_debut: str
+    seance_fin: str
+    seances_manquantes: str
+    nb_trous: int
+    
+    class Config:
+        from_attributes = True
+
 
 class GenerationStatistiqueResponse(BaseModel):
     id: int
@@ -189,11 +205,16 @@ class GenerationStatistiqueResponse(BaseModel):
     nb_contraintes_seances_violees: int
     taux_contraintes_seances_respectees: int
     
+    # Statistiques des heures creuses
+    nb_heures_creuses_total: int = 0
+    nb_enseignants_heures_creuses: int = 0
+    
     # Listes détaillées (optionnelles)
     souhaits_violes: Optional[List[SouhaitVioleResponse]] = []
     responsables_absents_participants: Optional[List[ResponsableAbsentResponse]] = []
     responsables_absents_non_surveillants: Optional[List[ResponsableAbsentResponse]] = []
     depassements_max_jour: Optional[List[DepassementMaxJourResponse]] = []
+    heures_creuses: Optional[List[HeureCreuseResponse]] = []
     
     class Config:
         from_attributes = True
@@ -217,11 +238,12 @@ def obtenir_statistiques_generations(
     query = db.query(GenerationStatistique).order_by(GenerationStatistique.date_generation.desc()).limit(limit)
     
     if include_details:
-        from sqlalchemy.orm import joinedload
+        from sqlalchemy.orm import joinedload, selectinload
         query = query.options(
             joinedload(GenerationStatistique.souhaits_violes),
             joinedload(GenerationStatistique.responsables_absents),
-            joinedload(GenerationStatistique.depassements_max_jour)
+            joinedload(GenerationStatistique.depassements_max_jour),
+            selectinload(GenerationStatistique.heures_creuses)  # selectinload pour éviter les problèmes avec beaucoup de lignes
         )
     
     generations = query.all()
@@ -250,6 +272,9 @@ def obtenir_statistiques_generations(
             'nb_contraintes_seances_respectees': gen.nb_contraintes_seances_respectees,
             'nb_contraintes_seances_violees': gen.nb_contraintes_seances_violees,
             'taux_contraintes_seances_respectees': gen.taux_contraintes_seances_respectees,
+            
+            'nb_heures_creuses_total': gen.nb_heures_creuses_total,
+            'nb_enseignants_heures_creuses': gen.nb_enseignants_heures_creuses,
         }
         
         if include_details:
@@ -306,6 +331,23 @@ def obtenir_statistiques_generations(
                 }
                 for d in gen.depassements_max_jour
             ]
+            
+            gen_dict['heures_creuses'] = [
+                {
+                    'id': h.id,
+                    'enseignant_nom': h.enseignant_nom,
+                    'enseignant_prenom': h.enseignant_prenom,
+                    'code_smartex': h.code_smartex,
+                    'date_exam': h.date_exam.strftime('%Y-%m-%d'),
+                    'jour_nom': h.jour_nom,
+                    'seances_affectees': h.seances_affectees,
+                    'seance_debut': h.seance_debut,
+                    'seance_fin': h.seance_fin,
+                    'seances_manquantes': h.seances_manquantes,
+                    'nb_trous': h.nb_trous
+                }
+                for h in gen.heures_creuses
+            ]
         
         result.append(gen_dict)
     
@@ -326,11 +368,12 @@ def obtenir_derniere_statistique_generation(
     query = db.query(GenerationStatistique).order_by(GenerationStatistique.date_generation.desc()).limit(1)
     
     if include_details:
-        from sqlalchemy.orm import joinedload
+        from sqlalchemy.orm import joinedload, selectinload
         query = query.options(
             joinedload(GenerationStatistique.souhaits_violes),
             joinedload(GenerationStatistique.responsables_absents),
-            joinedload(GenerationStatistique.depassements_max_jour)
+            joinedload(GenerationStatistique.depassements_max_jour),
+            selectinload(GenerationStatistique.heures_creuses)  # selectinload pour éviter les problèmes avec beaucoup de lignes
         )
     
     gen = query.first()
@@ -360,6 +403,9 @@ def obtenir_derniere_statistique_generation(
         'nb_contraintes_seances_respectees': gen.nb_contraintes_seances_respectees,
         'nb_contraintes_seances_violees': gen.nb_contraintes_seances_violees,
         'taux_contraintes_seances_respectees': gen.taux_contraintes_seances_respectees,
+        
+        'nb_heures_creuses_total': gen.nb_heures_creuses_total,
+        'nb_enseignants_heures_creuses': gen.nb_enseignants_heures_creuses,
     }
     
     if include_details:
@@ -415,6 +461,23 @@ def obtenir_derniere_statistique_generation(
                 'seances': d.seances
             }
             for d in gen.depassements_max_jour
+        ]
+        
+        gen_dict['heures_creuses'] = [
+            {
+                'id': h.id,
+                'enseignant_nom': h.enseignant_nom,
+                'enseignant_prenom': h.enseignant_prenom,
+                'code_smartex': h.code_smartex,
+                'date_exam': h.date_exam.strftime('%Y-%m-%d'),
+                'jour_nom': h.jour_nom,
+                'seances_affectees': h.seances_affectees,
+                'seance_debut': h.seance_debut,
+                'seance_fin': h.seance_fin,
+                'seances_manquantes': h.seances_manquantes,
+                'nb_trous': h.nb_trous
+            }
+            for h in gen.heures_creuses
         ]
     
     return gen_dict

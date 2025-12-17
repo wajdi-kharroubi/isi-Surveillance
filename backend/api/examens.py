@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from database import get_db
 from models import ExamenResponse, Examen, Affectation, Enseignant
-from models.models import GenerationStatistique, Presence, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from models.models import GenerationStatistique, Presence, SouhaitViole, ResponsableAbsent, DepassementMaxJour, HeureCreuse
 import logging
 
 router = APIRouter(prefix="/examens", tags=["Examens"])
@@ -16,6 +16,7 @@ def vider_statistiques_generation(db: Session):
         db.query(SouhaitViole).delete()
         db.query(ResponsableAbsent).delete()
         db.query(DepassementMaxJour).delete()
+        db.query(HeureCreuse).delete()
         db.query(GenerationStatistique).delete()
         db.query(Presence).delete()
         db.commit()

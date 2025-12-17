@@ -6,7 +6,7 @@ from models import (
     VoeuResponse,
     Voeu, Affectation
 )
-from models.models import GenerationStatistique, Presence, SouhaitViole, ResponsableAbsent, DepassementMaxJour
+from models.models import GenerationStatistique, Presence, SouhaitViole, ResponsableAbsent, DepassementMaxJour, HeureCreuse
 import logging
 
 router = APIRouter(prefix="/voeux", tags=["Voeux"])
@@ -19,6 +19,7 @@ def vider_statistiques_generation(db: Session):
         db.query(SouhaitViole).delete()
         db.query(ResponsableAbsent).delete()
         db.query(DepassementMaxJour).delete()
+        db.query(HeureCreuse).delete()
         db.query(GenerationStatistique).delete()
         db.query(Presence).delete()
         db.commit()

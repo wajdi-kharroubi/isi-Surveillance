@@ -7,7 +7,7 @@ from models import (
     EnseignantExceptionUpdate,
     Enseignant, Affectation
 )
-from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour ,Presence
+from models.models import GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour, HeureCreuse, Presence
 import logging
 
 router = APIRouter(prefix="/enseignants", tags=["Enseignants"])
@@ -20,6 +20,7 @@ def vider_statistiques_generation(db: Session):
         db.query(SouhaitViole).delete()
         db.query(ResponsableAbsent).delete()
         db.query(DepassementMaxJour).delete()
+        db.query(HeureCreuse).delete()
         db.query(GenerationStatistique).delete()
         db.query(Presence).delete()
         db.commit()

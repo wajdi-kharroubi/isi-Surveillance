@@ -198,6 +198,10 @@ class GenerationStatistique(Base):
         Integer, nullable=False, default=0
     )  # Pourcentage
 
+    # Statistiques des heures creuses (séances non consécutives)
+    nb_heures_creuses_total = Column(Integer, nullable=False, default=0)
+    nb_enseignants_heures_creuses = Column(Integer, nullable=False, default=0)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relations
@@ -213,6 +217,11 @@ class GenerationStatistique(Base):
     )
     depassements_max_jour = relationship(
         "DepassementMaxJour",
+        back_populates="generation_statistique",
+        cascade="all, delete-orphan",
+    )
+    heures_creuses = relationship(
+        "HeureCreuse",
         back_populates="generation_statistique",
         cascade="all, delete-orphan",
     )
@@ -311,6 +320,38 @@ class DepassementMaxJour(Base):
 
     def __repr__(self):
         return f"<DepassementMaxJour {self.enseignant_nom} {self.enseignant_prenom} - {self.date_exam} ({self.nb_seances}/{self.max_autorise})>"
+
+
+class HeureCreuse(Base):
+    """Enregistrement d'une heure creuse (séances non consécutives)"""
+
+    __tablename__ = "heures_creuses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    generation_statistique_id = Column(
+        Integer, ForeignKey("generation_statistiques.id"), nullable=False
+    )
+    enseignant_id = Column(Integer, ForeignKey("enseignants.id"), nullable=False)
+    enseignant_nom = Column(String(100), nullable=False)
+    enseignant_prenom = Column(String(100), nullable=False)
+    code_smartex = Column(String(50), nullable=False)
+    date_exam = Column(Date, nullable=False)
+    jour_nom = Column(String(20), nullable=False)  # Lundi, Mardi, etc.
+    seances_affectees = Column(String(100), nullable=False)  # Ex: "S1, S3, S4"
+    seance_debut = Column(String(5), nullable=False)  # Ex: "S1"
+    seance_fin = Column(String(5), nullable=False)  # Ex: "S3"
+    seances_manquantes = Column(String(50), nullable=False)  # Ex: "S2"
+    nb_trous = Column(Integer, nullable=False)  # Nombre de séances manquantes
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relations
+    generation_statistique = relationship(
+        "GenerationStatistique", back_populates="heures_creuses"
+    )
+    enseignant = relationship("Enseignant")
+
+    def __repr__(self):
+        return f"<HeureCreuse {self.enseignant_nom} {self.enseignant_prenom} - {self.date_exam} {self.jour_nom} [{self.seances_affectees}] (manque: {self.seances_manquantes})>"
 
 
 class Presence(Base):

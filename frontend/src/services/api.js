@@ -153,6 +153,7 @@ export const planningAPI = {
   ajouterEnseignantParDateHeure: (data) => api.post('/planning/ajouter-enseignant-par-date-heure', data),
   verifierContraintesAjout: (data) => api.post('/planning/verifier-contraintes-ajout', data),
   verifierContraintesEchange: (data) => api.post('/planning/verifier-contraintes-echange', data),
+  verifierContraintesSuppression: (data) => api.post('/planning/verifier-contraintes-suppression', data),
   exchangeEnseignants: (data) => api.post('/planning/exchange-enseignants', data),
 };
 

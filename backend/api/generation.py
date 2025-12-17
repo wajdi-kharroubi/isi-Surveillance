@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import GenerationRequest, GenerationResponse
-from models.models import Affectation, Examen, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour, Presence
+from models.models import Affectation, Examen, GenerationStatistique, SouhaitViole, ResponsableAbsent, DepassementMaxJour, HeureCreuse, Presence
 from algorithms.optimizer_v3 import SurveillanceOptimizerV3
 from datetime import datetime
 import logging
@@ -57,6 +57,7 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
             db.query(SouhaitViole).delete()
             db.query(ResponsableAbsent).delete()
             db.query(DepassementMaxJour).delete()
+            db.query(HeureCreuse).delete()
             # Puis la table parent
             db.query(GenerationStatistique).delete()
             # Vider également la table Presence
@@ -110,6 +111,7 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                 stats_souhaits = statistiques_data.get('souhaits', {})
                 stats_responsables = statistiques_data.get('responsables', {})
                 stats_max_seances = statistiques_data.get('max_seances_jour', {})
+                stats_heures_creuses = statistiques_data.get('heures_creuses', {})
                 
                 # Calculer les taux en pourcentage
                 taux_souhaits = int((stats_souhaits.get('respectes', 0) / stats_souhaits.get('total', 1) * 100)) if stats_souhaits.get('total', 0) > 0 else 100
@@ -139,6 +141,10 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                     nb_contraintes_seances_respectees=stats_max_seances.get('respectees', 0),
                     nb_contraintes_seances_violees=stats_max_seances.get('violees', 0),
                     taux_contraintes_seances_respectees=taux_seances,
+                    
+                    # Statistiques des heures creuses
+                    nb_heures_creuses_total=stats_heures_creuses.get('total', 0),
+                    nb_enseignants_heures_creuses=stats_heures_creuses.get('enseignants_concernes', 0),
                 )
                 
                 db.add(generation_stat)
@@ -190,6 +196,26 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                     )
                     db.add(depass)
                 
+                # Enregistrer les heures creuses
+                for heure_creuse in stats_heures_creuses.get('details', []):
+                    hc = HeureCreuse(
+                        generation_statistique_id=generation_stat.id,
+                        enseignant_id=heure_creuse['enseignant_id'],
+                        enseignant_nom=heure_creuse['enseignant_nom'],
+                        enseignant_prenom=heure_creuse['enseignant_prenom'],
+                        code_smartex=heure_creuse['code'],
+                        date_exam=heure_creuse['date_obj'],
+                        jour_nom=heure_creuse['jour'],
+                        seances_affectees=heure_creuse['seances_affectees'],
+                        seance_debut=heure_creuse['seance_debut'],
+                        seance_fin=heure_creuse['seance_fin'],
+                        seances_manquantes=heure_creuse['seances_manquantes'],
+                        nb_trous=heure_creuse['nb_trous']
+                    )
+                    db.add(hc)
+                
+                # Flush pour garantir que tous les enregistrements statistiques sont écrits avant commit
+                db.flush()
                 db.commit()
                 logger.info(f"Statistiques de génération enregistrées avec succès (ID: {generation_stat.id})")
                 
@@ -233,6 +259,7 @@ def reinitialiser_planning(db: Session = Depends(get_db)):
             db.query(SouhaitViole).delete()
             db.query(ResponsableAbsent).delete()
             db.query(DepassementMaxJour).delete()
+            db.query(HeureCreuse).delete()
             db.query(GenerationStatistique).delete()
             # Vider également la table Presence
             db.query(Presence).delete()

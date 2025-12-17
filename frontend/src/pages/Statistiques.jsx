@@ -267,13 +267,32 @@ export default function Statistiques() {
             } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
           >
             <CalendarDaysIcon className="h-5 w-5" />
-            <span>Contraintes</span>
+            <span>Séances par jour</span>
             {stats.nb_contraintes_seances_violees > 0 && (
               <span className="ml-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-bold">
                 {stats.nb_contraintes_seances_violees}
               </span>
             )}
             {activeTab === 'contraintes' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('heures_creuses')}
+            className={`${
+              activeTab === 'heures_creuses'
+                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            } flex-1 py-3 px-6 font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-300 relative`}
+          >
+            <ClockIcon className="h-5 w-5" />
+            <span>Heures creuses</span>
+            {(stats.heures_creuses?.length || 0) > 0 && (
+              <span className="ml-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">
+                {stats.heures_creuses?.length || 0}
+              </span>
+            )}
+            {activeTab === 'heures_creuses' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white"></div>
             )}
           </button>
@@ -295,10 +314,11 @@ export default function Statistiques() {
 
         <div className="p-8">
           {/* Contenu des onglets */}
-          {activeTab === 'overview' && <VueEnsemble stats={stats} />}
+          {activeTab === 'overview' && <VueEnsemble stats={stats} setActiveTab={setActiveTab} />}
           {activeTab === 'souhaits' && <VueSouhaits stats={stats} />}
           {activeTab === 'responsables' && <VueResponsables stats={stats} />}
           {activeTab === 'contraintes' && <VueContraintes stats={stats} />}
+          {activeTab === 'heures_creuses' && <VueHeuresCreuses stats={stats} />}
           {activeTab === 'grades' && <VueGrades statsParGrade={statsParGrade} chargeEnseignants={chargeEnseignants} />}
         </div>
       </div>
@@ -307,7 +327,7 @@ export default function Statistiques() {
 }
 
 // Composant Vue d'ensemble
-function VueEnsemble({ stats }) {
+function VueEnsemble({ stats, setActiveTab }) {
   // Utiliser les nouvelles propriétés séparées du backend
   const responsablesAbsentsNonSurveillants = stats.responsables_absents_non_surveillants || [];
   const responsablesAbsentsAutres = stats.responsables_absents_participants || [];
@@ -317,7 +337,10 @@ function VueEnsemble({ stats }) {
       {/* Cartes de statistiques principales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Carte Souhaits */}
-        <div className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-blue-400 transition-all duration-300">
+        <div 
+          className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-blue-400 transition-all duration-300 cursor-pointer"
+          onClick={() => setActiveTab('souhaits')}
+        >
           <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600"></div>
           
           <div className="p-6">
@@ -352,7 +375,10 @@ function VueEnsemble({ stats }) {
         </div>
 
         {/* Carte Responsables */}
-        <div className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-green-400 transition-all duration-300">
+        <div 
+          className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-green-400 transition-all duration-300 cursor-pointer"
+          onClick={() => setActiveTab('responsables')}
+        >
           <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-emerald-500 to-green-600"></div>
           
           <div className="p-6">
@@ -392,7 +418,10 @@ function VueEnsemble({ stats }) {
         </div>
 
         {/* Carte Contraintes séances/jour */}
-        <div className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-purple-400 transition-all duration-300">
+        <div 
+          className="group relative bg-white border-2 border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-purple-400 transition-all duration-300 cursor-pointer"
+          onClick={() => setActiveTab('contraintes')}
+        >
           <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600"></div>
           
           <div className="p-6">
@@ -423,6 +452,32 @@ function VueEnsemble({ stats }) {
                 />
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section Heures creuses */}
+      <div 
+        className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl shadow-md border-2 border-amber-200 p-6 cursor-pointer hover:shadow-xl hover:border-amber-300 transition-all duration-300"
+        onClick={() => setActiveTab('heures_creuses')}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg flex items-center justify-center">
+              <ClockIcon className="h-5 w-5 text-white" />
+            </div>
+            Heures creuses (séances non consécutives)
+          </h3>
+
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-gray-200">
+            <p className="text-sm text-gray-600 font-medium">Gaps détectés</p>
+            <p className="text-3xl font-bold text-amber-600">{stats.heures_creuses?.length || 0}</p>
+          </div>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-orange-200">
+            <p className="text-sm text-orange-600 font-medium">Enseignants concernés</p>
+            <p className="text-3xl font-bold text-orange-600">{stats.nb_enseignants_heures_creuses || 0}</p>
           </div>
         </div>
       </div>
@@ -960,6 +1015,164 @@ function VueContraintes({ stats }) {
           </div>
           <p className="text-green-700 text-2xl font-bold mb-2">Excellent !</p>
           <p className="text-green-600 text-base">Toutes les contraintes de séances par jour sont respectées.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Composant Vue Heures Creuses
+function VueHeuresCreuses({ stats }) {
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  
+  const sortedHeuresCreuses = React.useMemo(() => {
+    if (!stats.heures_creuses || stats.heures_creuses.length === 0) return [];
+    
+    let sortableItems = [...stats.heures_creuses];
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+        
+        // Pour les noms d'enseignants
+        if (sortConfig.key === 'enseignant_nom') {
+          aVal = `${a.enseignant_nom} ${a.enseignant_prenom}`;
+          bVal = `${b.enseignant_nom} ${b.enseignant_prenom}`;
+        }
+        
+        // Pour les nombres
+        if (sortConfig.key === 'nb_trous') {
+          aVal = Number(aVal);
+          bVal = Number(bVal);
+        }
+        
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [stats.heures_creuses, sortConfig]);
+
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortableHeader = ({ label, sortKey }) => (
+    <th 
+      className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+      onClick={() => requestSort(sortKey)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {sortConfig.key === sortKey && (
+          sortConfig.direction === 'asc' 
+            ? <ChevronUpIcon className="h-4 w-4" />
+            : <ChevronDownIcon className="h-4 w-4" />
+        )}
+      </div>
+    </th>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Statistiques résumées */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl shadow-md border-2 border-amber-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg flex items-center justify-center">
+              <ClockIcon className="h-5 w-5 text-white" />
+            </div>
+            Heures creuses (séances non consécutives)
+          </h3>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-gray-200">
+            <p className="text-sm text-gray-600 font-medium">Gaps détectés</p>
+            <p className="text-3xl font-bold text-amber-600">{stats.heures_creuses?.length || 0}</p>
+          </div>
+          <div className="text-center p-4 bg-white rounded-xl shadow-sm border-2 border-orange-200">
+            <p className="text-sm text-orange-600 font-medium">Enseignants concernés</p>
+            <p className="text-3xl font-bold text-orange-600">{stats.nb_enseignants_heures_creuses || 0}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Liste des heures creuses */}
+      {sortedHeuresCreuses.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-md border-2 border-gray-200 overflow-hidden">
+          <div className="p-6 border-b-2 border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg flex items-center justify-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+              </div>
+              Liste détaillée des heures creuses ({sortedHeuresCreuses.length})
+            </h3>
+            <p className="text-sm text-gray-600 mt-2">
+              Enseignants avec des séances non consécutives dans la même journée (ex: S1 puis S3 sans S2)
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <SortableHeader label="Enseignant" sortKey="enseignant_nom" />
+                  <SortableHeader label="Date" sortKey="date_exam" />
+                  <SortableHeader label="Jour" sortKey="jour_nom" />
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                    Séances affectées
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                    Séances manquantes
+                  </th>
+                  <SortableHeader label="Nb trous" sortKey="nb_trous" />
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {sortedHeuresCreuses.map((hc) => (
+                  <tr key={hc.id} className="hover:bg-amber-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-bold text-gray-900">
+                        {hc.enseignant_nom} {hc.enseignant_prenom}
+                      </div>
+                      <div className="text-sm text-gray-500 font-medium">{hc.code_smartex}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{hc.date_exam}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900 font-medium">{hc.jour_nom}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-semibold text-blue-600">{hc.seances_affectees}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-amber-100 text-amber-800">
+                        {hc.seances_manquantes}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-bold text-amber-600">{hc.nb_trous}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {(!stats.heures_creuses || stats.heures_creuses.length === 0) && (
+        <div className="text-center py-20 bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 rounded-2xl border-3 border-dashed border-green-300">
+          <div className="w-24 h-24 bg-gradient-to-br from-green-200 to-emerald-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <CheckCircleIcon className="w-14 h-14 text-green-600" />
+          </div>
+          <p className="text-green-700 text-2xl font-bold mb-2">Excellent !</p>
+          <p className="text-green-600 text-base">Aucune heure creuse détectée. Toutes les séances sont consécutives.</p>
         </div>
       )}
     </div>

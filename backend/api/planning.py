@@ -13,6 +13,7 @@ from models.models import (
     SouhaitViole,
     Voeu,
     DepassementMaxJour,
+    HeureCreuse,
 )
 from models.schemas import (
     AjouterEnseignantSeanceRequest,
@@ -187,6 +188,177 @@ def _verifier_et_gerer_depassement_max_jour(
             return "supprime"
 
     return None
+
+
+def _verifier_et_gerer_heures_creuses(
+    db: Session,
+    enseignant_id: int,
+    date_exam,
+    derniere_generation,
+):
+    """
+    Vérifie si l'enseignant a des heures creuses (séances non consécutives) 
+    pour une date donnée et met à jour la base de données en conséquence
+    """
+    if not derniere_generation:
+        return
+
+    # Récupérer l'enseignant
+    enseignant = db.query(Enseignant).filter(Enseignant.id == enseignant_id).first()
+    if not enseignant:
+        return
+
+    # Flush pour que les modifications soient prises en compte
+    db.flush()
+
+    # Définir l'ordre des séances
+    ordre_seances = ["S1", "S2", "S3", "S4"]
+
+    # Récupérer toutes les séances de l'enseignant à cette date
+    seances_jour = (
+        db.query(Examen.h_debut, Examen.h_fin)
+        .join(Affectation, Affectation.examen_id == Examen.id)
+        .filter(
+            Affectation.enseignant_id == enseignant_id,
+            Examen.dateExam == date_exam
+        )
+        .distinct()
+        .all()
+    )
+
+    # Convertir les heures en codes de séances
+    seances_affectees = []
+    for h_debut, h_fin in seances_jour:
+        code = _get_seance_code_from_time(h_debut)
+        if code:
+            seances_affectees.append(code)
+    
+    # Trier les séances
+    seances_affectees = sorted(set(seances_affectees), key=lambda x: ordre_seances.index(x))
+
+    # Compter les heures creuses AVANT suppression (pour comparaison)
+    nb_heures_creuses_avant = db.query(func.count(HeureCreuse.id)).filter(
+        HeureCreuse.generation_statistique_id == derniere_generation.id,
+        HeureCreuse.enseignant_id == enseignant_id,
+        HeureCreuse.date_exam == date_exam
+    ).scalar() or 0
+
+    # Supprimer d'abord toutes les heures creuses existantes pour cet enseignant à cette date
+    db.query(HeureCreuse).filter(
+        HeureCreuse.generation_statistique_id == derniere_generation.id,
+        HeureCreuse.enseignant_id == enseignant_id,
+        HeureCreuse.date_exam == date_exam
+    ).delete()
+
+    # Si moins de 2 séances, pas de possibilité d'heures creuses
+    if len(seances_affectees) < 2:
+        # Mettre à jour les statistiques globales
+        total_heures_creuses = db.query(func.count(HeureCreuse.id)).filter(
+            HeureCreuse.generation_statistique_id == derniere_generation.id
+        ).scalar()
+
+        nb_enseignants_avec_hc = db.query(func.count(func.distinct(HeureCreuse.enseignant_id))).filter(
+            HeureCreuse.generation_statistique_id == derniere_generation.id
+        ).scalar()
+
+        derniere_generation.nb_heures_creuses_total = total_heures_creuses
+        derniere_generation.nb_enseignants_heures_creuses = nb_enseignants_avec_hc
+        
+        # Si il y avait des heures creuses avant, elles ont été supprimées
+        if nb_heures_creuses_avant > 0:
+            return "supprimees"
+        return "aucune"
+
+    # Vérifier s'il y a des trous entre les séances
+    indices_affectes = [ordre_seances.index(code) for code in seances_affectees]
+    indices_affectes.sort()
+
+    trous_detectes = []
+    for i in range(len(indices_affectes) - 1):
+        idx_actuel = indices_affectes[i]
+        idx_suivant = indices_affectes[i + 1]
+
+        # S'il y a un écart > 1, il y a un trou
+        if idx_suivant - idx_actuel > 1:
+            seances_manquantes = [ordre_seances[j] for j in range(idx_actuel + 1, idx_suivant)]
+            trous_detectes.append({
+                'debut': ordre_seances[idx_actuel],
+                'fin': ordre_seances[idx_suivant],
+                'manquantes': seances_manquantes
+            })
+
+    # S'il n'y a pas de trous détectés maintenant
+    if not trous_detectes:
+        # Mettre à jour les statistiques globales
+        total_heures_creuses = db.query(func.count(HeureCreuse.id)).filter(
+            HeureCreuse.generation_statistique_id == derniere_generation.id
+        ).scalar()
+
+        nb_enseignants_avec_hc = db.query(func.count(func.distinct(HeureCreuse.enseignant_id))).filter(
+            HeureCreuse.generation_statistique_id == derniere_generation.id
+        ).scalar()
+
+        derniere_generation.nb_heures_creuses_total = total_heures_creuses
+        derniere_generation.nb_enseignants_heures_creuses = nb_enseignants_avec_hc
+        
+        # Si il y avait des heures creuses avant, elles ont été supprimées
+        if nb_heures_creuses_avant > 0:
+            return "supprimees"
+        return "aucune"
+
+    # Nom du jour
+    jours_semaine = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    jour_nom = jours_semaine[date_exam.weekday()]
+
+    # Créer les enregistrements HeureCreuse
+    nb_heures_creuses_ajoutees = 0
+    for trou in trous_detectes:
+        nouvelle_hc = HeureCreuse(
+            generation_statistique_id=derniere_generation.id,
+            enseignant_id=enseignant_id,
+            enseignant_nom=enseignant.nom,
+            enseignant_prenom=enseignant.prenom,
+            code_smartex=enseignant.code_smartex,
+            date_exam=date_exam,
+            jour_nom=jour_nom,
+            seances_affectees=', '.join(seances_affectees),
+            seance_debut=trou['debut'],
+            seance_fin=trou['fin'],
+            seances_manquantes=', '.join(trou['manquantes']),
+            nb_trous=len(trou['manquantes']),
+        )
+        db.add(nouvelle_hc)
+        nb_heures_creuses_ajoutees += 1
+
+    # Flush pour que les ajouts soient pris en compte dans les requêtes suivantes
+    db.flush()
+
+    # Mettre à jour les statistiques dans generation_statistique
+    # Recompter le total des heures creuses et le nombre d'enseignants concernés
+    total_heures_creuses = db.query(func.count(HeureCreuse.id)).filter(
+        HeureCreuse.generation_statistique_id == derniere_generation.id
+    ).scalar()
+
+    nb_enseignants_avec_hc = db.query(func.count(func.distinct(HeureCreuse.enseignant_id))).filter(
+        HeureCreuse.generation_statistique_id == derniere_generation.id
+    ).scalar()
+
+    derniere_generation.nb_heures_creuses_total = total_heures_creuses
+    derniere_generation.nb_enseignants_heures_creuses = nb_enseignants_avec_hc
+
+    # Déterminer le type de changement
+    nb_heures_creuses_apres = nb_heures_creuses_ajoutees
+    
+    if nb_heures_creuses_avant == 0 and nb_heures_creuses_apres > 0:
+        return "creees"
+    elif nb_heures_creuses_avant > 0 and nb_heures_creuses_apres > nb_heures_creuses_avant:
+        return "augmentees"
+    elif nb_heures_creuses_avant > 0 and nb_heures_creuses_apres < nb_heures_creuses_avant:
+        return "reduites"
+    elif nb_heures_creuses_avant > 0 and nb_heures_creuses_apres > 0:
+        return "maintenues"
+    else:
+        return "aucune"
 
 
 @router.get("/emploi-enseignant/{enseignant_id}")
@@ -1177,6 +1349,24 @@ def supprimer_enseignant_seance(
     elif resultat_depassement == "mis_a_jour":
         messages_info.append(f"Dépassement max séances/jour réduit")
 
+    # Gestion des HeuresCreuses
+    resultat_heures_creuses = _verifier_et_gerer_heures_creuses(
+        db, request.enseignant_id, request.date_examen, derniere_generation
+    )
+    if resultat_heures_creuses == "creees":
+        messages_info.append(f"Heures creuses créées")
+    elif resultat_heures_creuses == "augmentees":
+        messages_info.append(f"Heures creuses augmentées")
+    elif resultat_heures_creuses == "reduites":
+        messages_info.append(f"Heures creuses réduites")
+    elif resultat_heures_creuses == "supprimees":
+        messages_info.append(f"Heures creuses résolues")
+    elif resultat_heures_creuses == "maintenues":
+        messages_info.append(f"Heures creuses maintenues")
+
+    # Flush pour que les suppressions d'affectations soient visibles dans le comptage
+    db.flush()
+
     # Mettre à jour le nombre d'affectations dans les statistiques
     if derniere_generation:
         nb_affectations_total = (
@@ -1405,6 +1595,20 @@ def ajouter_enseignant_par_date_heure(
     elif resultat_depassement == "mis_a_jour":
         messages_info.append(f"Dépassement max séances/jour augmenté")
 
+    # Gestion des HeuresCreuses
+    resultat_heures_creuses = _verifier_et_gerer_heures_creuses(
+        db, request.enseignant_id, request.date_examen, derniere_generation
+    )
+    if resultat_heures_creuses == "creees":
+        messages_info.append(f"Heures creuses créées")
+    elif resultat_heures_creuses == "augmentees":
+        messages_info.append(f"Heures creuses augmentées")
+    elif resultat_heures_creuses == "maintenues":
+        messages_info.append(f"Heures creuses maintenues")
+
+    # Flush pour que les nouvelles affectations soient visibles dans le comptage
+    db.flush()
+
     # Mettre à jour le nombre d'affectations dans les statistiques
     if derniere_generation:
         nb_affectations_total = (
@@ -1454,6 +1658,9 @@ def verifier_contraintes_ajout(
     Retourne les informations de validation et les warnings/erreurs
     """
     from models.models import Voeu
+
+    # Flush pour s'assurer que toutes les modifications en attente sont visibles
+    db.flush()
 
     # Vérifier que l'enseignant existe
     enseignant = (
@@ -1570,6 +1777,107 @@ def verifier_contraintes_ajout(
             f"MAX SÉANCES/JOUR DÉPASSÉ : L'enseignant aura {nb_seances_ce_jour + 1}/{nombre_max_par_jour} séances ce jour-là"
         )
 
+    # Vérifier les heures creuses qui seraient créées
+    # Récupérer toutes les séances de l'enseignant pour ce jour
+    seances_jour_actuelles = (
+        db.query(Examen.h_debut, Examen.h_fin)
+        .join(Affectation)
+        .filter(
+            Affectation.enseignant_id == request.enseignant_id,
+            Examen.dateExam == request.date_examen,
+        )
+        .distinct()
+        .all()
+    )
+
+    # Convertir les heures en codes de séance et trier
+    def heure_vers_code_seance(h_debut_time):
+        heures = h_debut_time.hour
+        minutes = h_debut_time.minute
+        heure_minutes = heures * 60 + minutes
+        if 510 <= heure_minutes < 630:
+            return ("S1", 1)
+        elif 630 <= heure_minutes < 750:
+            return ("S2", 2)
+        elif 750 <= heure_minutes < 870:
+            return ("S3", 3)
+        else:
+            return ("S4", 4)
+
+    # Fonction pour détecter les heures creuses
+    def detecter_heures_creuses(seances_list):
+        seances_codes = []
+        for h_debut, _ in seances_list:
+            code, idx = heure_vers_code_seance(h_debut)
+            if (code, idx) not in seances_codes:
+                seances_codes.append((code, idx))
+        
+        seances_codes.sort(key=lambda x: x[1])
+        
+        heures_creuses = []
+        if len(seances_codes) > 1:
+            for i in range(len(seances_codes) - 1):
+                if seances_codes[i+1][1] - seances_codes[i][1] > 1:
+                    seances_manquantes = []
+                    for j in range(seances_codes[i][1] + 1, seances_codes[i+1][1]):
+                        seances_manquantes.append(f"S{j}")
+                    heures_creuses.append({
+                        "seance_debut": seances_codes[i][0],
+                        "seance_fin": seances_codes[i+1][0],
+                        "seances_manquantes": ", ".join(seances_manquantes),
+                    })
+        return heures_creuses
+
+    # Fonction pour compter les séances manquantes
+    def compter_seances_manquantes(heures_creuses_list):
+        total = 0
+        for hc in heures_creuses_list:
+            total += len(hc['seances_manquantes'].split(', '))
+        return total
+    
+    # Calculer heures creuses AVANT ajout
+    heures_creuses_avant = detecter_heures_creuses(seances_jour_actuelles)
+    nb_seances_manquantes_avant = compter_seances_manquantes(heures_creuses_avant)
+    
+    # Calculer heures creuses APRÈS ajout
+    seances_avec_nouvelle = list(seances_jour_actuelles) + [(request.h_debut, request.h_debut)]
+    heures_creuses_apres = detecter_heures_creuses(seances_avec_nouvelle)
+    nb_seances_manquantes_apres = compter_seances_manquantes(heures_creuses_apres)
+    
+    # Comparer et générer les warnings/infos appropriés
+    infos = []
+    
+    if len(heures_creuses_apres) > len(heures_creuses_avant):
+        # Nouveaux gaps créés
+        nouvelles_hc = [hc for hc in heures_creuses_apres if hc not in heures_creuses_avant]
+        for hc in nouvelles_hc:
+            warnings.append(
+                f"HEURES CREUSES CRÉÉES : L'ajout créera un trou entre {hc['seance_debut']} et {hc['seance_fin']} (séances manquantes: {hc['seances_manquantes']})"
+            )
+    elif nb_seances_manquantes_apres > nb_seances_manquantes_avant:
+        # Gaps élargis
+        gaps_elargis = [hc for hc in heures_creuses_apres if hc not in heures_creuses_avant]
+        for hc in gaps_elargis:
+            warnings.append(
+                f"HEURES CREUSES ÉLARGIES : L'ajout élargira un trou entre {hc['seance_debut']} et {hc['seance_fin']} (séances manquantes: {hc['seances_manquantes']})"
+            )
+    elif len(heures_creuses_apres) < len(heures_creuses_avant):
+        # Gaps réduits ou supprimés (POSITIF)
+        nb_gaps_reduits = len(heures_creuses_avant) - len(heures_creuses_apres)
+        if len(heures_creuses_apres) == 0:
+            infos.append(
+                f"HEURES CREUSES SUPPRIMÉES : L'ajout éliminera toutes les heures creuses ({nb_gaps_reduits}) pour cet enseignant"
+            )
+        else:
+            infos.append(
+                f"HEURES CREUSES RÉDUITES : L'ajout réduira les heures creuses de {nb_gaps_reduits} (de {len(heures_creuses_avant)} à {len(heures_creuses_apres)})"
+            )
+    elif nb_seances_manquantes_apres < nb_seances_manquantes_avant:
+        # Même nombre de gaps mais plus petits (POSITIF)
+        infos.append(
+            f"HEURES CREUSES RÉDUITES : L'ajout réduira la taille des heures creuses (de {nb_seances_manquantes_avant} à {nb_seances_manquantes_apres} séances manquantes)"
+        )
+
     # Vérifier si l'enseignant est responsable d'un examen dans cette séance
     # D'abord, récupérer tous les examens de cette séance (même date/heure)
     examens_seance = (
@@ -1632,6 +1940,7 @@ def verifier_contraintes_ajout(
             "info": examen_responsable_info,
         },
         "warnings": warnings,
+        "infos": infos,
         "errors": errors,
         "peut_ajouter": len(errors) == 0,
     }
@@ -1646,6 +1955,9 @@ def verifier_contraintes_echange(
     Retourne les validations pour les deux enseignants.
     """
     from models.models import Voeu
+
+    # Flush pour s'assurer que toutes les modifications en attente sont visibles
+    db.flush()
 
     def calculer_code_seance(h_debut_time):
         """Détermine le code séance (S1, S2, S3, S4) à partir de l'heure de début."""
@@ -1792,6 +2104,105 @@ def verifier_contraintes_echange(
                 f"MAX SÉANCES/JOUR DÉPASSÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a déjà {nb_seances_ce_jour}/{nombre_max_par_jour} séances ce jour-là"
             )
 
+        # Vérifier les heures creuses qui seraient créées après l'échange
+        # Simuler le planning après l'échange : retirer l'ancienne séance, ajouter la nouvelle
+        def heure_vers_code_seance_avec_idx(h_debut_time):
+            heures = h_debut_time.hour
+            minutes = h_debut_time.minute
+            heure_minutes = heures * 60 + minutes
+            if 510 <= heure_minutes < 630:
+                return ("S1", 1)
+            elif 630 <= heure_minutes < 750:
+                return ("S2", 2)
+            elif 750 <= heure_minutes < 870:
+                return ("S3", 3)
+            else:
+                return ("S4", 4)
+        
+        # Fonction pour détecter les heures creuses à partir de séances (h_debut, h_fin)
+        def detecter_heures_creuses_from_seances(seances_list):
+            seances_codes = []
+            for h_debut_s, _ in seances_list:
+                code, idx = heure_vers_code_seance_avec_idx(h_debut_s)
+                if (code, idx) not in seances_codes:
+                    seances_codes.append((code, idx))
+            
+            seances_codes.sort(key=lambda x: x[1])
+            
+            heures_creuses = []
+            if len(seances_codes) > 1:
+                for i in range(len(seances_codes) - 1):
+                    if seances_codes[i+1][1] - seances_codes[i][1] > 1:
+                        seances_manquantes = []
+                        for j in range(seances_codes[i][1] + 1, seances_codes[i+1][1]):
+                            seances_manquantes.append(f"S{j}")
+                        heures_creuses.append({
+                            "seance_debut": seances_codes[i][0],
+                            "seance_fin": seances_codes[i+1][0],
+                            "seances_manquantes": ", ".join(seances_manquantes),
+                        })
+            return heures_creuses
+        
+        # Fonction pour compter les séances manquantes
+        def compter_seances_manquantes(heures_creuses_list):
+            total = 0
+            for hc in heures_creuses_list:
+                total += len(hc['seances_manquantes'].split(', '))
+            return total
+        
+        # Calculer heures creuses AVANT échange (sur le jour de la nouvelle séance)
+        heures_creuses_avant = detecter_heures_creuses_from_seances(seances_ce_jour)
+        nb_seances_manquantes_avant = compter_seances_manquantes(heures_creuses_avant)
+        
+        # Simuler APRÈS échange
+        seances_apres = list(seances_ce_jour)
+        
+        # Retirer l'ancienne séance si elle est le même jour
+        if date_actuelle and h_debut_actuelle and date_actuelle == date_examen:
+            seances_apres = [(h, f) for h, f in seances_apres if h != h_debut_actuelle]
+        
+        # Ajouter la nouvelle séance
+        if (h_debut, h_debut) not in seances_apres:
+            seances_apres.append((h_debut, h_debut))
+        
+        # Calculer heures creuses APRÈS échange
+        heures_creuses_apres = detecter_heures_creuses_from_seances(seances_apres)
+        nb_seances_manquantes_apres = compter_seances_manquantes(heures_creuses_apres)
+        
+        # Comparer et générer warnings/infos
+        infos = []
+        
+        if len(heures_creuses_apres) > len(heures_creuses_avant):
+            # Nouveaux gaps créés
+            nouvelles_hc = [hc for hc in heures_creuses_apres if hc not in heures_creuses_avant]
+            for hc in nouvelles_hc:
+                warnings.append(
+                    f"HEURES CREUSES CRÉÉES ({enseignant.nom} {enseignant.prenom}) : L'échange créera un trou entre {hc['seance_debut']} et {hc['seance_fin']} (séances manquantes: {hc['seances_manquantes']})"
+                )
+        elif nb_seances_manquantes_apres > nb_seances_manquantes_avant:
+            # Gaps élargis
+            gaps_elargis = [hc for hc in heures_creuses_apres if hc not in heures_creuses_avant]
+            for hc in gaps_elargis:
+                warnings.append(
+                    f"HEURES CREUSES ÉLARGIES ({enseignant.nom} {enseignant.prenom}) : L'échange élargira un trou entre {hc['seance_debut']} et {hc['seance_fin']} (séances manquantes: {hc['seances_manquantes']})"
+                )
+        elif len(heures_creuses_apres) < len(heures_creuses_avant):
+            # Gaps réduits ou supprimés (POSITIF)
+            nb_gaps_reduits = len(heures_creuses_avant) - len(heures_creuses_apres)
+            if len(heures_creuses_apres) == 0:
+                infos.append(
+                    f"HEURES CREUSES SUPPRIMÉES ({enseignant.nom} {enseignant.prenom}) : L'échange éliminera toutes les heures creuses ({nb_gaps_reduits})"
+                )
+            else:
+                infos.append(
+                    f"HEURES CREUSES RÉDUITES ({enseignant.nom} {enseignant.prenom}) : L'échange réduira les heures creuses de {nb_gaps_reduits} (de {len(heures_creuses_avant)} à {len(heures_creuses_apres)})"
+                )
+        elif nb_seances_manquantes_apres < nb_seances_manquantes_avant:
+            # Même nombre de gaps mais plus petits (POSITIF)
+            infos.append(
+                f"HEURES CREUSES RÉDUITES ({enseignant.nom} {enseignant.prenom}) : L'échange réduira la taille des heures creuses (de {nb_seances_manquantes_avant} à {nb_seances_manquantes_apres} séances manquantes)"
+            )
+
         return {
             "enseignant": {
                 "id": enseignant.id,
@@ -1825,6 +2236,7 @@ def verifier_contraintes_echange(
                 "nb_examens": nb_examens_responsable_nouvelle,
             },
             "warnings": warnings,
+            "infos": infos,
             "errors": errors,
         }
 
@@ -1858,6 +2270,171 @@ def verifier_contraintes_echange(
         "warnings": all_warnings,
         "errors": all_errors,
         "peut_echanger": len(all_errors) == 0,
+    }
+
+
+@router.post("/verifier-contraintes-suppression")
+def verifier_contraintes_suppression(
+    request: SupprimerEnseignantSeanceRequest, db: Session = Depends(get_db)
+):
+    """
+    Vérifie les contraintes avant de supprimer un enseignant d'une séance :
+    - Vérifie si la suppression créera des heures creuses pour l'enseignant
+    - Vérifie si la suppression résoudra des heures creuses existantes
+    Retourne les informations de validation et les warnings
+    """
+    # Flush pour s'assurer que toutes les modifications en attente sont visibles
+    db.flush()
+
+    # Vérifier que l'enseignant existe
+    enseignant = (
+        db.query(Enseignant).filter(Enseignant.id == request.enseignant_id).first()
+    )
+    if not enseignant:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Enseignant avec ID {request.enseignant_id} introuvable",
+        )
+
+    # Récupérer toutes les séances de l'enseignant pour ce jour
+    seances_ce_jour = (
+        db.query(Examen.h_debut, Examen.h_fin)
+        .join(Affectation)
+        .filter(
+            Affectation.enseignant_id == request.enseignant_id,
+            Examen.dateExam == request.date_examen,
+        )
+        .distinct()
+        .all()
+    )
+
+    # Fonction pour convertir l'heure en code séance
+    def heure_vers_code_seance_avec_idx(h_debut_time):
+        heures = h_debut_time.hour
+        minutes = h_debut_time.minute
+        heure_minutes = heures * 60 + minutes
+        if 510 <= heure_minutes < 630:
+            return ("S1", 1)
+        elif 630 <= heure_minutes < 750:
+            return ("S2", 2)
+        elif 750 <= heure_minutes < 870:
+            return ("S3", 3)
+        else:
+            return ("S4", 4)
+
+    # Calculer les heures creuses AVANT suppression
+    seances_codes_avant = []
+    for h_debut, _ in seances_ce_jour:
+        code, idx = heure_vers_code_seance_avec_idx(h_debut)
+        if (code, idx) not in seances_codes_avant:
+            seances_codes_avant.append((code, idx))
+    
+    seances_codes_avant.sort(key=lambda x: x[1])
+    
+    heures_creuses_avant = []
+    if len(seances_codes_avant) > 1:
+        for i in range(len(seances_codes_avant) - 1):
+            if seances_codes_avant[i+1][1] - seances_codes_avant[i][1] > 1:
+                seances_manquantes = []
+                for j in range(seances_codes_avant[i][1] + 1, seances_codes_avant[i+1][1]):
+                    seances_manquantes.append(f"S{j}")
+                heures_creuses_avant.append({
+                    "seance_debut": seances_codes_avant[i][0],
+                    "seance_fin": seances_codes_avant[i+1][0],
+                    "seances_manquantes": ", ".join(seances_manquantes),
+                })
+
+    # Simuler les séances APRÈS suppression (retirer la séance à supprimer)
+    seances_apres_suppression = [
+        (h_debut, h_fin) for h_debut, h_fin in seances_ce_jour
+        if h_debut != request.h_debut
+    ]
+    
+    # Calculer les heures creuses APRÈS suppression
+    seances_codes_apres = []
+    for h_debut, _ in seances_apres_suppression:
+        code, idx = heure_vers_code_seance_avec_idx(h_debut)
+        if (code, idx) not in seances_codes_apres:
+            seances_codes_apres.append((code, idx))
+    
+    seances_codes_apres.sort(key=lambda x: x[1])
+    
+    heures_creuses_apres = []
+    if len(seances_codes_apres) > 1:
+        for i in range(len(seances_codes_apres) - 1):
+            if seances_codes_apres[i+1][1] - seances_codes_apres[i][1] > 1:
+                seances_manquantes = []
+                for j in range(seances_codes_apres[i][1] + 1, seances_codes_apres[i+1][1]):
+                    seances_manquantes.append(f"S{j}")
+                heures_creuses_apres.append({
+                    "seance_debut": seances_codes_apres[i][0],
+                    "seance_fin": seances_codes_apres[i+1][0],
+                    "seances_manquantes": ", ".join(seances_manquantes),
+                })
+
+    # Construire les warnings
+    warnings = []
+    infos = []
+
+    # Compter le nombre total de séances manquantes (taille des gaps)
+    def compter_seances_manquantes(heures_creuses_list):
+        total = 0
+        for hc in heures_creuses_list:
+            # Compter le nombre de séances dans "seances_manquantes" (ex: "S2, S3" = 2)
+            total += len(hc['seances_manquantes'].split(', '))
+        return total
+
+    nb_seances_manquantes_avant = compter_seances_manquantes(heures_creuses_avant)
+    nb_seances_manquantes_apres = compter_seances_manquantes(heures_creuses_apres)
+
+    # Cas 1 : Des heures creuses vont être CRÉÉES ou AUGMENTÉES
+    if len(heures_creuses_apres) > len(heures_creuses_avant):
+        # Plus de gaps créés
+        nouvelles_hc = [hc for hc in heures_creuses_apres if hc not in heures_creuses_avant]
+        for hc in nouvelles_hc:
+            warnings.append(
+                f"HEURES CREUSES CRÉÉES : La suppression créera un trou entre {hc['seance_debut']} et {hc['seance_fin']} (séances manquantes: {hc['seances_manquantes']})"
+            )
+    elif nb_seances_manquantes_apres > nb_seances_manquantes_avant:
+        # Même nombre de gaps mais plus larges
+        gaps_elargis = [hc for hc in heures_creuses_apres if hc not in heures_creuses_avant]
+        for hc in gaps_elargis:
+            warnings.append(
+                f"HEURES CREUSES ÉLARGIES : La suppression élargira un trou entre {hc['seance_debut']} et {hc['seance_fin']} (séances manquantes: {hc['seances_manquantes']})"
+            )
+    
+    # Cas 2 : Des heures creuses vont être RÉDUITES ou RÉSOLUES
+    elif len(heures_creuses_apres) < len(heures_creuses_avant):
+        # Moins de gaps
+        hc_reduites = len(heures_creuses_avant) - len(heures_creuses_apres)
+        if len(heures_creuses_apres) == 0:
+            # Suppression complète des heures creuses
+            infos.append(
+                f"HEURES CREUSES SUPPRIMÉES : La suppression éliminera toutes les heures creuses ({hc_reduites}) pour cet enseignant"
+            )
+        else:
+            # Réduction partielle
+            infos.append(
+                f"HEURES CREUSES RÉDUITES : La suppression réduira les heures creuses de {hc_reduites} pour cet enseignant (de {len(heures_creuses_avant)} à {len(heures_creuses_apres)})"
+            )
+    elif nb_seances_manquantes_apres < nb_seances_manquantes_avant:
+        # Même nombre de gaps mais plus petits
+        infos.append(
+            f"HEURES CREUSES RÉDUITES : La suppression réduira la taille des heures creuses (de {nb_seances_manquantes_avant} à {nb_seances_manquantes_apres} séances manquantes)"
+        )
+
+    return {
+        "enseignant": {
+            "id": enseignant.id,
+            "nom": enseignant.nom,
+            "prenom": enseignant.prenom,
+            "grade_code": enseignant.grade_code,
+        },
+        "heures_creuses_avant": len(heures_creuses_avant),
+        "heures_creuses_apres": len(heures_creuses_apres),
+        "warnings": warnings,
+        "infos": infos,
+        "peut_supprimer": True,  # La suppression est toujours possible
     }
 
 
@@ -2350,6 +2927,9 @@ def exchange_enseignants(
         db.add(affectation)
         nb_affectations += 1
 
+    # Flush pour que les modifications d'affectations soient visibles dans les vérifications suivantes
+    db.flush()
+
     # Gestion du DepassementMaxJour
     messages_depassements = []
     if derniere_generation:
@@ -2389,6 +2969,37 @@ def exchange_enseignants(
         elif resultat_dep4 == "mis_a_jour":
             messages_depassements.append(f"Dépassement Ens2 date1 augmenté")
 
+    # Gestion des HeuresCreuses pour les deux enseignants sur leurs nouvelles dates
+    messages_heures_creuses = []
+    if derniere_generation:
+        # Vérifier Ens1 sur date1 (après suppression de séance1)
+        resultat_hc1 = _verifier_et_gerer_heures_creuses(
+            db, request.enseignant1_id, request.date1, derniere_generation
+        )
+        
+        # Vérifier Ens2 sur date2 (après suppression de séance2)
+        resultat_hc2 = _verifier_et_gerer_heures_creuses(
+            db, request.enseignant2_id, request.date2, derniere_generation
+        )
+        
+        # Vérifier Ens1 sur date2 (après ajout à séance2)
+        resultat_hc3 = _verifier_et_gerer_heures_creuses(
+            db, request.enseignant1_id, request.date2, derniere_generation
+        )
+        if resultat_hc3 in ["creees", "augmentees", "maintenues"]:
+            messages_heures_creuses.append(f"HC Ens1 date2")
+        elif resultat_hc3 == "supprimees":
+            messages_heures_creuses.append(f"HC Ens1 date2 résolues")
+        
+        # Vérifier Ens2 sur date1 (après ajout à séance1)
+        resultat_hc4 = _verifier_et_gerer_heures_creuses(
+            db, request.enseignant2_id, request.date1, derniere_generation
+        )
+        if resultat_hc4 in ["creees", "augmentees", "maintenues"]:
+            messages_heures_creuses.append(f"HC Ens2 date1")
+        elif resultat_hc4 == "supprimees":
+            messages_heures_creuses.append(f"HC Ens2 date1 résolues")
+
     db.commit()
 
     message = "Échange effectué avec succès"
@@ -2401,6 +3012,9 @@ def exchange_enseignants(
 
     if messages_depassements:
         message += f" [Dépassements: {', '.join(messages_depassements)}]"
+
+    if messages_heures_creuses:
+        message += f" [Heures creuses: {', '.join(messages_heures_creuses)}]"
 
     return AffectationOperationResponse(
         success=True,
