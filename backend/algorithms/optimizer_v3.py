@@ -2565,17 +2565,11 @@ class SurveillanceOptimizerV3:
             
             for i, detail in enumerate(heures_creuses_details, 1):
                 self.infos.append(
-                    f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
-                    f"{detail['jour']:10s} {detail['date']:10s}"
+                    f"   {i:3d}. {detail['enseignant']:30s} | Code: {detail['code']:10s} | "
+                    f"{detail['jour']:10s} {detail['date']:10s} | "
+                    f"Séances: [{detail['seances_affectees']}] | "
+                    f"HC: {detail['seance_debut']} à {detail['seance_fin']} (manque: {detail['seances_manquantes']})"
                 )
-                self.infos.append(
-                    f"        → Séances affectées: [{detail['seances_affectees']}]"
-                )
-                self.infos.append(
-                    f"        → Heure creuse: {detail['seance_debut']} à {detail['seance_fin']} "
-                    f"(manque: {detail['seances_manquantes']})"
-                )
-                self.infos.append("")
         
         self.infos.append("=" * 80)
         

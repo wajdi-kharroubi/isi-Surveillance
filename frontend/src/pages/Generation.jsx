@@ -167,7 +167,7 @@ export default function Generation() {
             </div>
             <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/30">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-sm font-semibold text-white">V3 Actif</span>
+              <span className="text-sm font-semibold text-white">V4 Actif</span>
             </div>
           </div>
         </div>
