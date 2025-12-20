@@ -91,6 +91,14 @@ def charge_par_enseignant(db: Session = Depends(get_db)):
                     )
                 )
             ).label("nb_surveillances"),
+            func.count(
+                distinct(
+                    case(
+                        (Examen.id.isnot(None), func.date(Examen.dateExam)),
+                        else_=None
+                    )
+                )
+            ).label("nb_jours"),
         )
         .filter(Enseignant.participe_surveillance == True)  # Ne compter que les enseignants qui participent
         .join(Affectation, Enseignant.id == Affectation.enseignant_id, isouter=True)
@@ -111,10 +119,11 @@ def charge_par_enseignant(db: Session = Depends(get_db)):
                 "prenom": prenom,
                 "grade": grade,
                 "nb_surveillances": nb or 0,
+                "nb_jours": nb_jours or 0,
                 "quota_initial": quota_exception if is_exception and quota_exception is not None else quota_par_grade.get(grade, 0),
                 "is_exception": is_exception,
             }
-            for ens_id, nom, prenom, grade, is_exception, quota_exception, nb in charges
+            for ens_id, nom, prenom, grade, is_exception, quota_exception, nb, nb_jours in charges
         ]
     }
 

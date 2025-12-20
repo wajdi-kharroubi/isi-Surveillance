@@ -40,10 +40,11 @@ class SurveillanceOptimizerV3:
     RÈGLES DE PRÉFÉRENCE (Contraintes souples - SOFT):
     1. Respect des vœux de NON-disponibilité (vœux = créneaux où l'enseignant NE VEUT PAS surveiller)
     2. Nombre maximum de séances par jour
-    3. Regroupement des séances (limiter les heures creuses)
-    4. Présence des responsables d'examen (favorisée mais non obligatoire)
-    5. Équilibre entre séances de taille similaire
-    6. Interdiction première + dernière séance isolées
+    3. Minimisation du nombre de jours de surveillance (concentrer sur moins de jours)
+    4. Regroupement des séances (limiter les heures creuses)
+    5. Présence des responsables d'examen (favorisée mais non obligatoire)
+    6. Équilibre entre séances de taille similaire
+    7. Interdiction première + dernière séance isolées
 
     PRIORITÉ DES CONTRAINTES (ordre d'importance):
     1. ÉGALITÉ STRICTE par Grade (PRIORITÉ 1 - OBLIGATOIRE)
@@ -51,10 +52,11 @@ class SurveillanceOptimizerV3:
     3. Nombre d'Enseignants par Séance (PRIORITÉ 2 - OBLIGATOIRE)
     4. Respect des Vœux de NON-Disponibilité (PRIORITÉ 3 - SOUPLE - POIDS LE PLUS ÉLEVÉ)
     5. Nombre Maximum de Séances par Jour (PRIORITÉ 4 - SOUPLE)
-    6. Regroupement des Séances (PRIORITÉ 5 - SOUPLE - limiter heures creuses)
-    7. Présence des Responsables d'Examens (PRIORITÉ 6 - SOUPLE)
-    8. Équilibre entre Séances de Taille Similaire (PRIORITÉ 7)
-    9. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 8)
+    6. Minimisation du Nombre de Jours de Surveillance (PRIORITÉ 5 - SOUPLE)
+    7. Regroupement des Séances (PRIORITÉ 6 - SOUPLE - limiter heures creuses)
+    8. Présence des Responsables d'Examens (PRIORITÉ 7 - SOUPLE)
+    9. Équilibre entre Séances de Taille Similaire (PRIORITÉ 8)
+    10. Interdiction Première + Dernière Séance Isolées (PRIORITÉ 9)
     """
 
     def __init__(self, db: Session):
@@ -210,7 +212,12 @@ class SurveillanceOptimizerV3:
             enseignants, seances, affectations_vars
         )
 
-        # CONTRAINTE 5: Favoriser séances consécutives - Regroupement (PRIORITÉ 5 - SOUPLE - limiter heures creuses)
+        # CONTRAINTE 5: Minimiser le nombre de jours de surveillance (PRIORITÉ 5 - SOUPLE)
+        penalite_nombre_jours = self._contrainte_minimiser_jours_surveillance(
+            enseignants, seances, affectations_vars
+        )
+
+        # CONTRAINTE 6: Favoriser séances consécutives - Regroupement (PRIORITÉ 6 - SOUPLE - limiter heures creuses)
         bonus_consecutivite = None
         if activer_regroupement_temporel:
             bonus_consecutivite = self._contrainte_seances_consecutives(
@@ -219,12 +226,12 @@ class SurveillanceOptimizerV3:
         else:
             pass
 
-        # CONTRAINTE 6: Favoriser la présence des responsables (PRIORITÉ 6 - SOUPLE)
+        # CONTRAINTE 7: Favoriser la présence des responsables (PRIORITÉ 7 - SOUPLE)
         preferences_responsables = self._contrainte_responsables(
             responsables_examens, seances, affectations_vars, enseignants
         )
 
-        # CONTRAINTE 7: Équilibre entre séances (PRIORITÉ 7 - OBLIGATOIRE)
+        # CONTRAINTE 8: Équilibre entre séances (PRIORITÉ 8 - OBLIGATOIRE)
         self._contrainte_equilibre_entre_seances(
             seances,
             enseignants,
@@ -253,6 +260,7 @@ class SurveillanceOptimizerV3:
             activer_regroupement_temporel,
             mode_adaptatif,
             penalite_max_seances,
+            penalite_nombre_jours,
             preferences_responsables,
             objectifs_par_seance,
             penalite_isolees,
@@ -813,6 +821,73 @@ class SurveillanceOptimizerV3:
         
         return penalite_max_seances
 
+    def _contrainte_minimiser_jours_surveillance(
+        self, enseignants: List[Enseignant], seances: Dict, affectations_vars: Dict
+    ):
+        """
+        CONTRAINTE 5 (PRIORITÉ 5 - SOUPLE): Minimiser le nombre de jours de surveillance par enseignant.
+
+        Objectif:
+        - Concentrer les surveillances sur le moins de jours possibles
+        - Éviter qu'un enseignant surveille sur 5 jours différents s'il peut le faire sur 3 jours
+
+        Stratégie:
+        - Compter pour chaque enseignant le nombre de jours où il a au moins une séance
+        - Minimiser la somme de ces nombres (pénalité = nombre total de jours travaillés)
+
+        Exemple:
+        - Enseignant A: 4 séances réparties sur 2 jours → score = 2
+        - Enseignant B: 4 séances réparties sur 4 jours → score = 4 (PÉNALISÉ)
+
+        Retourne une variable représentant le nombre total de jours de surveillance (à minimiser).
+        """
+        # Grouper les séances par jour
+        seances_par_jour = {}
+        for seance_key in seances.keys():
+            jour_index = seance_key[4]  # Index du jour (1, 2, 3...)
+            if jour_index not in seances_par_jour:
+                seances_par_jour[jour_index] = []
+            seances_par_jour[jour_index].append(seance_key)
+
+        # Pour chaque enseignant, compter le nombre de jours où il travaille
+        jours_travailles_par_enseignant = []
+
+        for enseignant in enseignants:
+            for jour_index, seances_jour in seances_par_jour.items():
+                # Vérifier si l'enseignant a au moins une séance ce jour
+                affectations_jour = [
+                    affectations_vars[(seance_key, enseignant.id)]
+                    for seance_key in seances_jour
+                    if (seance_key, enseignant.id) in affectations_vars
+                ]
+
+                if affectations_jour:
+                    # Variable booléenne: 1 si l'enseignant travaille ce jour, 0 sinon
+                    travaille_ce_jour = self.model.NewBoolVar(
+                        f"ens_{enseignant.id}_travaille_jour_{jour_index}"
+                    )
+                    
+                    # Si au moins une séance est affectée ce jour → travaille_ce_jour = 1
+                    self.model.Add(sum(affectations_jour) >= 1).OnlyEnforceIf(travaille_ce_jour)
+                    self.model.Add(sum(affectations_jour) == 0).OnlyEnforceIf(travaille_ce_jour.Not())
+                    
+                    jours_travailles_par_enseignant.append(travaille_ce_jour)
+
+        # Calculer le nombre total de jours travaillés (à minimiser)
+        if jours_travailles_par_enseignant:
+            nb_total_jours = self.model.NewIntVar(
+                0, len(jours_travailles_par_enseignant), "total_jours_surveillance"
+            )
+            self.model.Add(nb_total_jours == sum(jours_travailles_par_enseignant))
+            
+            self.infos.append(
+                f"✓ Contrainte minimisation jours: {len(enseignants)} enseignants × {len(seances_par_jour)} jours"
+            )
+            
+            return nb_total_jours
+        
+        return None
+
     def _contrainte_voeux(
         self,
         list_voeux: List[Dict],
@@ -1326,6 +1401,7 @@ class SurveillanceOptimizerV3:
         activer_regroupement_temporel: bool = False,
         mode_adaptatif: bool = False,
         penalite_max_seances=None,
+        penalite_nombre_jours=None,
         preferences_responsables: Dict = None,
         objectifs_par_seance: Dict = None,
         penalite_isolees=None,
@@ -1337,10 +1413,11 @@ class SurveillanceOptimizerV3:
         - PRIORITÉ 1-2: ÉGALITÉ par grade + Quota maximum + Nombre d'enseignants (CONTRAINTES FORTES - garanties)
         - PRIORITÉ 3: Respect des vœux de NON-disponibilité (POIDS LE PLUS ÉLEVÉ - SOUPLE)
         - PRIORITÉ 4: Respect du nombre max de séances/jour (POIDS ÉLEVÉ - SOUPLE)
-        - PRIORITÉ 5: Regroupement des séances (POIDS MOYEN - SOUPLE - limiter heures creuses)
-        - PRIORITÉ 6: Présence des responsables (POIDS MOYEN - SOUPLE)
-        - PRIORITÉ 7: Équilibre entre séances (CONTRAINTE FORTE - garantie)
-        - PRIORITÉ 8: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 5: Minimisation du nombre de jours de surveillance (POIDS ÉLEVÉ - SOUPLE)
+        - PRIORITÉ 6: Regroupement des séances (POIDS MOYEN - SOUPLE - limiter heures creuses)
+        - PRIORITÉ 7: Présence des responsables (POIDS MOYEN - SOUPLE)
+        - PRIORITÉ 8: Équilibre entre séances (CONTRAINTE FORTE - garantie)
+        - PRIORITÉ 9: Interdiction 1ère+dernière isolées (CONTRAINTE FORTE - garantie)
 
         ADAPTATION SELON LE MODE:
         
@@ -1473,13 +1550,22 @@ class SurveillanceOptimizerV3:
             else:
                 poids.append(-40)  # Poids élevé en mode normal
 
-        # PRIORITÉ 5: Bonus regroupement (POIDS MOYEN pour limiter heures creuses)
+        # PRIORITÉ 5: Minimiser le nombre de jours de surveillance (POIDS ÉLEVÉ - SOUPLE)
+        if penalite_nombre_jours is not None:
+            composantes.append(penalite_nombre_jours)
+            # Troisième priorité - concentrer les surveillances sur moins de jours
+            if mode_adaptatif:
+                poids.append(-32)  # Poids élevé (plus que regroupement, moins que max séances/jour)
+            else:
+                poids.append(-35)  # Poids élevé en mode normal
+
+        # PRIORITÉ 6: Bonus regroupement (POIDS MOYEN pour limiter heures creuses)
         if activer_regroupement_temporel and bonus_consecutivite is not None:
             composantes.append(bonus_consecutivite)
-            # Troisième priorité - important pour le confort des enseignants
-            poids.append(30)  # Poids moyen positif
+            # Quatrième priorité - important pour le confort des enseignants
+            poids.append(25)  # Poids moyen positif (réduit car moins prioritaire)
 
-        # PRIORITÉ 6: MAXIMISER la présence des responsables (POIDS MOYEN - SOUPLE)
+        # PRIORITÉ 7: MAXIMISER la présence des responsables (POIDS MOYEN - SOUPLE)
         bonus_responsables = None
         if preferences_responsables and preferences_responsables.get('variables'):
             responsables_vars = preferences_responsables['variables']
@@ -1493,11 +1579,11 @@ class SurveillanceOptimizerV3:
                 self.model.Add(bonus_responsables == sum(responsables_vars))
                 
                 composantes.append(bonus_responsables)
-                # Quatrième priorité
+                # Cinquième priorité
                 if mode_adaptatif:
-                    poids.append(20)  # Poids moyen
+                    poids.append(18)  # Poids moyen
                 else:
-                    poids.append(25)  # Poids moyen en mode normal
+                    poids.append(22)  # Poids moyen en mode normal
 
         # Équilibre global de charge (minimiser dispersion globale entre TOUS les enseignants)
         # ⚠️ DÉSACTIVÉ EN MODE ADAPTATIF : La dispersion inter-grades est structurelle (quotas différents)

@@ -16,7 +16,7 @@ function ensureDataFolderStructure() {
 
   try {
     const appData = process.env.APPDATA || path.join(require('os').homedir(), 'AppData', 'Roaming');
-    const dataFolder = path.join(appData, 'GestionSurveillances');
+    const dataFolder = path.join(appData, 'GestionSurveillancesISI');
     
     // Créer le dossier et les sous-dossiers s'ils n'existent pas
     if (!fs.existsSync(dataFolder)) {

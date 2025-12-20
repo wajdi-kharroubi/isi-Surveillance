@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     # Running as compiled executable
     # Use AppData folder for user data (not Program Files - permissions issue!)
     appdata = os.getenv('APPDATA') or os.path.expanduser('~')
-    BASE_DIR = Path(appdata) / "GestionSurveillances"
+    BASE_DIR = Path(appdata) / "GestionSurveillancesISI"
     BASE_DIR.mkdir(parents=True, exist_ok=True)
     DEBUG = False  # Force production mode
 else:

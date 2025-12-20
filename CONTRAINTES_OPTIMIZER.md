@@ -191,7 +191,99 @@ Enseignant A a exprimé un vœu de NON-disponibilité pour :
 
 ---
 
-### 7. CONTRAINTE DE PRÉSENCE DES RESPONSABLES (Priorité 4)
+### 7. CONTRAINTE DE NOMBRE MAXIMUM DE SÉANCES PAR JOUR (Priorité 4)
+
+**Méthode:** `_contrainte_nombre_max_seances_par_jour()`
+
+**Rôle:**
+- Respecter la préférence de chaque enseignant concernant le **nombre maximum de séances** qu'il souhaite surveiller dans une même journée
+- Champ `nombre_max` dans la table Enseignant
+
+**Objectif:**
+- **Confort des enseignants** : éviter une charge trop concentrée sur une seule journée
+- Si nombre_max = 0 : contrainte DURE (interdiction absolue)
+- Si nombre_max > 0 : contrainte SOUPLE (préférence)
+
+**Poids dans la fonction objectif:**
+- Mode NORMAL : **-40**
+- Mode ADAPTATIF : **-35**
+
+**Exemple:**
+```
+Enseignant avec nombre_max = 2 :
+✅ PRÉFÉRÉ : Maximum 2 séances par jour
+⚠️ POSSIBLE mais PÉNALISÉ : 3 ou 4 séances dans la même journée
+```
+
+**Impact en cas de violation:** Pénalité élevée dans le score
+
+---
+
+### 8. CONTRAINTE DE MINIMISATION DU NOMBRE DE JOURS (Priorité 5)
+
+**Méthode:** `_contrainte_minimiser_jours_surveillance()`
+
+**Rôle:**
+- **Concentrer** les séances de surveillance de chaque enseignant sur le **moins de jours possible**
+- Éviter qu'un enseignant surveille sur 5 jours différents s'il peut le faire sur 3 jours
+
+**Objectif:**
+- **Confort des enseignants** : réduire le nombre de déplacements
+- Améliorer l'équilibre vie professionnelle/vie personnelle
+- Favoriser des jours entièrement libres
+
+**Poids dans la fonction objectif:**
+- Mode NORMAL : **-35**
+- Mode ADAPTATIF : **-32**
+
+**Exemple:**
+```
+Enseignant devant faire 4 séances de surveillance :
+
+✅ OPTIMAL : Les 4 séances réparties sur 2 jours
+   - Lundi : S1, S2
+   - Mardi : S3, S4
+
+⚠️ PÉNALISÉ : Les 4 séances réparties sur 4 jours différents
+   - Lundi : S1
+   - Mardi : S2
+   - Jeudi : S3
+   - Vendredi : S4
+```
+
+**Impact en cas de violation:** Pénalité élevée dans le score (mais moins que vœux ou nombre max par jour)
+
+---
+
+### 9. CONTRAINTE DE REGROUPEMENT DES SÉANCES (Priorité 6)
+
+**Méthode:** `_contrainte_seances_consecutives()`
+
+**Rôle:**
+- **Favoriser les séances consécutives** dans une même journée (S1-S2, S2-S3, S3-S4)
+- **Pénaliser les heures creuses** (exemple : S1 puis S3 avec un trou en S2)
+
+**Objectif:**
+- **Confort des enseignants** : limiter les temps d'attente inutiles
+- Réduire les heures creuses entre séances
+
+**Poids dans la fonction objectif:**
+- **+25** (bonus pour séances consécutives, réduit car moins prioritaire que minimisation des jours)
+
+**Exemple:**
+```
+Enseignant devant surveiller 3 séances dans la même journée :
+
+✅ OPTIMAL : S1-S2-S3 (séances consécutives) → Bonus +6
+⚠️ ACCEPTABLE : S1-S2-S4 (heure creuse en S3) → Pénalité -5
+❌ PEU SOUHAITABLE : S1 seule → Pénalité -2
+```
+
+**Impact en cas de violation:** Légère pénalité dans le score
+
+---
+
+### 10. CONTRAINTE DE PRÉSENCE DES RESPONSABLES (Priorité 7)
 
 **Méthode:** `_contrainte_responsables()`
 

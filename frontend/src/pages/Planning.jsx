@@ -115,6 +115,7 @@ export default function Planning() {
         : (gradeInfo?.nb_surveillances || 0);
       
       const nb_surveillances_affectees = charge?.nb_surveillances || 0;
+      const nb_jours = charge?.nb_jours || 0;
       const pourcentage_quota = quota_max > 0 
         ? Math.round((nb_surveillances_affectees / quota_max) * 100)
         : 0;
@@ -122,6 +123,7 @@ export default function Planning() {
       return {
         ...ens,
         nb_surveillances_affectees,
+        nb_jours,
         quota_max,
         pourcentage_quota,
       };
@@ -1094,6 +1096,26 @@ export default function Planning() {
                           <th className="px-6 py-4 text-center">
                             <button
                               onClick={() => {
+                                if (sortBy === 'jours') {
+                                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                                } else {
+                                  setSortBy('jours');
+                                  setSortOrder('desc');
+                                }
+                              }}
+                              className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider hover:text-blue-600 transition-colors"
+                            >
+                              Nb Jours
+                              {sortBy === 'jours' && (
+                                <span className="text-blue-600">
+                                  {sortOrder === 'asc' ? '↑' : '↓'}
+                                </span>
+                              )}
+                            </button>
+                          </th>
+                          <th className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => {
                                 if (sortBy === 'pourcentage') {
                                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
                                 } else {
@@ -1126,6 +1148,9 @@ export default function Planning() {
                               const pctA = a.quota_max > 0 ? (a.nb_surveillances_affectees / a.quota_max) * 100 : 0;
                               const pctB = b.quota_max > 0 ? (b.nb_surveillances_affectees / b.quota_max) * 100 : 0;
                               compareValue = pctB - pctA;
+                            } else if (sortBy === 'jours') {
+                              // Trier par nombre de jours
+                              compareValue = (b.nb_jours || 0) - (a.nb_jours || 0);
                             } else if (sortBy === 'grade') {
                               // Trier par grade (alphabétique)
                               compareValue = (a.grade_code || '').localeCompare(b.grade_code || '');
@@ -1182,6 +1207,16 @@ export default function Planning() {
                                     </span>
                                     <span className="text-sm text-gray-500 font-medium">
                                       / {ens.quota_max}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+                                    <span className="text-lg font-bold text-blue-700">
+                                      {ens.nb_jours}
+                                    </span>
+                                    <span className="text-xs text-blue-600 font-semibold">
+                                      {ens.nb_jours <= 1 ? 'jour' : 'jours'}
                                     </span>
                                   </div>
                                 </td>
