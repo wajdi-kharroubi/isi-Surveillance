@@ -395,7 +395,22 @@ class GmailConvocationService:
                 <p>Vous êtes convoqué(e) pour assurer la surveillance des examens selon le planning suivant :</p>
         """
         
-        # Tableau simplifié avec toutes les affectations
+        # Regrouper les affectations par séance (date + horaires) pour éviter les doublons
+        seances = {}
+        for aff in affectations:
+            exam = aff.examen
+            key = (exam.dateExam, exam.h_debut, exam.h_fin)
+            if key not in seances:
+                seances[key] = {
+                    'date': exam.dateExam,
+                    'h_debut': exam.h_debut,
+                    'h_fin': exam.h_fin
+                }
+        
+        # Trier par date puis heure de début
+        seances_list = sorted(seances.values(), key=lambda x: (x['date'], x['h_debut']))
+        
+        # Tableau simplifié avec toutes les séances uniques
         html += """
                 <table>
                     <tr>
@@ -405,15 +420,10 @@ class GmailConvocationService:
                     </tr>
         """
         
-        # Trier toutes les affectations par date et heure
-        affectations_triees = sorted(affectations, key=lambda x: (x.examen.dateExam, x.examen.h_debut))
-        
-        for aff in affectations_triees:
-            exam = aff.examen
-            
+        for seance in seances_list:
             # Calculer la durée
-            duree_minutes = int((exam.h_fin.hour * 60 + exam.h_fin.minute) - 
-                               (exam.h_debut.hour * 60 + exam.h_debut.minute))
+            duree_minutes = int((seance['h_fin'].hour * 60 + seance['h_fin'].minute) - 
+                               (seance['h_debut'].hour * 60 + seance['h_debut'].minute))
             duree_heures = duree_minutes // 60
             duree_reste = duree_minutes % 60
             
@@ -426,12 +436,12 @@ class GmailConvocationService:
             
             # Obtenir le jour de la semaine
             jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
-            jour = jours[exam.dateExam.weekday()]
+            jour = jours[seance['date'].weekday()]
             
             html += f"""
                 <tr>
-                    <td>{jour} {exam.dateExam.strftime('%d/%m/%Y')}</td>
-                    <td>{exam.h_debut.strftime('%H:%M')} - {exam.h_fin.strftime('%H:%M')}</td>
+                    <td>{jour} {seance['date'].strftime('%d/%m/%Y')}</td>
+                    <td>{seance['h_debut'].strftime('%H:%M')} - {seance['h_fin'].strftime('%H:%M')}</td>
                     <td>{duree_str}</td>
                 </tr>
             """
@@ -502,7 +512,7 @@ class GmailConvocationService:
                 joinedload(Affectation.examen)
             ).filter(
                 Affectation.enseignant_id == enseignant_id
-            ).join(Examen).order_by(Examen.dateExam, Examen.h_debut).all()
+            ).all()
             
             if not affectations:
                 return {
@@ -539,17 +549,28 @@ class GmailConvocationService:
                     'error': 'Échec envoi Gmail API'
                 }
             
+            # Regrouper les affectations par séance pour éviter les doublons
+            seances = {}
+            for aff in affectations:
+                exam = aff.examen
+                key = (exam.dateExam, exam.h_debut, exam.h_fin)
+                if key not in seances:
+                    seances[key] = {
+                        'date': exam.dateExam,
+                        'h_debut': exam.h_debut,
+                        'h_fin': exam.h_fin
+                    }
+            
             # Créer les événements Google Calendar si demandé
             calendar_events_created = 0
             calendar_errors = []
             
             if creer_evenements_calendar:
-                for aff in affectations:
-                    exam = aff.examen
-                    
+                # Créer un événement par séance unique
+                for seance in seances.values():
                     # Combiner date et heure
-                    start_dt = datetime.combine(exam.dateExam, exam.h_debut)
-                    end_dt = datetime.combine(exam.dateExam, exam.h_fin)
+                    start_dt = datetime.combine(seance['date'], seance['h_debut'])
+                    end_dt = datetime.combine(seance['date'], seance['h_fin'])
                     
                     # Créer le titre de l'événement
                     event_summary = f"Surveillance d'examen"
@@ -570,7 +591,7 @@ class GmailConvocationService:
                     if event_id:
                         calendar_events_created += 1
                     else:
-                        calendar_errors.append(f"Échec événement du {exam.dateExam.strftime('%d/%m/%Y')}")
+                        calendar_errors.append(f"Échec événement du {seance['date'].strftime('%d/%m/%Y')}")
             
             result = {
                 'success': True,
@@ -581,7 +602,7 @@ class GmailConvocationService:
             
             if creer_evenements_calendar:
                 result['calendar_events_created'] = calendar_events_created
-                result['calendar_events_total'] = len(affectations)
+                result['calendar_events_total'] = len(seances)
                 if calendar_errors:
                     result['calendar_errors'] = calendar_errors
             

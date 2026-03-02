@@ -1069,7 +1069,7 @@ class ExportService:
             joinedload(Affectation.examen)
         ).filter(
             Affectation.enseignant_id == enseignant.id
-        ).join(Examen).order_by(Examen.dateExam, Examen.h_debut).all()
+        ).all()
         
         if not affectations:
             raise ValueError(f"Aucune affectation trouvée pour l'enseignant {enseignant.nom} {enseignant.prenom}")

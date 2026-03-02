@@ -21,7 +21,7 @@ class Enseignant(Base):
     id = Column(Integer, primary_key=True, index=True)
     nom = Column(String(100), nullable=False)
     prenom = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False, index=True)
+    email = Column(String(150), nullable=False, index=True)
     grade = Column(String(50), nullable=False)
     grade_code = Column(String(10), nullable=False)
     code_smartex = Column(String(50), unique=True, nullable=False, index=True)
