@@ -121,12 +121,14 @@ def _verifier_et_gerer_depassement_max_jour(
         .first()
     )
 
-    # Cas 1: Dépassement actuel
-    if nb_seances > max_autorise:
-        depassement = nb_seances - max_autorise
+    # Écart signé au nombre max: positif (au-dessus), négatif (en-dessous), 0 (exact)
+    depassement = nb_seances - max_autorise
+
+    # Cas 1: Écart actuel (au-dessus OU en-dessous) sur un jour réellement travaillé
+    if nb_seances > 0 and depassement != 0:
 
         if not depassement_existant:
-            # Créer un nouveau dépassement
+            # Créer un nouvel écart
             nouveau_depassement = DepassementMaxJour(
                 generation_statistique_id=derniere_generation.id,
                 enseignant_id=enseignant_id,
@@ -158,16 +160,16 @@ def _verifier_et_gerer_depassement_max_jour(
 
             return "cree"
         else:
-            # Mettre à jour le dépassement existant
+            # Mettre à jour l'écart existant
             depassement_existant.nb_seances = nb_seances
             depassement_existant.depassement = depassement
             depassement_existant.seances = seances_str
             return "mis_a_jour"
 
-    # Cas 2: Plus de dépassement
+    # Cas 2: Plus d'écart (exactement au max)
     else:
         if depassement_existant:
-            # Supprimer le dépassement
+            # Supprimer l'écart
             db.delete(depassement_existant)
 
             # Mettre à jour les statistiques
@@ -1132,9 +1134,9 @@ def ajouter_enseignant_seance(
         db, request.enseignant_id, request.date_examen, derniere_generation, "ajouter"
     )
     if resultat_depassement == "cree":
-        messages_info.append(f"Dépassement max séances/jour détecté")
+        messages_info.append(f"Écart max séances/jour détecté")
     elif resultat_depassement == "mis_a_jour":
-        messages_info.append(f"Dépassement max séances/jour augmenté")
+        messages_info.append(f"Écart max séances/jour ajusté")
 
     # Mettre à jour le nombre d'affectations dans les statistiques
     if derniere_generation:
@@ -1345,9 +1347,9 @@ def supprimer_enseignant_seance(
         db, request.enseignant_id, request.date_examen, derniere_generation, "supprimer"
     )
     if resultat_depassement == "supprime":
-        messages_info.append(f"Dépassement max séances/jour résolu")
+        messages_info.append(f"Écart max séances/jour résolu")
     elif resultat_depassement == "mis_a_jour":
-        messages_info.append(f"Dépassement max séances/jour réduit")
+        messages_info.append(f"Écart max séances/jour ajusté")
 
     # Gestion des HeuresCreuses
     resultat_heures_creuses = _verifier_et_gerer_heures_creuses(
@@ -1591,9 +1593,9 @@ def ajouter_enseignant_par_date_heure(
         db, request.enseignant_id, request.date_examen, derniere_generation, "ajouter"
     )
     if resultat_depassement == "cree":
-        messages_info.append(f"Dépassement max séances/jour détecté")
+        messages_info.append(f"Écart max séances/jour détecté")
     elif resultat_depassement == "mis_a_jour":
-        messages_info.append(f"Dépassement max séances/jour augmenté")
+        messages_info.append(f"Écart max séances/jour ajusté")
 
     # Gestion des HeuresCreuses
     resultat_heures_creuses = _verifier_et_gerer_heures_creuses(
@@ -1754,11 +1756,17 @@ def verifier_contraintes_ajout(
     nb_seances_ce_jour = len(seances_ce_jour)
 
     nombre_max_par_jour = enseignant.nombre_max
-    max_seances_jour_depasse = (nb_seances_ce_jour + 1) > nombre_max_par_jour
+    nb_seances_apres_ajout = nb_seances_ce_jour + 1
+    ecart_actuel_seances_jour = nb_seances_ce_jour - nombre_max_par_jour
+    ecart_apres_ajout = nb_seances_apres_ajout - nombre_max_par_jour
+    seances_jour_violation = (
+        nb_seances_apres_ajout > 0 and ecart_apres_ajout != 0
+    )
 
     # Construire la réponse
     warnings = []
     errors = []
+    infos = []
 
     if quota_depasse:
         warnings.append(
@@ -1772,9 +1780,30 @@ def verifier_contraintes_ajout(
             warning_msg += f" - Motif: {voeu.motif}"
         warnings.append(warning_msg)
 
-    if max_seances_jour_depasse:
-        warnings.append(
-            f"MAX SÉANCES/JOUR DÉPASSÉ : L'enseignant aura {nb_seances_ce_jour + 1}/{nombre_max_par_jour} séances ce jour-là"
+    if seances_jour_violation:
+        abs_ecart_actuel = abs(ecart_actuel_seances_jour)
+        abs_ecart_apres = abs(ecart_apres_ajout)
+
+        if abs_ecart_apres < abs_ecart_actuel:
+            infos.append(
+                f"SÉANCES/JOUR AMÉLIORÉ : l'écart diminue ({ecart_actuel_seances_jour:+d} -> {ecart_apres_ajout:+d})"
+            )
+        elif abs_ecart_apres > abs_ecart_actuel:
+            if ecart_apres_ajout > 0:
+                warnings.append(
+                    f"SÉANCES/JOUR DÉGRADÉ : l'enseignant sera au-dessus de la cible ({nb_seances_apres_ajout}/{nombre_max_par_jour}, écart {ecart_apres_ajout:+d})"
+                )
+            else:
+                warnings.append(
+                    f"SÉANCES/JOUR DÉGRADÉ : l'enseignant sera en-dessous de la cible ({nb_seances_apres_ajout}/{nombre_max_par_jour}, écart {ecart_apres_ajout:+d})"
+                )
+        else:
+            warnings.append(
+                f"SÉANCES/JOUR NON RESPECTÉ : écart inchangé ({ecart_actuel_seances_jour:+d})"
+            )
+    else:
+        infos.append(
+            f"SÉANCES/JOUR RESPECTÉ : cible atteinte ({nb_seances_apres_ajout}/{nombre_max_par_jour})"
         )
 
     # Vérifier les heures creuses qui seraient créées
@@ -1845,7 +1874,6 @@ def verifier_contraintes_ajout(
     nb_seances_manquantes_apres = compter_seances_manquantes(heures_creuses_apres)
     
     # Comparer et générer les warnings/infos appropriés
-    infos = []
     
     if len(heures_creuses_apres) > len(heures_creuses_avant):
         # Nouveaux gaps créés
@@ -1926,8 +1954,14 @@ def verifier_contraintes_ajout(
         "seances_jour": {
             "actuel": nb_seances_ce_jour,
             "max": nombre_max_par_jour,
-            "apres_ajout": nb_seances_ce_jour + 1,
-            "depasse": max_seances_jour_depasse,
+            "apres_ajout": nb_seances_apres_ajout,
+            "ecart_actuel": ecart_actuel_seances_jour,
+            "ecart_apres_ajout": ecart_apres_ajout,
+            "respectee_apres_ajout": (
+                nb_seances_apres_ajout > 0 and ecart_apres_ajout == 0
+            ),
+            "violation": seances_jour_violation,
+            "depasse": seances_jour_violation,
         },
         "souhait": {
             "existe": voeu is not None,
@@ -2049,7 +2083,7 @@ def verifier_contraintes_echange(
 
         nb_seances_ce_jour = len(seances_ce_jour)
         nombre_max_par_jour = enseignant.nombre_max
-        max_seances_jour_depasse = nb_seances_ce_jour > nombre_max_par_jour
+        ecart_actuel_seances_jour = nb_seances_ce_jour - nombre_max_par_jour
 
         # Vérifier si l'enseignant est responsable dans sa séance actuelle (celle qu'il va quitter)
         est_responsable_seance_actuelle = False
@@ -2087,6 +2121,7 @@ def verifier_contraintes_echange(
         # Construire warnings et errors
         warnings = []
         errors = []
+        infos = []
 
         if quota_depasse:
             warnings.append(
@@ -2098,11 +2133,6 @@ def verifier_contraintes_echange(
             if voeu and voeu.motif:
                 warning_msg += f" - Motif: {voeu.motif}"
             warnings.append(warning_msg)
-
-        if max_seances_jour_depasse:
-            warnings.append(
-                f"MAX SÉANCES/JOUR DÉPASSÉ ({enseignant.nom} {enseignant.prenom}) : L'enseignant a déjà {nb_seances_ce_jour}/{nombre_max_par_jour} séances ce jour-là"
-            )
 
         # Vérifier les heures creuses qui seraient créées après l'échange
         # Simuler le planning après l'échange : retirer l'ancienne séance, ajouter la nouvelle
@@ -2162,15 +2192,51 @@ def verifier_contraintes_echange(
             seances_apres = [(h, f) for h, f in seances_apres if h != h_debut_actuelle]
         
         # Ajouter la nouvelle séance
-        if (h_debut, h_debut) not in seances_apres:
-            seances_apres.append((h_debut, h_debut))
+        if not any(h == h_debut for h, _ in seances_apres):
+            seances_apres.append((h_debut, h_fin))
+
+        # Contrainte cible séances/jour (version écart signé)
+        nb_seances_apres_echange = len({h for h, _ in seances_apres})
+        ecart_apres_echange = nb_seances_apres_echange - nombre_max_par_jour
+        seances_jour_violation = (
+            nb_seances_apres_echange > 0 and ecart_apres_echange != 0
+        )
+
+        if seances_jour_violation:
+            abs_ecart_actuel = abs(ecart_actuel_seances_jour)
+            abs_ecart_apres = abs(ecart_apres_echange)
+
+            if abs_ecart_apres < abs_ecart_actuel:
+                infos.append(
+                    f"SÉANCES/JOUR AMÉLIORÉ ({enseignant.nom} {enseignant.prenom}) : l'écart diminue ({ecart_actuel_seances_jour:+d} -> {ecart_apres_echange:+d})"
+                )
+            elif abs_ecart_apres > abs_ecart_actuel:
+                if ecart_apres_echange > 0:
+                    warnings.append(
+                        f"SÉANCES/JOUR DÉGRADÉ ({enseignant.nom} {enseignant.prenom}) : au-dessus de la cible après échange ({nb_seances_apres_echange}/{nombre_max_par_jour}, écart {ecart_apres_echange:+d})"
+                    )
+                else:
+                    warnings.append(
+                        f"SÉANCES/JOUR DÉGRADÉ ({enseignant.nom} {enseignant.prenom}) : en-dessous de la cible après échange ({nb_seances_apres_echange}/{nombre_max_par_jour}, écart {ecart_apres_echange:+d})"
+                    )
+            else:
+                warnings.append(
+                    f"SÉANCES/JOUR NON RESPECTÉ ({enseignant.nom} {enseignant.prenom}) : écart inchangé ({ecart_actuel_seances_jour:+d})"
+                )
+        elif nb_seances_apres_echange > 0:
+            infos.append(
+                f"SÉANCES/JOUR RESPECTÉ ({enseignant.nom} {enseignant.prenom}) : cible atteinte après échange ({nb_seances_apres_echange}/{nombre_max_par_jour})"
+            )
+        else:
+            infos.append(
+                f"SÉANCES/JOUR ({enseignant.nom} {enseignant.prenom}) : ne travaille plus ce jour-là après échange"
+            )
         
         # Calculer heures creuses APRÈS échange
         heures_creuses_apres = detecter_heures_creuses_from_seances(seances_apres)
         nb_seances_manquantes_apres = compter_seances_manquantes(heures_creuses_apres)
         
         # Comparer et générer warnings/infos
-        infos = []
         
         if len(heures_creuses_apres) > len(heures_creuses_avant):
             # Nouveaux gaps créés
@@ -2219,7 +2285,14 @@ def verifier_contraintes_echange(
             "seances_jour": {
                 "actuel": nb_seances_ce_jour,
                 "max": nombre_max_par_jour,
-                "depasse": max_seances_jour_depasse,
+                "apres_echange": nb_seances_apres_echange,
+                "ecart_actuel": ecart_actuel_seances_jour,
+                "ecart_apres_echange": ecart_apres_echange,
+                "respectee_apres_echange": (
+                    nb_seances_apres_echange > 0 and ecart_apres_echange == 0
+                ),
+                "violation": seances_jour_violation,
+                "depasse": seances_jour_violation,
             },
             "souhait": {
                 "existe": voeu is not None,
@@ -2308,6 +2381,9 @@ def verifier_contraintes_suppression(
         .all()
     )
 
+    nb_seances_ce_jour = len(seances_ce_jour)
+    nombre_max_par_jour = enseignant.nombre_max
+
     # Fonction pour convertir l'heure en code séance
     def heure_vers_code_seance_avec_idx(h_debut_time):
         heures = h_debut_time.hour
@@ -2349,6 +2425,13 @@ def verifier_contraintes_suppression(
         (h_debut, h_fin) for h_debut, h_fin in seances_ce_jour
         if h_debut != request.h_debut
     ]
+
+    nb_seances_apres_suppression = len(seances_apres_suppression)
+    ecart_actuel_seances_jour = nb_seances_ce_jour - nombre_max_par_jour
+    ecart_apres_suppression = nb_seances_apres_suppression - nombre_max_par_jour
+    seances_jour_violation = (
+        nb_seances_apres_suppression > 0 and ecart_apres_suppression != 0
+    )
     
     # Calculer les heures creuses APRÈS suppression
     seances_codes_apres = []
@@ -2375,6 +2458,36 @@ def verifier_contraintes_suppression(
     # Construire les warnings
     warnings = []
     infos = []
+
+    # Contrainte séances/jour (cible exacte)
+    if nb_seances_apres_suppression > 0:
+        if ecart_apres_suppression == 0:
+            infos.append(
+                f"SÉANCES/JOUR RESPECTÉ : cible atteinte après suppression ({nb_seances_apres_suppression}/{nombre_max_par_jour})"
+            )
+        else:
+            abs_ecart_actuel = abs(ecart_actuel_seances_jour)
+            abs_ecart_apres = abs(ecart_apres_suppression)
+
+            if abs_ecart_apres < abs_ecart_actuel:
+                infos.append(
+                    f"SÉANCES/JOUR AMÉLIORÉ : l'écart diminue ({ecart_actuel_seances_jour:+d} -> {ecart_apres_suppression:+d})"
+                )
+            elif abs_ecart_apres > abs_ecart_actuel:
+                if ecart_apres_suppression > 0:
+                    warnings.append(
+                        f"SÉANCES/JOUR DÉGRADÉ : au-dessus de la cible après suppression ({nb_seances_apres_suppression}/{nombre_max_par_jour}, écart {ecart_apres_suppression:+d})"
+                    )
+                else:
+                    warnings.append(
+                        f"SÉANCES/JOUR DÉGRADÉ : en-dessous de la cible après suppression ({nb_seances_apres_suppression}/{nombre_max_par_jour}, écart {ecart_apres_suppression:+d})"
+                    )
+            else:
+                warnings.append(
+                    f"SÉANCES/JOUR NON RESPECTÉ : écart inchangé ({ecart_actuel_seances_jour:+d})"
+                )
+    else:
+        infos.append("SÉANCES/JOUR : après suppression, l'enseignant ne travaille plus ce jour-là")
 
     # Compter le nombre total de séances manquantes (taille des gaps)
     def compter_seances_manquantes(heures_creuses_list):
@@ -2429,6 +2542,18 @@ def verifier_contraintes_suppression(
             "nom": enseignant.nom,
             "prenom": enseignant.prenom,
             "grade_code": enseignant.grade_code,
+        },
+        "seances_jour": {
+            "actuel": nb_seances_ce_jour,
+            "max": nombre_max_par_jour,
+            "apres_suppression": nb_seances_apres_suppression,
+            "ecart_actuel": ecart_actuel_seances_jour,
+            "ecart_apres_suppression": ecart_apres_suppression,
+            "respectee_apres_suppression": (
+                nb_seances_apres_suppression > 0 and ecart_apres_suppression == 0
+            ),
+            "violation": seances_jour_violation,
+            "depasse": seances_jour_violation,
         },
         "heures_creuses_avant": len(heures_creuses_avant),
         "heures_creuses_apres": len(heures_creuses_apres),

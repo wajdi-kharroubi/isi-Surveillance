@@ -180,8 +180,47 @@ def generer_planning_v3(request: GenerationRequest, db: Session = Depends(get_db
                     )
                     db.add(responsable)
                 
-                # Enregistrer les dépassements du nombre max de séances par jour
-                for depassement in stats_max_seances.get('details_violations', []):
+                # Enregistrer les écarts du nombre max de séances par jour (+ et -)
+                # Compatibilité: certaines versions peuvent séparer les écarts négatifs
+                # dans details_en_dessous, on fusionne donc les deux sources.
+                ecarts_max_jour = list(stats_max_seances.get('details_violations', []))
+
+                cles_existantes = set()
+                for item in ecarts_max_jour:
+                    cles_existantes.add(
+                        (
+                            item.get('enseignant_id'),
+                            item.get('date_obj'),
+                            item.get('nb_seances'),
+                            item.get('max_autorise'),
+                        )
+                    )
+
+                for ecart_sous in stats_max_seances.get('details_en_dessous', []):
+                    ecart_converti = {
+                        'enseignant_id': ecart_sous['enseignant_id'],
+                        'enseignant_nom': ecart_sous['enseignant_nom'],
+                        'enseignant_prenom': ecart_sous['enseignant_prenom'],
+                        'code': ecart_sous['code'],
+                        'date_obj': ecart_sous['date_obj'],
+                        'nb_seances': ecart_sous['nb_seances'],
+                        'max_autorise': ecart_sous['max_autorise'],
+                        'depassement': -abs(ecart_sous.get('ecart_sous', 0)),
+                        'seances': ecart_sous['seances'],
+                    }
+
+                    cle = (
+                        ecart_converti['enseignant_id'],
+                        ecart_converti['date_obj'],
+                        ecart_converti['nb_seances'],
+                        ecart_converti['max_autorise'],
+                    )
+
+                    if cle not in cles_existantes:
+                        ecarts_max_jour.append(ecart_converti)
+                        cles_existantes.add(cle)
+
+                for depassement in ecarts_max_jour:
                     depass = DepassementMaxJour(
                         generation_statistique_id=generation_stat.id,
                         enseignant_id=depassement['enseignant_id'],

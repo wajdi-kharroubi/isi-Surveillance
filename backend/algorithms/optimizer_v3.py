@@ -350,7 +350,17 @@ class SurveillanceOptimizerV3:
         statistiques_data = {
             'souhaits': {'total': 0, 'respectes': 0, 'violes': 0, 'details_violes': []},
             'responsables': {'total': 0, 'presents': 0, 'absents': 0, 'details_absents': []},
-            'max_seances_jour': {'total': 0, 'respectees': 0, 'violees': 0, 'details_violations': []},
+            'max_seances_jour': {
+                'total': 0,
+                'respectees': 0,
+                'violees': 0,
+                'details_violations': [],
+                'en_dessous_max': 0,
+                'details_en_dessous': [],
+                'a_la_limite_max': 0,
+                'ecart_sous_total': 0,
+                'ecart_absolu_total': 0,
+            },
             'heures_creuses': {'total': 0, 'enseignants_concernes': 0, 'details': []}
         }
         
@@ -743,8 +753,9 @@ class SurveillanceOptimizerV3:
         - Si nombre_max = 2 : l'enseignant PRÉFÈRE surveiller au maximum 2 séances dans la même journée - SOUPLE
         - Si nombre_max = 4 : l'enseignant peut surveiller toutes les séances d'une journée (S1, S2, S3, S4)
 
-        Cette contrainte souple pénalise les dépassements du nombre max de séances par jour,
-        mais permet de les dépasser si nécessaire pour couvrir toutes les séances.
+        Cette contrainte souple pénalise l'écart au nombre max de séances par jour
+        (au-dessus ET en-dessous), afin de converger vers `nombre_max`.
+        Les jours sans aucune séance affectée ne sont pas pénalisés.
         
         Retourne un score de pénalité pour la fonction objectif.
         """
@@ -757,9 +768,9 @@ class SurveillanceOptimizerV3:
             seances_par_date[date_exam].append(seance_key)
 
         # Pour les enseignants avec nombre_max = 0, on garde une contrainte DURE
-        # Pour les autres, on calcule une pénalité souple
+        # Pour les autres, on calcule une pénalité souple d'écart au nombre_max
         nb_contraintes_dures = 0
-        penalites_depassement = []
+        penalites_ecart = []
         
         for enseignant in enseignants:
             nombre_max = getattr(enseignant, 'nombre_max', 4)  # Défaut: 4 séances max
@@ -772,7 +783,7 @@ class SurveillanceOptimizerV3:
                         self.model.Add(affectations_vars[(seance_key, enseignant.id)] == 0)
                         nb_contraintes_dures += 1
             else:
-                # Pour chaque jour, calculer la pénalité de dépassement (CONTRAINTE SOUPLE)
+                # Pour chaque jour, calculer la pénalité d'écart au nombre_max (CONTRAINTE SOUPLE)
                 for date_exam, seances_du_jour in seances_par_date.items():
                     # Calculer le nombre de séances affectées à cet enseignant ce jour-là
                     seances_affectees_ce_jour = []
@@ -789,16 +800,34 @@ class SurveillanceOptimizerV3:
                             f"nb_seances_{enseignant.id}_{date_exam}"
                         )
                         self.model.Add(nb_seances_jour == sum(seances_affectees_ce_jour))
-                        
-                        # Créer une variable pour le dépassement (0 si <= nombre_max, sinon nb - nombre_max)
-                        depassement = self.model.NewIntVar(
-                            0, len(seances_du_jour), 
-                            f"depassement_{enseignant.id}_{date_exam}"
+
+                        # Déterminer si l'enseignant travaille ce jour-là
+                        travaille_ce_jour = self.model.NewBoolVar(
+                            f"travaille_{enseignant.id}_{date_exam}"
                         )
-                        self.model.AddMaxEquality(depassement, [0, nb_seances_jour - nombre_max])
-                        
+                        self.model.Add(nb_seances_jour >= 1).OnlyEnforceIf(travaille_ce_jour)
+                        self.model.Add(nb_seances_jour == 0).OnlyEnforceIf(travaille_ce_jour.Not())
+
+                        # Écart absolu au nombre_max: |nb_seances_jour - nombre_max|
+                        borne_ecart = max(nombre_max, len(seances_du_jour))
+                        ecart_absolu = self.model.NewIntVar(
+                            0,
+                            borne_ecart,
+                            f"ecart_nombre_max_{enseignant.id}_{date_exam}"
+                        )
+                        self.model.AddAbsEquality(ecart_absolu, nb_seances_jour - nombre_max)
+
+                        # Pénalité active uniquement si l'enseignant travaille ce jour-là
+                        penalite_jour = self.model.NewIntVar(
+                            0,
+                            borne_ecart,
+                            f"penalite_nombre_max_{enseignant.id}_{date_exam}"
+                        )
+                        self.model.Add(penalite_jour == ecart_absolu).OnlyEnforceIf(travaille_ce_jour)
+                        self.model.Add(penalite_jour == 0).OnlyEnforceIf(travaille_ce_jour.Not())
+
                         # Ajouter à la liste des pénalités
-                        penalites_depassement.append(depassement)
+                        penalites_ecart.append(penalite_jour)
 
         if nb_contraintes_dures > 0:
             self.infos.append(
@@ -807,16 +836,16 @@ class SurveillanceOptimizerV3:
         
         # Calculer le score total de pénalité
         penalite_max_seances = None
-        if penalites_depassement:
+        if penalites_ecart:
             penalite_max_seances = self.model.NewIntVar(
                 0, 
-                len(penalites_depassement) * max([len(s) for s in seances_par_date.values()]), 
+                len(penalites_ecart) * max([len(s) for s in seances_par_date.values()]), 
                 "penalite_max_seances_par_jour"
             )
-            self.model.Add(penalite_max_seances == sum(penalites_depassement))
+            self.model.Add(penalite_max_seances == sum(penalites_ecart))
             
             self.infos.append(
-                f"✓ Contrainte SOUPLE nombre max de séances/jour: {len(penalites_depassement)} pénalités calculées"
+                f"✓ Contrainte SOUPLE nombre max de séances/jour: {len(penalites_ecart)} pénalités d'écart calculées"
             )
         
         return penalite_max_seances
@@ -2416,7 +2445,10 @@ class SurveillanceOptimizerV3:
             enseignants: Liste des enseignants
             
         Returns:
-            dict: Statistiques avec 'total', 'respectees', 'violees', 'details_violations'
+            dict: Statistiques avec:
+                - total, respectees, violees, details_violations (compatibilité)
+                - en_dessous_max, details_en_dessous, a_la_limite_max
+                - ecart_sous_total, ecart_absolu_total
         """
         # Grouper les séances par date
         seances_par_date = {}
@@ -2429,8 +2461,13 @@ class SurveillanceOptimizerV3:
         nb_total_contraintes = 0
         nb_contraintes_respectees = 0
         nb_contraintes_violees = 0
+        nb_contraintes_en_dessous = 0
+        nb_contraintes_a_la_limite = 0
+        ecart_sous_total = 0
+        ecart_absolu_total = 0
         
         violations_details = []
+        en_dessous_details = []
         
         # Pour chaque enseignant
         for enseignant in enseignants:
@@ -2451,12 +2488,34 @@ class SurveillanceOptimizerV3:
                 # Si l'enseignant a au moins une séance ce jour-là, vérifier la contrainte
                 if nb_seances_affectees > 0:
                     nb_total_contraintes += 1
-                    
-                    if nb_seances_affectees <= nombre_max:
+                    ecart = nb_seances_affectees - nombre_max
+                    ecart_absolu_total += abs(ecart)
+
+                    # Contrainte respectée SEULEMENT si on atteint exactement le nombre_max
+                    if nb_seances_affectees == nombre_max:
                         nb_contraintes_respectees += 1
+                        nb_contraintes_a_la_limite += 1
                     else:
-                        # Violation de la contrainte
+                        # Violation de la contrainte: écart positif (au-dessus) ou négatif (en-dessous)
                         nb_contraintes_violees += 1
+                        if ecart < 0:
+                            ecart_sous = -ecart
+                            nb_contraintes_en_dessous += 1
+                            ecart_sous_total += ecart_sous
+                            en_dessous_details.append({
+                                'enseignant_id': enseignant.id,
+                                'enseignant_nom': enseignant.nom,
+                                'enseignant_prenom': enseignant.prenom,
+                                'enseignant': f"{enseignant.nom} {enseignant.prenom}",
+                                'code': enseignant.code_smartex or f"ID_{enseignant.id}",
+                                'date': date_exam.strftime('%d/%m/%Y'),
+                                'date_obj': date_exam,
+                                'nb_seances': nb_seances_affectees,
+                                'max_autorise': nombre_max,
+                                'seances': ', '.join(sorted(seances_affectees_liste)),
+                                'ecart_sous': ecart_sous
+                            })
+
                         violations_details.append({
                             'enseignant_id': enseignant.id,
                             'enseignant_nom': enseignant.nom,
@@ -2468,12 +2527,11 @@ class SurveillanceOptimizerV3:
                             'nb_seances': nb_seances_affectees,
                             'max_autorise': nombre_max,
                             'seances': ', '.join(sorted(seances_affectees_liste)),
-                            'depassement': nb_seances_affectees - nombre_max
+                            'depassement': ecart
                         })
         
         # Calculer les pourcentages
         pourcentage_respectees = (nb_contraintes_respectees / nb_total_contraintes * 100) if nb_total_contraintes > 0 else 100
-        pourcentage_violees = (nb_contraintes_violees / nb_total_contraintes * 100) if nb_total_contraintes > 0 else 0
         
         # Affichage détaillé
         self.infos.append("\n" + "=" * 80)
@@ -2481,28 +2539,27 @@ class SurveillanceOptimizerV3:
         self.infos.append("=" * 80)
         self.infos.append("")
         
-        # Résultats avec emoji
-        self.infos.append(f"   ✅ Contraintes respectées: {nb_contraintes_respectees} ({pourcentage_respectees:.1f}%)")
-        self.infos.append(f"   ⚠️ Contraintes violées: {nb_contraintes_violees} ({pourcentage_violees:.1f}%)")
+        # Affichage demandé: uniquement le pourcentage total respecté
+        self.infos.append(f"   ✅ Pourcentage total de contraintes respectées: {pourcentage_respectees:.1f}%")
         self.infos.append("")
         
-        # Si des violations ont été détectées, afficher les détails
-        if nb_contraintes_violees > 0:
+        # Liste unique des violations (+ et -)
+        if violations_details:
             self.infos.append("-" * 80)
-            self.infos.append(f"⚠️ LISTE DES {nb_contraintes_violees} VIOLATIONS:")
+            self.infos.append(f"⚠️ LISTE DES {len(violations_details)} VIOLATIONS (+ / -):")
             self.infos.append("-" * 80)
             self.infos.append("")
-            self.infos.append("Ces enseignants dépassent leur nombre maximum de séances par jour:")
+            self.infos.append("Ces enseignants s'écartent de leur nombre maximum de séances par jour:")
             self.infos.append("")
             
-            # Trier par date, puis par dépassement (du plus grave au moins grave), puis par nom
-            violations_details.sort(key=lambda x: (x['date'], -x['depassement'], x['enseignant']))
+            # Trier par date, puis par gravité d'écart absolu, puis par nom
+            violations_details.sort(key=lambda x: (x['date'], -abs(x['depassement']), x['enseignant']))
             
             for i, detail in enumerate(violations_details, 1):
                 self.infos.append(
                     f"   {i:3d}. {detail['enseignant']:35s} | Code: {detail['code']:12s} | "
                     f"Date: {detail['date']:10s} | Séances: {detail['nb_seances']}/{detail['max_autorise']} "
-                    f"(+{detail['depassement']}) | [{detail['seances']}]"
+                    f"({detail['depassement']:+d}) | [{detail['seances']}]"
                 )
             self.infos.append("")
         
@@ -2513,7 +2570,12 @@ class SurveillanceOptimizerV3:
             'total': nb_total_contraintes,
             'respectees': nb_contraintes_respectees,
             'violees': nb_contraintes_violees,
-            'details_violations': violations_details
+            'details_violations': violations_details,
+            'en_dessous_max': nb_contraintes_en_dessous,
+            'details_en_dessous': en_dessous_details,
+            'a_la_limite_max': nb_contraintes_a_la_limite,
+            'ecart_sous_total': ecart_sous_total,
+            'ecart_absolu_total': ecart_absolu_total,
         }
 
     def _generer_statistiques_heures_creuses(

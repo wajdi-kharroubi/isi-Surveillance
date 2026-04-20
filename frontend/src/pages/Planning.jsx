@@ -249,6 +249,11 @@ export default function Planning() {
     return timeStr.substring(0, 5);
   };
 
+  const formatSignedEcart = (value) => {
+    const n = Number(value ?? 0);
+    return n > 0 ? `+${n}` : `${n}`;
+  };
+
   const enseignantsFiltres = useMemo(() => {
     if (!searchFilter.trim()) {
       return enseignantsAvecCharge.filter(e => e.participe_surveillance);
@@ -1853,18 +1858,18 @@ export default function Planning() {
                 </div>
 
                 <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border-2 border-purple-200">
-                  <h3 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour</h3>
+                  <h3 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour (cible)</h3>
                   <div className="space-y-1">
                     <p className="text-sm text-purple-700">
-                      <span className="font-semibold">Actuel:</span> {validationData.validation.seances_jour.actuel}/{validationData.validation.seances_jour.max}
+                      <span className="font-semibold">Actuel:</span> {validationData.validation.seances_jour.actuel}/{validationData.validation.seances_jour.max} (écart {formatSignedEcart(validationData.validation.seances_jour.ecart_actuel)})
                     </p>
                     <p className="text-sm text-purple-700">
-                      <span className="font-semibold">Après ajout:</span> {validationData.validation.seances_jour.apres_ajout}/{validationData.validation.seances_jour.max}
+                      <span className="font-semibold">Après ajout:</span> {validationData.validation.seances_jour.apres_ajout}/{validationData.validation.seances_jour.max} (écart {formatSignedEcart(validationData.validation.seances_jour.ecart_apres_ajout)})
                     </p>
                     <p className={`text-lg font-bold ${
-                      validationData.validation.seances_jour.depasse ? 'text-red-600' : 'text-purple-600'
+                      validationData.validation.seances_jour.violation ? 'text-red-600' : 'text-green-600'
                     }`}>
-                      {validationData.validation.seances_jour.depasse ? 'MAX DÉPASSÉ' : 'OK'}
+                      {validationData.validation.seances_jour.violation ? 'VIOLÉE' : 'RESPECTÉE'}
                     </p>
                   </div>
                 </div>
@@ -2096,9 +2101,17 @@ export default function Planning() {
                   </div>
 
                   <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 border border-purple-200">
-                    <h4 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour</h4>
+                    <h4 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances/jour cible</h4>
                     <p className="text-sm text-purple-700">
-                      {exchangeValidationData.enseignant1.seances_jour.actuel}/{exchangeValidationData.enseignant1.seances_jour.max}
+                      Actuel: {exchangeValidationData.enseignant1.seances_jour.actuel}/{exchangeValidationData.enseignant1.seances_jour.max} (écart {formatSignedEcart(exchangeValidationData.enseignant1.seances_jour.ecart_actuel)})
+                    </p>
+                    <p className="text-sm text-purple-700">
+                      Après échange: {exchangeValidationData.enseignant1.seances_jour.apres_echange}/{exchangeValidationData.enseignant1.seances_jour.max} (écart {formatSignedEcart(exchangeValidationData.enseignant1.seances_jour.ecart_apres_echange)})
+                    </p>
+                    <p className={`text-sm font-bold ${
+                      exchangeValidationData.enseignant1.seances_jour.violation ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {exchangeValidationData.enseignant1.seances_jour.violation ? 'Statut: VIOLÉE' : 'Statut: RESPECTÉE'}
                     </p>
                   </div>
 
@@ -2130,9 +2143,17 @@ export default function Planning() {
                   </div>
 
                   <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 border border-purple-200">
-                    <h4 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances ce jour</h4>
+                    <h4 className="text-xs font-bold text-purple-900 mb-2 uppercase">Séances/jour cible</h4>
                     <p className="text-sm text-purple-700">
-                      {exchangeValidationData.enseignant2.seances_jour.actuel}/{exchangeValidationData.enseignant2.seances_jour.max}
+                      Actuel: {exchangeValidationData.enseignant2.seances_jour.actuel}/{exchangeValidationData.enseignant2.seances_jour.max} (écart {formatSignedEcart(exchangeValidationData.enseignant2.seances_jour.ecart_actuel)})
+                    </p>
+                    <p className="text-sm text-purple-700">
+                      Après échange: {exchangeValidationData.enseignant2.seances_jour.apres_echange}/{exchangeValidationData.enseignant2.seances_jour.max} (écart {formatSignedEcart(exchangeValidationData.enseignant2.seances_jour.ecart_apres_echange)})
+                    </p>
+                    <p className={`text-sm font-bold ${
+                      exchangeValidationData.enseignant2.seances_jour.violation ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {exchangeValidationData.enseignant2.seances_jour.violation ? 'Statut: VIOLÉE' : 'Statut: RESPECTÉE'}
                     </p>
                   </div>
 
@@ -2252,6 +2273,26 @@ export default function Planning() {
                   </div>
                 </div>
               </div>
+
+              {/* Contrainte séances/jour (cible) */}
+              {pendingSuppressionData.validation?.seances_jour && (
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border-2 border-purple-200">
+                  <h3 className="text-sm font-bold text-purple-900 mb-3">Contrainte séances/jour (cible)</h3>
+                  <div className="space-y-2">
+                    <p className="text-sm text-purple-700">
+                      <span className="font-semibold">Actuel:</span> {pendingSuppressionData.validation.seances_jour.actuel}/{pendingSuppressionData.validation.seances_jour.max} (écart {formatSignedEcart(pendingSuppressionData.validation.seances_jour.ecart_actuel)})
+                    </p>
+                    <p className="text-sm text-purple-700">
+                      <span className="font-semibold">Après suppression:</span> {pendingSuppressionData.validation.seances_jour.apres_suppression}/{pendingSuppressionData.validation.seances_jour.max} (écart {formatSignedEcart(pendingSuppressionData.validation.seances_jour.ecart_apres_suppression)})
+                    </p>
+                    <p className={`text-sm font-bold ${
+                      pendingSuppressionData.validation.seances_jour.violation ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {pendingSuppressionData.validation.seances_jour.violation ? 'Statut après suppression: VIOLÉE' : 'Statut après suppression: RESPECTÉE'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Avertissement spécial si responsable */}
               {pendingSuppressionData.emploi.est_responsable && (
